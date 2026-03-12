@@ -185,7 +185,6 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
     
     now = datetime.utcnow()
     limit_date = now - timedelta(days=days)
-    limit_date_str = limit_date.strftime('%Y-%m-%d %H:%M:%S')
     
     # Filter for campaign if specified
     campaign_id = None
@@ -232,8 +231,8 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
         return delivered, orate, crate, srate, brate
 
     prev_month_start = limit_date - timedelta(days=days)
-    cur_d, cur_orate, cur_crate, cur_srate, cur_brate = get_period_stats(limit_date_str)
-    prev_d, prev_orate, prev_crate, prev_srate, prev_brate = get_period_stats(prev_month_start.strftime('%Y-%m-%d %H:%M:%S'), limit_date_str)
+    cur_d, cur_orate, cur_crate, cur_srate, cur_brate = get_period_stats(limit_date)
+    prev_d, prev_orate, prev_crate, prev_srate, prev_brate = get_period_stats(prev_month_start, limit_date)
     
     def calc_growth(cur, prev):
         if prev == 0: return 100.0 if cur > 0 else 0.0
@@ -243,8 +242,8 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
     performance = []
     for i in range(7):
         d = now - timedelta(days=6-i)
-        d_start = d.replace(hour=0, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
-        d_end = (d + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).strftime('%Y-%m-%d %H:%M:%S')
+        d_start = d.replace(hour=0, minute=0, second=0, microsecond=0)
+        d_end = (d + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         o = count_metric(event_type=EventType.OPENED, start=d_start, end=d_end)
         c = count_metric(event_type=EventType.CLICKED, start=d_start, end=d_end)
         performance.append({"time": d.strftime('%a'), "opens": o, "clicks": c})
@@ -260,7 +259,7 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
     locations = []
     q_loc = db.query(EmailEvent.city, EmailEvent.country, func.count(EmailEvent.id)).filter(EmailEvent.event_type == EventType.OPENED)
     if campaign_id: q_loc = q_loc.join(Email).filter(Email.campaign_id == campaign_id)
-    cur_opens_total = count_metric(event_type=EventType.OPENED, start=limit_date_str)
+    cur_opens_total = count_metric(event_type=EventType.OPENED, start=limit_date)
     for city, country, count in q_loc.group_by(EmailEvent.city, EmailEvent.country).limit(5).all():
         if city or country:
             locations.append({
@@ -308,12 +307,11 @@ def compute_stats(db: Session, days: int = 30):
         if end_str: q_t = q_t.filter(Email.sent_at < end_str)
         total_attempted = q_t.scalar() or 0
         
-        # Delivered (Status is SENT or DELIVERED)
         q_d = db.query(func.count(Email.id)).filter(
-            Email.status.in_(["SENT", "DELIVERED"]),
-            Email.sent_at >= start_str
+            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]),
+            Email.sent_at >= start
         )
-        if end_str: q_d = q_d.filter(Email.sent_at < end_str)
+        if end: q_d = q_d.filter(Email.sent_at < end)
         delivered = q_d.scalar() or 0
         
         # Unique opens
@@ -348,12 +346,11 @@ def compute_stats(db: Session, days: int = 30):
         if end_str: q_s = q_s.filter(EmailEvent.timestamp < end_str)
         spam = q_s.scalar() or 0
         
-        # Active (running) campaigns
         q_ac = db.query(func.count(Campaign.id)).filter(
             Campaign.status == CampaignStatus.RUNNING, 
-            Campaign.created_at >= start_str
+            Campaign.created_at >= start
         )
-        if end_str: q_ac = q_ac.filter(Campaign.created_at < end_str)
+        if end: q_ac = q_ac.filter(Campaign.created_at < end)
         ac = q_ac.scalar() or 0
         
         return float(total_attempted), float(delivered), float(opens), float(clicks), float(bounces), float(spam), float(ac)
@@ -464,14 +461,13 @@ def emails_over_time(db: Session, days: int = 7):
 def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: str = "all"):
     from datetime import datetime, timedelta
     limit_date = datetime.utcnow() - timedelta(days=days)
-    limit_date_str = limit_date.strftime('%Y-%m-%d %H:%M:%S')
     
     query = db.query(EmailEvent).join(Email)
     
     if campaign_name != "all":
         query = query.join(Campaign).filter(Campaign.name == campaign_name)
         
-    events = query.filter(EmailEvent.timestamp >= limit_date_str).order_by(EmailEvent.timestamp.desc()).limit(limit).all()
+    events = query.filter(EmailEvent.timestamp >= limit_date).order_by(EmailEvent.timestamp.desc()).limit(limit).all()
     
     result = []
     for ev in events:
