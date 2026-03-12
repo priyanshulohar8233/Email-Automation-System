@@ -305,9 +305,9 @@ def compute_stats(db: Session, days: int = 30):
         total_attempted = q_t.scalar() or 0
         
         q_d = db.query(func.count(Email.id)).filter(
-            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]),
-            Email.sent_at >= start
+            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
         )
+        if start: q_d = q_d.filter(Email.sent_at >= start)
         if end: q_d = q_d.filter(Email.sent_at < end)
         delivered = q_d.scalar() or 0
         
@@ -539,21 +539,45 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
         query = query.filter(Campaign.status == status.upper())
         
     campaigns = query.order_by(Campaign.created_at.desc()).all()
-    return [
-        {
+    
+    results = []
+    for c in campaigns:
+        # Dynamic counts for accuracy in serverless/async environments
+        sent = db.query(func.count(Email.id)).filter(
+            Email.campaign_id == c.id, 
+            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
+        ).scalar() or 0
+        
+        delivered = db.query(func.count(Email.id)).filter(
+            Email.campaign_id == c.id, 
+            Email.status == EmailStatus.DELIVERED
+        ).scalar() or 0
+        
+        failed = db.query(func.count(Email.id)).filter(
+            Email.campaign_id == c.id, 
+            Email.status == EmailStatus.BOUNCED
+        ).scalar() or 0
+        
+        opens = db.query(func.count(distinct(EmailEvent.email_id))).join(Email).filter(
+            Email.campaign_id == c.id,
+            EmailEvent.event_type == EventType.OPENED
+        ).scalar() or 0
+        
+        unread = (sent - opens) if sent > opens else 0
+        
+        results.append({
             "id": str(c.id),
             "name": c.name,
             "status": "Complete" if c.status == CampaignStatus.COMPLETED else c.status.value.title(),
-            "sent": c.sent_count,
-            "delivered": c.delivered_count,
-            "failed": c.failed_count,
-            "opens": f"{c.opens_count} ({round(c.opens_count/c.delivered_count*100, 1) if c.delivered_count and c.delivered_count > 0 else 0}%)",
-            "unread": f"{c.unread_count} ({round(c.unread_count/c.delivered_count*100, 1) if c.unread_count and c.delivered_count > 0 else 0}%)",
-            "bounce": f"{c.bounce_count} ({round(c.bounce_count/c.sent_count*100, 1) if c.sent_count and c.sent_count > 0 else 0}%)",
+            "sent": sent,
+            "delivered": delivered,
+            "failed": failed,
+            "opens": f"{opens} ({round(opens/delivered*100, 1) if delivered > 0 else 0}%)",
+            "unread": f"{unread} ({round(unread/sent*100, 1) if sent > 0 else 0}%)",
+            "bounce": f"{failed} ({round(failed/sent*100, 1) if sent > 0 else 0}%)",
             "scheduled": c.scheduled_for or "Not scheduled",
-        }
-        for c in campaigns
-    ]
+        })
+    return results
 
 def update_campaign(db: Session, campaign_id: int, data):
     from .models import Campaign
