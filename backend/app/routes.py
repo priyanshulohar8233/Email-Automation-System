@@ -38,6 +38,10 @@ def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: S
     camp = db.query(Campaign).get(req.campaign_id)
     if not camp:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # Check if a campaign with this ID is already RUNNING
+    if camp.status == CampaignStatus.RUNNING:
+        return {"status": "error", "message": "Campaign is already running"}
 
     records = []
     for addr in req.recipients:

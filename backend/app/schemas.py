@@ -60,6 +60,17 @@ class ContactResponse(BaseModel):
     status: str
     lastOpen: str
 
+class ContactCreate(BaseModel):
+    name: str
+    email: EmailStr
+    company: Optional[str] = None
+    industry: Optional[str] = None
+    tags: Optional[List[str]] = None
+    status: Optional[str] = "active"
+
+class BulkContactsRequest(BaseModel):
+    contacts: List[ContactCreate]
+
 class SettingsResponse(BaseModel):
     smtp_host: str
     smtp_port: int
@@ -91,3 +102,9 @@ class TemplateResponse(BaseModel):
     content: str
     created_at: str
     updated_at: str
+
+class TestEmailRequest(BaseModel):
+    subject: str
+    body: str
+    recipient: EmailStr
+    attachments: Optional[List[str]] = None

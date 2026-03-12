@@ -158,11 +158,30 @@ export default function AITemplates() {
     const [invalidCount, setInvalidCount] = useState<number>(0);
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'reading' | 'success' | 'error'>('idle');
     const [uploadError, setUploadError] = useState<string | null>(null);
+    const [campaignId, setCampaignId] = useState<number>(1);
 
     const seniorityMenuRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
 
     useEffect(() => {
+        async function fetchCampaigns() {
+            try {
+                const res = await fetch("/api/campaigns");
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.length > 0) {
+                        // Use the ID of the first campaign or look for one with "AI" in the name
+                        const aiCamp = data.find((c: any) => c.name.toLowerCase().includes('ai'));
+                        if (aiCamp) setCampaignId(parseInt(aiCamp.id));
+                        else setCampaignId(parseInt(data[0].id));
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch campaigns:", e);
+            }
+        }
+        fetchCampaigns();
+
         const storedRecipients = localStorage.getItem("ai_draft_recipients");
         const storedFileName = localStorage.getItem("ai_draft_filename");
         if (storedRecipients) {
@@ -323,7 +342,7 @@ export default function AITemplates() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    campaign_id: 1, // Default AI campaign
+                    campaign_id: campaignId, // Dynamic campaign
                     subject: generatedSubject,
                     body: finalBody,
                     recipients: recipients.map(r => r.email),

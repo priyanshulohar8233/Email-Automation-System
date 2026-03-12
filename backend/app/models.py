@@ -6,11 +6,11 @@ from .database import Base
 
 
 class CampaignStatus(str, enum.Enum):
-    DRAFT = "draft"
-    SCHEDULED = "scheduled"
-    QUEUED = "queued"
-    RUNNING = "running"
-    COMPLETED = "completed"
+    DRAFT = "DRAFT"
+    SCHEDULED = "SCHEDULED"
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
 
 class Campaign(Base):
     __tablename__ = "campaigns"

@@ -145,9 +145,8 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
         if email:
             if event_type == EventType.DELIVERED: email.status = EmailStatus.DELIVERED
             elif event_type == EventType.BOUNCED: email.status = EmailStatus.BOUNCED
-                
-                    elif event_type == EventType.CLICKED:
-                        pass # Stats calculated dynamically in get_campaigns
+            elif event_type == EventType.CLICKED:
+                pass # Stats calculated dynamically in get_campaigns
                 
             db.commit()
             

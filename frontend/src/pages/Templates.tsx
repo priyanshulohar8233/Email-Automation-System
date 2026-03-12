@@ -198,7 +198,35 @@ export default function Templates() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => alert("Test send triggered!")}
+            onClick={async () => {
+              const email = prompt("Enter recipient email for test send:");
+              if (!email) return;
+
+              // Convert blocks to HTML (simple version)
+              const body = blocks.map(b => {
+                if (b.type === 'text') return `<p style="font-size: ${b.styles.fontSize}; text-align: ${b.styles.textAlign}; font-weight: ${b.styles.fontWeight}">${b.content.replace(/\n/g, '<br/>')}</p>`;
+                if (b.type === 'image') return `<div style="text-align: center"><img src="${b.content}" style="max-width: 100%; border-radius: ${b.styles.borderRadius}" /></div>`;
+                if (b.type === 'button') return `<div style="text-align: ${b.styles.textAlign}"><a href="#" style="background: ${b.styles.backgroundColor}; color: ${b.styles.color}; padding: ${b.styles.padding}; border-radius: ${b.styles.borderRadius}; text-decoration: none; display: inline-block;">${b.content}</a></div>`;
+                if (b.type === 'divider') return `<hr style="height: ${b.styles.height}; background: ${b.styles.backgroundColor}; border: none;" />`;
+                return "";
+              }).join("\n");
+
+              try {
+                const res = await fetch("/api/templates/test-send", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    subject: "Template Test Send",
+                    body: body,
+                    recipient: email
+                  })
+                });
+                if (res.ok) alert("Test email sent!");
+                else alert("Failed to send: " + await res.text());
+              } catch (e) {
+                alert("Error: " + e);
+              }
+            }}
             style={{ borderRadius: "14px" }}
             className="h-9 px-4 text-xs font-semibold gap-2"
           >

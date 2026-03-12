@@ -98,10 +98,6 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         log_event(db, email_id, EventType.SENT)
         log_event(db, email_id, EventType.DELIVERED)
         
-        # Check for campaign completion is handled inside log_event (for SENT/DELIVERED)
-        # but we do a final check here just in case log_event didn't trigger it (if campaign_id was missing)
-        check_and_complete_campaign(db, campaign_id)
-                
         db.commit()
         
     except Exception as ex:

@@ -11,9 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Upload, Download, Search, Filter, Check, Eye } from "lucide-react";
+import { Upload, Download, Search, Filter, Check, Eye, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RecipientActivityModal } from "@/components/dashboard/RecipientActivityModal";
+import * as XLSX from 'xlsx';
 
 interface Contact {
   id: string;
@@ -65,8 +66,57 @@ export default function Contacts() {
         subtitle="Manage your subscribers and leads."
       >
         <div className="flex gap-2">
+          <input
+            type="file"
+            id="contact-import"
+            className="hidden"
+            accept=".xlsx, .xls, .csv"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              
+              const reader = new FileReader();
+              reader.onload = async (event) => {
+                try {
+                  const binaryStr = event.target?.result;
+                  const workbook = XLSX.read(binaryStr, { type: 'binary' });
+                  const firstSheetName = workbook.SheetNames[0];
+                  const worksheet = workbook.Sheets[firstSheetName];
+                  const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                  
+                  if (jsonData.length === 0) throw new Error("File is empty");
+                  
+                  // Simple mapper
+                  const contacts = jsonData.map((row: any) => ({
+                    name: row.name || row.Name || row.email || row.Email,
+                    email: row.email || row.Email,
+                    company: row.company || row.Company || "",
+                    industry: row.industry || row.Industry || "",
+                    tags: row.tags ? String(row.tags).split(",") : []
+                  })).filter(c => c.email);
+                  
+                  const res = await fetch("/api/contacts/import", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contacts })
+                  });
+                  
+                  if (res.ok) {
+                    alert("Import successful!");
+                    window.location.reload();
+                  } else {
+                    alert("Import failed: " + await res.text());
+                  }
+                } catch (err) {
+                    alert("Error parsing file: " + err);
+                }
+              };
+              reader.readAsBinaryString(file);
+            }}
+          />
           <Button
             variant="outline"
+            onClick={() => document.getElementById('contact-import')?.click()}
             style={{ borderRadius: "14px" }}
             className="h-9 px-4 text-xs font-semibold border-border bg-card hover:bg-muted transition-all shadow-sm"
           >
@@ -75,6 +125,9 @@ export default function Contacts() {
           </Button>
           <Button
             variant="outline"
+            onClick={async () => {
+              window.open("/api/contacts/export", "_blank");
+            }}
             style={{ borderRadius: "14px" }}
             className="h-9 px-4 text-xs font-semibold border-border bg-card hover:bg-muted transition-all shadow-sm"
           >

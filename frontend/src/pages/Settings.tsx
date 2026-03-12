@@ -152,8 +152,12 @@ export default function Settings() {
                   <Button
                     onClick={async () => {
                       try {
+                        setSaveMessage({ type: "success", text: "Testing connection..." });
                         const res = await fetch("/api/settings/test-smtp", { method: "POST" });
-                        if (!res.ok) throw new Error(await res.text());
+                        if (!res.ok) {
+                          const err = await res.json().catch(() => ({ detail: "Unknown error" }));
+                          throw new Error(err.detail || "Connection failed");
+                        }
                         setSaveMessage({ type: "success", text: "Test email sent successfully! Please check your inbox." });
                       } catch (e: any) {
                         setSaveMessage({ type: "error", text: `Connection failed: ${e.message}` });
