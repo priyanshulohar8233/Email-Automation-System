@@ -264,116 +264,117 @@ export default function Campaigns() {
                   <TableCell>{campaign.opens}</TableCell>
                   <TableCell>{campaign.scheduled}</TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                      onClick={() => handleToggleCampaign(campaign.id)}
-                    >
-                      <Play className={`h-4 w-4 ${campaign.status.toLowerCase() === 'running' ? 'fill-indigo-600' : ''}`} />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleEditCampaign(campaign)}
-                    >
-                      <Edit className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                      onClick={() => {
-                        setCampaignToDelete(campaign.id);
-                        setShowDeleteConfirm(true);
-                      }}
-                    >
-                      <Trash className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                        onClick={() => handleToggleCampaign(campaign.id)}
+                      >
+                        <Play className={`h-4 w-4 ${campaign.status.toLowerCase() === 'running' ? 'fill-indigo-600' : ''}`} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleEditCampaign(campaign)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                        onClick={() => {
+                          setCampaignToDelete(campaign.id);
+                          setShowDeleteConfirm(true);
+                        }}
+                      >
+                        <Trash className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
-      {/* Edit Campaign Modal */ }
-  {
-    showEditModal && selectedCampaign && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Edit Campaign</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold">Campaign Name</label>
-              <Input
-                value={selectedCampaign.name}
-                onChange={(e) => setSelectedCampaign({ ...selectedCampaign, name: e.target.value })}
-                className="mt-1"
-              />
-            </div>
-            <div className="flex gap-2 justify-end mt-6">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowEditModal(false);
-                  setSelectedCampaign(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="bg-indigo-600 hover:bg-indigo-700"
-                onClick={handleSaveEdit}
-              >
-                Save Changes
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+      {/* Edit Campaign Modal */}
+      {
+        showEditModal && selectedCampaign && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Edit Campaign</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold">Campaign Name</label>
+                  <Input
+                    value={selectedCampaign.name}
+                    onChange={(e) => setSelectedCampaign({ ...selectedCampaign, name: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowEditModal(false);
+                      setSelectedCampaign(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="bg-indigo-600 hover:bg-indigo-700"
+                    onClick={handleSaveEdit}
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )
+      }
 
-  {/* Delete Confirmation Dialog */ }
-  {
-    showDeleteConfirm && campaignToDelete && (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle>Delete Campaign</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Are you sure you want to delete this campaign? This action cannot be undone.
-            </p>
-            <div className="flex gap-2 justify-end mt-6">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowDeleteConfirm(false);
-                  setCampaignToDelete(null);
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="bg-red-600 hover:bg-red-700"
-                onClick={() => handleDeleteCampaign(campaignToDelete)}
-              >
-                Delete
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+      {/* Delete Confirmation Dialog */}
+      {
+        showDeleteConfirm && campaignToDelete && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md">
+              <CardHeader>
+                <CardTitle>Delete Campaign</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Are you sure you want to delete this campaign? This action cannot be undone.
+                </p>
+                <div className="flex gap-2 justify-end mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowDeleteConfirm(false);
+                      setCampaignToDelete(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="bg-red-600 hover:bg-red-700"
+                    onClick={() => handleDeleteCampaign(campaignToDelete)}
+                  >
+                    Delete
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )
+      }
     </div >
   );
 }

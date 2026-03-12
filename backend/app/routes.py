@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
@@ -14,7 +15,7 @@ from .tasks import send_email_task
 router = APIRouter(prefix="/api")
 
 @router.post("/send-campaign")
-def send_campaign(req: CampaignRequest, db: Session = Depends(get_db)):
+def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     from datetime import datetime
     eta = None
     if req.scheduled_at:
@@ -51,13 +52,22 @@ def send_campaign(req: CampaignRequest, db: Session = Depends(get_db)):
     db.commit()
     
     # Trigger tasks
+    # Fallback for Vercel: Use BackgroundTasks if no Redis/Celery is configured
+    is_serverless = os.getenv("VERCEL") == "1" or not os.getenv("REDIS_URL")
+    
     for e in records:
-        if eta:
-            send_email_task.apply_async(args=[e.id, req.subject, req.body, req.attachments], eta=eta)
+        if is_serverless:
+            # Native FastAPI Background Task (Serverless friendly)
+            from .tasks import send_email_fn
+            background_tasks.add_task(send_email_fn, e.id, req.subject, req.body, req.attachments)
         else:
-            send_email_task.delay(e.id, req.subject, req.body, req.attachments)
+            # Standard Celery
+            if eta:
+                send_email_task.apply_async(args=[e.id, req.subject, req.body, req.attachments], eta=eta)
+            else:
+                send_email_task.delay(e.id, req.subject, req.body, req.attachments)
             
-    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value}
+    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value, "mode": "serverless" if is_serverless else "celery"}
 
 @router.get("/campaigns")
 def get_campaigns(search: str | None = None, status: str | None = None, db: Session = Depends(get_db)):
