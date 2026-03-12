@@ -215,7 +215,3 @@ def generate_template(req: AIGenerateRequest):
 @router.get("/contacts")
 def get_contacts(search: str | None = None, db: Session = Depends(get_db)):
     return services.get_contacts(db, search=search)
-
-@router.get("/dashboard/recent-events")
-def get_recent_events_alias(days: int = 30, db: Session = Depends(get_db)):
-    return services.recent_events(db, days=days, limit=100)
