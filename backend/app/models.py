@@ -44,6 +44,7 @@ class Email(Base):
     recipient_email = Column(String, index=True, nullable=False)
     status = Column(Enum(EmailStatus), default=EmailStatus.PENDING)
     subject = Column(String, nullable=True)
+    body = Column(String, nullable=True)
     failure_reason = Column(String, nullable=True)
     sent_at = Column(DateTime, default=func.now())
 

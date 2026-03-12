@@ -55,35 +55,29 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         # Unsubscribe link
         unsubscribe_url = f"{base_url}/api/contacts/unsubscribe?email={quote(to_addr)}"
         
-        # Tracking Image (Pixel) - Hidden but compatible
-        tracking_pixel = f"<img src='{base_url}/api/track/open/{email_id}' width='1' height='1' border='0' style='display:none !important; visibility:hidden; opacity:0; color:transparent;' alt=''/>"
+        # Tracking Image (Pixel) - More robust than display:none which is often blocked
+        tracking_pixel = f"<img src='{base_url}/api/track/open/{email_id}' width='1' height='1' border='0' style='display:block; margin:0; padding:0; line-height:0; color:transparent; pointer-events:none;' alt=''/>"
         
-        formatted_body = body.replace("\n", "<br/>")
-        
-        tracking_body = (
-            f"<div style='font-family: sans-serif; color: #333; line-height: 1.6;'>"
-            f"{formatted_body}"
-            f"<br/><br/><hr style='border: 0; border-top: 1px solid #eee;'/><br/>"
-            f"<p style='font-size: 12px; color: #999; text-align: center;'>"
-            f"You received this because you are part of our mailing list.<br/>"
-            f"<a href='{unsubscribe_url}' style='color: #4f46e5; text-decoration: underline;'>Unsubscribe</a>"
-            f"</p>"
-            f"{tracking_pixel}"
-            f"</div>"
-        )
-        
-        def repl(match):
-            url = match.group(1)
-            # Skip tracking if it's already a tracking link or unsubscribe
-            if "/api/track/" in url or "/api/contacts/unsubscribe" in url or "mailto:" in url:
-                return f'href="{url}"'
+        # 3. Apply replacements to body
+        final_body = body
+        if "{{unsubscribe}}" in final_body:
+            final_body = final_body.replace("{{unsubscribe}}", unsubscribe_url)
+        else:
+            final_body += f"<br/><br/><a href='{unsubscribe_url}' style='font-size: 10px; color: #666;'>Unsubscribe</a>"
             
-            # Create a tracked version of the URL
+        final_body += tracking_pixel
+        
+        # 4. Wrap links for click tracking
+        import re
+        def replace_link(match):
+            url = match.group(1)
+            # Skip tracking for system links
+            if "/api/track/" in url or "/api/contacts/unsubscribe" in url:
+                return match.group(0)
             tracked_url = f"{base_url}/api/track/click/{email_id}?url={quote(url)}"
             return f'href="{tracked_url}"'
             
-        # Robust URL matching for href attributes
-        tracking_body = re.sub(r'href=["\']((?:http|https)://[^"\']+)["\']', repl, tracking_body)
+        final_body = re.sub(r'href="([^"]+)"', replace_link, final_body)
 
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
