@@ -300,11 +300,8 @@ def compute_stats(db: Session, days: int = 30):
     # Function to get counts
     def get_period_counts(start, end=None):
         # Total Attempted (Sent + Bounced + Spam etc)
-        start_str = start.strftime('%Y-%m-%d %H:%M:%S') if isinstance(start, datetime) else start
-        end_str = end.strftime('%Y-%m-%d %H:%M:%S') if end and isinstance(end, datetime) else end
-        
-        q_t = db.query(func.count(Email.id)).filter(Email.sent_at >= start_str)
-        if end_str: q_t = q_t.filter(Email.sent_at < end_str)
+        q_t = db.query(func.count(Email.id)).filter(Email.sent_at >= start)
+        if end: q_t = q_t.filter(Email.sent_at < end)
         total_attempted = q_t.scalar() or 0
         
         q_d = db.query(func.count(Email.id)).filter(
@@ -317,33 +314,33 @@ def compute_stats(db: Session, days: int = 30):
         # Unique opens
         q_o = db.query(func.count(distinct(EmailEvent.email_id))).filter(
             EmailEvent.event_type == EventType.OPENED, 
-            EmailEvent.timestamp >= start_str
+            EmailEvent.timestamp >= start
         )
-        if end_str: q_o = q_o.filter(EmailEvent.timestamp < end_str)
+        if end: q_o = q_o.filter(EmailEvent.timestamp < end)
         opens = q_o.scalar() or 0
         
         # Unique clicks
         q_c = db.query(func.count(distinct(EmailEvent.email_id))).filter(
             EmailEvent.event_type == EventType.CLICKED, 
-            EmailEvent.timestamp >= start_str
+            EmailEvent.timestamp >= start
         )
-        if end_str: q_c = q_c.filter(EmailEvent.timestamp < end_str)
+        if end: q_c = q_c.filter(EmailEvent.timestamp < end)
         clicks = q_c.scalar() or 0
         
         # Bounces
         q_b = db.query(func.count(Email.id)).filter(
             Email.status == "BOUNCED", 
-            Email.sent_at >= start_str
+            Email.sent_at >= start
         )
-        if end_str: q_b = q_b.filter(Email.sent_at < end_str)
+        if end: q_b = q_b.filter(Email.sent_at < end)
         bounces = q_b.scalar() or 0
 
         # Spam Reports
         q_s = db.query(func.count(EmailEvent.id)).filter(
             EmailEvent.event_type == EventType.SPAM_REPORT,
-            EmailEvent.timestamp >= start_str
+            EmailEvent.timestamp >= start
         )
-        if end_str: q_s = q_s.filter(EmailEvent.timestamp < end_str)
+        if end: q_s = q_s.filter(EmailEvent.timestamp < end)
         spam = q_s.scalar() or 0
         
         q_ac = db.query(func.count(Campaign.id)).filter(
