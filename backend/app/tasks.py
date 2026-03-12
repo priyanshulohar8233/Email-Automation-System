@@ -3,10 +3,10 @@ import os
 import re
 from datetime import datetime
 from urllib.parse import quote
-from app.config import settings
-from app.debug import debug_log
-from app.database import SessionLocal
-from app.models import Email, EmailStatus, EmailEvent, Campaign, CampaignStatus
+from .config import settings
+from .debug import debug_log
+from .database import SessionLocal
+from .models import Email, EmailStatus, EmailEvent, Campaign, CampaignStatus
 
 from celery import Celery
 
