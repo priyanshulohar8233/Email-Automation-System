@@ -101,6 +101,7 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         debug.debug_log(f"SUCCESS: Email {email_id} sent via SMTP")
         
         # 5. Update Status & Log Events
+        email_record.status = EmailStatus.SENT
         email_record.subject = subject
         email_record.body = final_body # Save for inspection/auditing
         
@@ -113,22 +114,42 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
     except Exception as ex:
         error_msg = f"{type(ex).__name__}: {str(ex)}"
         debug.debug_log(f"FAILED TO SEND EMAIL {email_id}: {error_msg}")
-        db.rollback()
         
-        email_record = db.query(Email).get(email_id)
-        if email_record:
-            email_record.status = EmailStatus.BOUNCED
-            email_record.failure_reason = error_msg
-            db.add(EmailEvent(email_id=email_id, event_type=EventType.BOUNCED, timestamp=datetime.utcnow()))
+        # Use a fresh session for error recovery in case the original one died (e.g. 'Closed Database')
+        db_recovery = SessionLocal()
+        try:
+            email_record = db_recovery.query(Email).get(email_id)
+            if email_record:
+                email_record.status = EmailStatus.BOUNCED
+                email_record.failure_reason = error_msg
+                
+                # Check for campaign completion
+                if email_record.campaign_id:
+                    pending_count = db_recovery.query(Email).filter(
+                        Email.campaign_id == email_record.campaign_id, 
+                        Email.status == EmailStatus.PENDING
+                    ).count()
+                    if pending_count == 0:
+                        camp = db_recovery.query(Campaign).get(email_record.campaign_id)
+                        if camp:
+                            camp.status = CampaignStatus.COMPLETED
+                
+                db_recovery.add(EmailEvent(
+                    email_id=email_id, 
+                    event_type=EventType.BOUNCED, 
+                    timestamp=datetime.utcnow()
+                ))
+                db_recovery.commit()
+        except Exception as recovery_ex:
+            debug.debug_log(f"RECOVERY ERROR for email {email_id}: {str(recovery_ex)}")
+        finally:
+            db_recovery.close()
             
-            pending_count = db.query(Email).filter(Email.campaign_id == email_record.campaign_id, Email.status == EmailStatus.PENDING).count()
-            if pending_count == 0:
-                camp = db.query(Campaign).get(email_record.campaign_id)
-                if camp:
-                    camp.status = CampaignStatus.COMPLETED
-            db.commit()
     finally:
-        db.close()
+        try:
+            db.close()
+        except:
+            pass
 
     debug.debug_log(f"DEBUG: Background task finished for email {email_id}")
 
