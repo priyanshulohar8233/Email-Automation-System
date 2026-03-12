@@ -329,7 +329,7 @@ def compute_stats(db: Session, days: int = 30):
         
         # Bounces
         q_b = db.query(func.count(Email.id)).filter(
-            Email.status == "BOUNCED", 
+            Email.status == EmailStatus.BOUNCED, 
             Email.sent_at >= start
         )
         if end: q_b = q_b.filter(Email.sent_at < end)
