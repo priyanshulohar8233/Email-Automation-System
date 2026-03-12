@@ -82,19 +82,13 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
 
-        s = db.query(Settings).first()
-        
-        smtp_host = s.smtp_host if s and s.smtp_host else settings.SMTP_HOST
-        smtp_port = s.smtp_port if s and s.smtp_port else settings.SMTP_PORT
-        smtp_user = s.smtp_username if s and s.smtp_username else settings.SMTP_USER
-        smtp_pass = s.smtp_password if s and s.smtp_password else settings.SMTP_PASS
-
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
         msg["From"] = smtp_user
         msg["To"] = to_addr
         
-        part = MIMEText(tracking_body, "html")
+        # Use final_body here (fixed NameError)
+        part = MIMEText(final_body, "html")
         msg.attach(part)
         
         # 4. Send via SMTP
@@ -105,13 +99,12 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             server.sendmail(smtp_user, [to_addr], msg.as_string())
         
         debug.debug_log(f"SUCCESS: Email {email_id} sent via SMTP")
-        now = datetime.utcnow()
         
         # 5. Update Status & Log Events
         email_record.subject = subject
-        db.commit() # Commit subject update if any
+        email_record.body = final_body # Save for inspection/auditing
         
-        # Log events using services for consistency
+        # Log events using services for consistency (updates campaign counters)
         log_event(db, email_id, EventType.SENT)
         log_event(db, email_id, EventType.DELIVERED)
         
