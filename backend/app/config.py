@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     SMTP_PASS: str = os.getenv("SMTP_PASS", "")
     
     # For tracking links
-    BASE_URL: str = os.getenv("BASE_URL", "http://localhost")
+    # For tracking links
+    BASE_URL: str = os.getenv("BASE_URL") or (f"https://{os.getenv('VERCEL_URL')}" if os.getenv("VERCEL_URL") else "http://localhost:8000")
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
 
     class Config:

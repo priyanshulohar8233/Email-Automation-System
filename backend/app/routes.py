@@ -6,11 +6,11 @@ from urllib.parse import unquote
 
 from .database import get_db
 from . import services
-from .schemas import CampaignRequest, SettingsUpdate, CampaignCreate, TemplateCreate, TemplateUpdate, AIGenerateRequest
+from .schemas import CampaignRequest, SettingsUpdate, CampaignCreate, TemplateCreate, TemplateUpdate, AIGenerateRequest, TestEmailRequest
 from .models import Email, EmailStatus, EventType
 from .config import settings
-from .debug import debug_log
-from .tasks import send_email_task
+from .tasks import send_email_task, send_email_fn
+from . import debug
 
 router = APIRouter(prefix="/api")
 
@@ -49,30 +49,25 @@ def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: S
     if eta and eta > datetime.utcnow():
         camp.status = CampaignStatus.QUEUED
         camp.scheduled_for = eta.isoformat()
-        debug_log(f"CAMPAIGN_SCHEDULED: ID {camp.id} set to QUEUED for {eta}")
     else:
         camp.status = CampaignStatus.RUNNING
-        debug_log(f"CAMPAIGN_STARTED: ID {camp.id} set to RUNNING")
     
     db.commit()
     
     # Trigger tasks
-    # Fallback for Vercel: Use BackgroundTasks if no Redis/Celery is configured
-    is_serverless = os.getenv("VERCEL") == "1" or not os.getenv("REDIS_URL")
+    # ALWAYS use BackgroundTasks for immediate sending to avoid worker dependency and ensure robustness.
+    # Use Celery ONLY for scheduled tasks (eta) if Redis is configured.
+    can_use_celery = bool(settings.REDIS_URL and "redis" in settings.REDIS_URL) and not os.getenv("VERCEL")
     
     for e in records:
-        if is_serverless:
-            # Native FastAPI Background Task (Serverless friendly)
-            from .tasks import send_email_fn
-            background_tasks.add_task(send_email_fn, e.id, req.subject, req.body, req.attachments)
+        if eta and can_use_celery:
+            # Scheduled tasks require Celery
+            send_email_task.apply_async(args=[e.id, req.subject, req.body, req.attachments], eta=eta)
         else:
-            # Standard Celery
-            if eta:
-                send_email_task.apply_async(args=[e.id, req.subject, req.body, req.attachments], eta=eta)
-            else:
-                send_email_task.delay(e.id, req.subject, req.body, req.attachments)
+            # Immediate sends use background_tasks (native to FastAPI/Uvicorn)
+            background_tasks.add_task(send_email_fn, e.id, req.subject, req.body, req.attachments)
             
-    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value, "mode": "serverless" if is_serverless else "celery"}
+    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value, "mode": "celery" if (eta and can_use_celery) else "background_tasks"}
 
 @router.get("/campaigns")
 def get_campaigns(search: str | None = None, status: str | None = None, db: Session = Depends(get_db)):
@@ -132,6 +127,29 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     s.monthly_limit = req.monthly_limit
     db.commit()
     return s
+
+@router.post("/settings/test-smtp")
+def test_smtp(db: Session = Depends(get_db)):
+    from .models import Settings
+    s = db.query(Settings).first()
+    if not s or not s.smtp_host or not s.smtp_username:
+        raise HTTPException(status_code=400, detail="SMTP settings not configured")
+    
+    try:
+        from .services import send_mail
+        # Try sending a test email to the user themselves
+        send_mail(
+            to_addr=s.smtp_username,
+            subject="Test Email from MailFlow",
+            body_html="<h1>Success!</h1><p>Your SMTP connection is working correctly.</p>",
+            smtp_host=s.smtp_host,
+            smtp_port=s.smtp_port,
+            smtp_user=s.smtp_username,
+            smtp_pass=s.smtp_password
+        )
+        return {"status": "success", "message": "Test email sent"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"SMTP Error: {str(e)}")
 
 @router.get("/analytics")
 def get_campaign_analytics(campaign: str = "all", days: int = 30, db: Session = Depends(get_db)):
@@ -212,6 +230,50 @@ def generate_template(req: AIGenerateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/contacts")
-def get_contacts(search: str | None = None, db: Session = Depends(get_db)):
-    return services.get_contacts(db, search=search)
+from .schemas import BulkContactsRequest
+
+@router.post("/contacts/import")
+def import_contacts(req: BulkContactsRequest, db: Session = Depends(get_db)):
+    return services.create_contacts(db, req.contacts)
+
+@router.get("/contacts/export")
+def export_contacts(db: Session = Depends(get_db)):
+    contacts = services.get_contacts(db)
+    import csv
+    import io
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Name", "Email", "Company", "Industry", "Status", "Score"])
+    for c in contacts:
+        writer.writerow([c["name"], c["email"], c["company"], c["industry"], c["status"], c["score"]])
+    
+    from fastapi.responses import StreamingResponse
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=contacts_export.csv"}
+    )
+
+@router.post("/templates/test-send")
+def test_send_template(req: TestEmailRequest, db: Session = Depends(get_db)):
+    from .models import Settings
+    s = db.query(Settings).first()
+    if not s:
+        raise HTTPException(status_code=400, detail="SMTP settings not configured")
+        
+    try:
+        from .services import send_mail
+        send_mail(
+            to_addr=req.recipient,
+            subject=req.subject,
+            body_html=req.body,
+            smtp_host=s.smtp_host,
+            smtp_port=s.smtp_port,
+            smtp_user=s.smtp_user,
+            smtp_pass=s.smtp_pass,
+            attachments=req.attachments
+        )
+        return {"status": "success"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

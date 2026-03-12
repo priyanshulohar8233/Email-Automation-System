@@ -2,7 +2,7 @@ import smtplib
 from datetime import datetime
 from sqlalchemy import func, distinct
 from sqlalchemy.orm import Session
-from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus
+from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, Settings
 
 
 # low-level mail sender
@@ -13,6 +13,21 @@ from email.mime.multipart import MIMEMultipart
 from email import encoders
 import requests
 import io
+
+def check_and_complete_campaign(db: Session, campaign_id: int):
+    from .models import Email, EmailStatus, Campaign, CampaignStatus
+    from . import debug
+    
+    # Reload campaign
+    camp = db.query(Campaign).get(campaign_id)
+    if not camp: return
+    
+    # Check if any emails are still PENDING
+    pending_count = db.query(Email).filter(Email.campaign_id == campaign_id, Email.status == EmailStatus.PENDING).count()
+    if pending_count == 0:
+        camp.status = CampaignStatus.COMPLETED
+        db.commit()
+        debug.debug_log(f"CAMPAIGN_COMPLETE: Campaign {campaign_id} finished.")
 
 def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_port: int, smtp_user: str, smtp_pass: str, reply_to: str = None, attachments: list = None):
     # Create the root message and set headers
@@ -81,7 +96,7 @@ def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_p
 # functions used by API
 
 def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None, ua: str = None, url: str = None):
-    from .debug import debug_log
+    from . import debug
     from datetime import datetime, timedelta
     
     # 1. Professional Security: Prevent duplicate open tracking (60s window)
@@ -92,10 +107,10 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
             EmailEvent.timestamp >= datetime.utcnow() - timedelta(seconds=60)
         ).first()
         if recent_open:
-            debug_log(f"TRACKING_FLOW: Blocked duplicate open for email {email_id} (within 60s)")
+            debug.debug_log(f"TRACKING_FLOW: Blocked duplicate open for email {email_id} (within 60s)")
             return
             
-    debug_log(f"TRACKING_FLOW: Received {event_type} for email {email_id}")
+    debug.debug_log(f"TRACKING_FLOW: Received {event_type} for email {email_id}")
     
     browser, os, device = "Unknown", "Unknown", "Desktop"
     if ua:
@@ -131,28 +146,18 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
             if event_type == EventType.DELIVERED: email.status = EmailStatus.DELIVERED
             elif event_type == EventType.BOUNCED: email.status = EmailStatus.BOUNCED
                 
-            if email.campaign_id:
-                camp = db.query(Campaign).get(email.campaign_id)
-                if camp:
-                    if event_type == EventType.OPENED:
-                        # Check first open (overall)
-                        first_open = db.query(EmailEvent).filter(
-                            EmailEvent.email_id == email_id, 
-                            EmailEvent.event_type == EventType.OPENED,
-                            EmailEvent.id != ev.id
-                        ).first() is None
-                        
-                        if first_open:
-                            camp.opens_count = (camp.opens_count or 0) + 1
-                            if camp.unread_count and camp.unread_count > 0:
-                                camp.unread_count -= 1
                     elif event_type == EventType.CLICKED:
-                        camp.clicks_count = (camp.clicks_count or 0) + 1
-        
-        db.commit()
+                        pass # Stats calculated dynamically in get_campaigns
+                
+            db.commit()
+            
+            # Atomic check for campaign completion if this was a delivery-related event
+            if event_type in [EventType.SENT, EventType.DELIVERED, EventType.BOUNCED]:
+                if email.campaign_id:
+                    check_and_complete_campaign(db, email.campaign_id)
     except Exception as e:
         db.rollback()
-        debug_log(f"TRACKING_FLOW_ERROR: {str(e)}")
+        debug.debug_log(f"TRACKING_FLOW_ERROR: {str(e)}")
         raise e
 
 def get_link_performance(db: Session, campaign_name: str = "all"):
@@ -653,6 +658,29 @@ def get_contacts(db: Session, search: str | None = None):
         }
         for c in contacts
     ]
+
+def create_contacts(db: Session, contacts_data: list):
+    from .models import Contact
+    new_contacts = []
+    for data in contacts_data:
+        # Check if contact already exists
+        existing = db.query(Contact).filter(Contact.email == data.email).first()
+        if existing:
+            continue
+        
+        c = Contact(
+            name=data.name,
+            email=data.email,
+            company=data.company,
+            industry=data.industry,
+            status=data.status or "active",
+            tags_raw=",".join(data.tags) if data.tags else ""
+        )
+        db.add(c)
+        new_contacts.append(c)
+    
+    db.commit()
+    return {"added": len(new_contacts)}
 
 
 
