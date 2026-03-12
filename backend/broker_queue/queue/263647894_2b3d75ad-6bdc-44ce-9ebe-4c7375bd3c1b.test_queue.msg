@@ -1,0 +1,1 @@
+{"body": "eyJoZWxsbyI6ICJ3b3JsZCJ9", "content-encoding": "utf-8", "content-type": "application/json", "headers": {}, "properties": {"delivery_mode": 2, "delivery_info": {"exchange": "test_exchange", "routing_key": "test_queue"}, "priority": 0, "body_encoding": "base64", "delivery_tag": "f27417e1-09f2-49dd-bfcd-caf56ddb8edd"}}

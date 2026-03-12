@@ -1,0 +1,25 @@
+INFO: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INFO: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INFO: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INFO: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INFO: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INFO: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue
+[18556] INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue (Eager: False)
+[26756] INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue (Eager: True)
+[24816] INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue (Eager: False)
+[26756] DEBUG: Worker starting task for email 23
+[26756] DEBUG: Queued email 23 immediately (task_id: 7a9ca4cc-95d0-42d1-b67c-b387ccc3e347)
+[37692] INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue (Eager: True)
+[37044] INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue (Eager: True)
+[13132] INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue (Eager: False)
+[37044] DEBUG: Worker starting task for email 24
+[37044] DEBUG: Queued email 24 immediately (task_id: c623ce57-e476-4c0a-af16-aaa489f178b8)
+[5696] INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue (Eager: True)
+[5696] DEBUG: Background thread starting task for email 25
+[17768] INIT: Celery using queue at D:\Email-Automation-System_2.0\backend\broker_queue\queue (Eager: True)
+[17768] DEBUG: Background thread starting task for email 26

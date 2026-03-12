@@ -1,0 +1,20 @@
+
+--- Summary of Event Types ---
+CLICKED: 2
+DELIVERED: 13
+OPENED: 3
+SENT: 13
+delivered: 4
+sent: 4
+
+--- All Opened Events ---
+No OPENED events found.
+
+--- All Clicked Events ---
+No CLICKED events found.
+
+--- Campaign Stats ---
+(2, 'welcome 2', 0, 2, 'RUNNING')
+(3, 'welcome 3', 0, 0, 'DRAFT')
+(4, 'AI: Offer Letter...', 0, 2, 'RUNNING')
+(5, 'AI', 0, 4, 'RUNNING')
