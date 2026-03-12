@@ -38,7 +38,9 @@ export const dashboardAPI = {
             const response = await fetchWithTimeout(url, 10000);
 
             if (!response.ok) {
-                throw new Error(`Error fetching dashboard stats: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error(`Dashboard API Stats Error [${response.status}]: ${response.statusText}`, errorText);
+                throw new Error(`Error fetching dashboard stats: ${response.status} ${response.statusText}`);
             }
             return await response.json();
         } catch (error) {
@@ -51,7 +53,9 @@ export const dashboardAPI = {
         const url = days ? `/api/dashboard/email-stats?days=${days}` : '/api/dashboard/email-stats';
         const response = await fetchWithTimeout(url, 10000);
         if (!response.ok) {
-            throw new Error(`Error fetching email stats: ${response.statusText}`);
+            const errorText = await response.text();
+            console.error(`Dashboard API Email Stats Error [${response.status}]: ${response.statusText}`, errorText);
+            throw new Error(`Error fetching email stats: ${response.status} ${response.statusText}`);
         }
         return await response.json();
     },
@@ -60,7 +64,9 @@ export const dashboardAPI = {
         const url = days ? `/api/dashboard/recent-events?days=${days}` : '/api/dashboard/recent-events';
         const response = await fetchWithTimeout(url, 10000);
         if (!response.ok) {
-            throw new Error(`Error fetching recent events: ${response.statusText}`);
+            const errorText = await response.text();
+            console.error(`Dashboard API Recent Events Error [${response.status}]: ${response.statusText}`, errorText);
+            throw new Error(`Error fetching recent events: ${response.status} ${response.statusText}`);
         }
         return await response.json();
     }
