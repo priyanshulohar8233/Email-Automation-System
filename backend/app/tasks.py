@@ -22,9 +22,20 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
     db = SessionLocal()
     
     try:
-        # 1. Get SMTP & Tracking Settings from DB (Source of Truth)
+        # 1. Get SMTP & Tracking Settings from DB with Retry (SQLite can lock)
         from .models import Settings as DBSettings
-        s = db.query(DBSettings).first()
+        import time
+        
+        s = None
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                s = db.query(DBSettings).first()
+                break
+            except Exception as e:
+                debug.debug_log(f"RETRY {attempt+1}: Failed to fetch settings: {str(e)}")
+                db.rollback()
+                time.sleep(1)
         
         # Fallback to env if DB settings are missing
         smtp_host = s.smtp_host if (s and s.smtp_host) else settings.SMTP_HOST
@@ -39,8 +50,8 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         
         # Check if we have valid settings
         if not smtp_host or not smtp_user:
-            debug.debug_log(f"ERROR: Email {email_id} failed: SMTP settings missing in DB and .env")
-            return
+            debug.debug_log(f"ERROR: Email {email_id} failed: SMTP settings missing")
+            raise Exception("SMTP settings missing in DB and .env")
 
         # Look up email record
         email_record = db.query(Email).get(email_id)
@@ -52,13 +63,9 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         to_addr = email_record.recipient_email
         
         # 2. Tracking Pixel & Link Replacement
-        # Unsubscribe link
         unsubscribe_url = f"{base_url}/api/contacts/unsubscribe?email={quote(to_addr)}"
-        
-        # Tracking Image (Pixel) - More robust than display:none which is often blocked
         tracking_pixel = f"<img src='{base_url}/api/track/open/{email_id}' width='1' height='1' border='0' style='display:block; margin:0; padding:0; line-height:0; color:transparent; pointer-events:none;' alt=''/>"
         
-        # 3. Apply replacements to body
         final_body = body
         if "{{unsubscribe}}" in final_body:
             final_body = final_body.replace("{{unsubscribe}}", unsubscribe_url)
@@ -67,11 +74,8 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             
         final_body += tracking_pixel
         
-        # 4. Wrap links for click tracking
-        import re
         def replace_link(match):
             url = match.group(1)
-            # Skip tracking for system links
             if "/api/track/" in url or "/api/contacts/unsubscribe" in url:
                 return match.group(0)
             tracked_url = f"{base_url}/api/track/click/{email_id}?url={quote(url)}"
@@ -79,6 +83,7 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             
         final_body = re.sub(r'href="([^"]+)"', replace_link, final_body)
 
+        # 3. Prepare Message
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
 
@@ -86,29 +91,34 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         msg["Subject"] = subject
         msg["From"] = smtp_user
         msg["To"] = to_addr
-        
-        # Use final_body here (fixed NameError)
         part = MIMEText(final_body, "html")
         msg.attach(part)
         
-        # 4. Send via SMTP
-        debug.debug_log(f"DEBUG: Connecting to SMTP {smtp_host}:{smtp_port} as {smtp_user}")
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
-            server.starttls()
-            server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, [to_addr], msg.as_string())
+        # 4. Send via SMTP with specific error catching
+        debug.debug_log(f"DEBUG: Connecting to SMTP {smtp_host}:{smtp_port}")
+        try:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, [to_addr], msg.as_string())
+        except smtplib.SMTPRecipientsRefused:
+            raise Exception(f"RECIPIENT_REFUSED: The email address {to_addr} was rejected by the server.")
+        except smtplib.SMTPAuthenticationError:
+            raise Exception("AUTH_ERROR: SMTP authentication failed. Check your username/password in Settings.")
+        except smtplib.SMTPConnectError:
+            raise Exception("CONNECT_ERROR: Could not connect to the SMTP server. Check host/port.")
+        except Exception as e:
+            raise Exception(f"SMTP_ERROR: {str(e)}")
         
-        debug.debug_log(f"SUCCESS: Email {email_id} sent via SMTP")
+        debug.debug_log(f"SUCCESS: Email {email_id} sent")
         
         # 5. Update Status & Log Events
         email_record.status = EmailStatus.SENT
         email_record.subject = subject
-        email_record.body = final_body # Save for inspection/auditing
+        email_record.body = final_body
         
-        # Log events using services for consistency (updates campaign counters)
         log_event(db, email_id, EventType.SENT)
         log_event(db, email_id, EventType.DELIVERED)
-        
         db.commit()
         
     except Exception as ex:
