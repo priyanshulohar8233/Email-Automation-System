@@ -89,6 +89,20 @@ export default function Campaigns() {
 
   useEffect(() => {
     fetchCampaigns();
+    
+    // Poll for real-time campaign progress every 10 seconds
+    const interval = setInterval(() => {
+      const params = new URLSearchParams();
+      if (searchTerm) params.append("search", searchTerm);
+      if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
+
+      fetch(`/api/campaigns?${params.toString()}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => { if (data) setCampaignsData(data); })
+        .catch(console.error);
+    }, 10000);
+    
+    return () => clearInterval(interval);
   }, [searchTerm, statusFilter]);
 
   async function handleEditCampaign(campaign: Campaign) {

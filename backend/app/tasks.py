@@ -22,19 +22,44 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
     db = SessionLocal()
     
     try:
-        # 1. Fetch email info
+        # 1. Get SMTP & Tracking Settings from DB (Source of Truth)
+        from .models import Settings as DBSettings
+        s = db.query(DBSettings).first()
+        
+        # Fallback to env if DB settings are missing
+        smtp_host = s.smtp_host if (s and s.smtp_host) else settings.SMTP_HOST
+        smtp_port = s.smtp_port if (s and s.smtp_port) else settings.SMTP_PORT
+        smtp_user = s.smtp_username if (s and s.smtp_username) else settings.SMTP_USER
+        smtp_pass = s.smtp_password if (s and s.smtp_password) else settings.SMTP_PASS
+        
+        # Dynamic BASE_URL from DB
+        base_url = s.base_url if (s and s.base_url) else settings.BASE_URL
+        if base_url.endswith("/"):
+            base_url = base_url[:-1]
+        
+        # Check if we have valid settings
+        if not smtp_host or not smtp_user:
+            debug.debug_log(f"ERROR: Email {email_id} failed: SMTP settings missing in DB and .env")
+            return
+
+        # Look up email record
         email_record = db.query(Email).get(email_id)
         if not email_record:
-            debug.debug_log(f"ERROR: Email {email_id} not found")
+            debug.debug_log(f"ERROR: Email {email_id} not found in DB")
             return
-        
-        to_addr = email_record.recipient_email
+            
         campaign_id = email_record.campaign_id
-        debug.debug_log(f"DEBUG: Processing email {email_id} to {to_addr}")
-
-        # 2. Compliance & Tracking
-        formatted_body = body.replace('\n', '<br/>')
-        unsubscribe_url = f"{settings.BASE_URL}/api/contacts/unsubscribe?email={to_addr}"
+        to_addr = email_record.recipient_email
+        
+        # 2. Tracking Pixel & Link Replacement
+        # Unsubscribe link
+        unsubscribe_url = f"{base_url}/api/contacts/unsubscribe?email={quote(to_addr)}"
+        
+        # Tracking Image (Pixel) - Hidden but compatible
+        tracking_pixel = f"<img src='{base_url}/api/track/open/{email_id}' width='1' height='1' border='0' style='display:none !important; visibility:hidden; opacity:0; color:transparent;' alt=''/>"
+        
+        formatted_body = body.replace("\n", "<br/>")
+        
         tracking_body = (
             f"<div style='font-family: sans-serif; color: #333; line-height: 1.6;'>"
             f"{formatted_body}"
@@ -43,18 +68,18 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             f"You received this because you are part of our mailing list.<br/>"
             f"<a href='{unsubscribe_url}' style='color: #4f46e5; text-decoration: underline;'>Unsubscribe</a>"
             f"</p>"
-            f"<img src='{settings.BASE_URL}/api/track/open/{email_id}' width='1' height='1' border='0' style='display:none !important; visibility:hidden; opacity:0; color:transparent;' alt=''/>"
+            f"{tracking_pixel}"
             f"</div>"
         )
         
         def repl(match):
             url = match.group(1)
             # Skip tracking if it's already a tracking link or unsubscribe
-            if "/api/track/" in url or "/api/contacts/unsubscribe" in url:
+            if "/api/track/" in url or "/api/contacts/unsubscribe" in url or "mailto:" in url:
                 return f'href="{url}"'
             
             # Create a tracked version of the URL
-            tracked_url = f"{settings.BASE_URL}/api/track/click/{email_id}?url={quote(url)}"
+            tracked_url = f"{base_url}/api/track/click/{email_id}?url={quote(url)}"
             return f'href="{tracked_url}"'
             
         # Robust URL matching for href attributes
@@ -63,8 +88,6 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
 
-        # 3. Fetch SMTP Settings from DB
-        from .models import Settings
         s = db.query(Settings).first()
         
         smtp_host = s.smtp_host if s and s.smtp_host else settings.SMTP_HOST

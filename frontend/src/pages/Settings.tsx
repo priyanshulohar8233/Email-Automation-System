@@ -14,6 +14,7 @@ interface SettingsState {
   webhookUrl: string;
   monthlyLimit: number;
   monthlySent: number;
+  baseUrl: string;
 }
 
 export default function Settings() {
@@ -25,6 +26,7 @@ export default function Settings() {
     webhookUrl: "",
     monthlyLimit: 500000,
     monthlySent: 0,
+    baseUrl: "",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -44,6 +46,7 @@ export default function Settings() {
             webhookUrl: data.webhook_url || "",
             monthlyLimit: data.monthly_limit ?? 500000,
             monthlySent: data.monthly_sent ?? 0,
+            baseUrl: data.base_url || "",
           });
         }
       } catch (error) {
@@ -69,6 +72,7 @@ export default function Settings() {
           smtp_password: settings.smtpPassword,
           webhook_url: settings.webhookUrl,
           monthly_limit: settings.monthlyLimit,
+          base_url: settings.baseUrl,
         }),
       });
       if (!response.ok) throw new Error("Failed to save settings");
@@ -211,18 +215,39 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        {/* Webhooks */}
+        {/* Tracking & Domain Settings */}
         <Card>
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Webhook className="h-5 w-5 text-indigo-600" />
-              <CardTitle>Webhooks</CardTitle>
+              <ExternalLink className="h-5 w-5 text-indigo-600" />
+              <CardTitle>Tracking & Domain Settings</CardTitle>
             </div>
-            <CardDescription>Receive real-time updates for email events.</CardDescription>
+            <CardDescription>Configure the domain used for email tracking and pixels.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Endpoint URL</label>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-foreground">Base Tracking URL</label>
+                <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200">Required for Tracking</Badge>
+              </div>
+              <div className="space-y-1">
+                <Input
+                  name="baseUrl"
+                  value={settings.baseUrl}
+                  onChange={handleChange}
+                  placeholder="https://your-domain.vercel.app"
+                  style={{ borderRadius: "14px" }}
+                  className="h-10 border-border bg-card text-xs font-semibold focus:ring-indigo-500"
+                />
+                <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-1">
+                  <Info className="h-3 w-3" />
+                  Ensure this is your live Vercel URL (with https://) for open/click tracking to work.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <label className="text-sm font-medium text-foreground">Webhook Endpoint</label>
               <div className="flex gap-2">
                 <Input
                   name="webhookUrl"
@@ -230,17 +255,22 @@ export default function Settings() {
                   onChange={handleChange}
                   placeholder="https://your-api.com/webhooks"
                   style={{ borderRadius: "14px" }}
-                  className="h-9 border-border bg-card text-xs font-semibold"
+                  className="h-10 border-border bg-card text-xs font-semibold"
                 />
-                <Button
-                  onClick={handleSave}
-                  disabled={isSaving}
-                  style={{ borderRadius: "14px" }}
-                  className="h-9 px-4 text-xs font-semibold"
-                >
-                  Update
-                </Button>
               </div>
+              <p className="text-[10px] text-muted-foreground">Receive real-time updates for email events externally.</p>
+            </div>
+            
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={handleSave}
+                disabled={isSaving}
+                style={{ borderRadius: "14px" }}
+                className="h-10 px-6 text-xs font-bold gap-2 bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md text-white"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {isSaving ? "Saving..." : "Save Tracking Settings"}
+              </Button>
             </div>
           </CardContent>
         </Card>

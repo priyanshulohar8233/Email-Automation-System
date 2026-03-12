@@ -45,6 +45,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchStats();
+    
+    // Poll for real-time data every 10 seconds
+    const interval = setInterval(() => {
+      // Fetch stats without setting global loading=true to avoid UI flickering
+      dashboardAPI.getStats(days).then(setStats).catch(console.error);
+    }, 10000);
+    
+    return () => clearInterval(interval);
   }, [days]);
 
   return (

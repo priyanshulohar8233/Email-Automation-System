@@ -76,6 +76,7 @@ class SettingsResponse(BaseModel):
     smtp_port: int
     smtp_username: str
     smtp_password: str
+    base_url: Optional[str] = "http://localhost:8000"
     webhook_url: Optional[str]
     monthly_limit: Optional[int] = 500000
     monthly_sent: Optional[int] = 0
@@ -85,6 +86,7 @@ class SettingsUpdate(BaseModel):
     smtp_port: Optional[int] = None
     smtp_username: Optional[str] = None
     smtp_password: Optional[str] = None
+    base_url: Optional[str] = None
     webhook_url: Optional[str] = None
     monthly_limit: Optional[int] = None
 

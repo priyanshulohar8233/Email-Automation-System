@@ -110,7 +110,12 @@ def get_settings(db: Session = Depends(get_db)):
     from .models import Settings
     s = db.query(Settings).first()
     if not s:
-        s = Settings(smtp_host="smtp.gmail.com", smtp_port=587, monthly_limit=1000000)
+        s = Settings(
+            smtp_host="smtp.gmail.com", 
+            smtp_port=587, 
+            monthly_limit=1000000,
+            base_url=(f"https://{os.getenv('VERCEL_URL')}" if os.getenv("VERCEL_URL") else "http://localhost:8000")
+        )
         db.add(s)
         db.commit()
         db.refresh(s)
@@ -128,6 +133,8 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     s.smtp_user = req.smtp_user
     if req.smtp_pass:
         s.smtp_pass = req.smtp_pass
+    if req.base_url:
+        s.base_url = req.base_url
     s.monthly_limit = req.monthly_limit
     db.commit()
     return s
