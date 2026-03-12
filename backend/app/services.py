@@ -304,11 +304,12 @@ def compute_stats(db: Session, days: int = 30):
     # Function to get counts
     def get_period_counts(start, end=None):
         # 1. Total Attempted (Raw count in DB)
-        q_t = db.query(func.count(Email.id)).filter(Email.sent_at >= start)
+        q_t = db.query(func.count(Email.id))
+        if start: q_t = q_t.filter(Email.sent_at >= start)
         if end: q_t = q_t.filter(Email.sent_at < end)
         attempted = q_t.scalar() or 0
         
-        # 2. Successfully Sent (SENT or DELIVERED) - This is what users care about as "Sent"
+        # 2. Successfully Sent (SENT or DELIVERED)
         q_s = db.query(func.count(Email.id)).filter(
             Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
         )
@@ -318,25 +319,25 @@ def compute_stats(db: Session, days: int = 30):
         
         # 3. Unique opens
         q_o = db.query(func.count(distinct(EmailEvent.email_id))).filter(
-            EmailEvent.event_type == EventType.OPENED, 
-            EmailEvent.timestamp >= start
+            EmailEvent.event_type == EventType.OPENED
         )
+        if start: q_o = q_o.filter(EmailEvent.timestamp >= start)
         if end: q_o = q_o.filter(EmailEvent.timestamp < end)
         opens = q_o.scalar() or 0
         
         # 4. Unique clicks
         q_c = db.query(func.count(distinct(EmailEvent.email_id))).filter(
-            EmailEvent.event_type == EventType.CLICKED, 
-            EmailEvent.timestamp >= start
+            EmailEvent.event_type == EventType.CLICKED
         )
+        if start: q_c = q_c.filter(EmailEvent.timestamp >= start)
         if end: q_c = q_c.filter(EmailEvent.timestamp < end)
         clicks = q_c.scalar() or 0
         
         # 5. Bounces
         q_b = db.query(func.count(Email.id)).filter(
-            Email.status == EmailStatus.BOUNCED, 
-            Email.sent_at >= start
+            Email.status == EmailStatus.BOUNCED
         )
+        if start: q_b = q_b.filter(Email.sent_at >= start)
         if end: q_b = q_b.filter(Email.sent_at < end)
         bounces = q_b.scalar() or 0
 
@@ -344,11 +345,9 @@ def compute_stats(db: Session, days: int = 30):
         q_ac = db.query(func.count(Campaign.id)).filter(
             Campaign.status == CampaignStatus.RUNNING
         )
-        # We check campaigns created within the window OR that were running during it
-        if start: q_ac = q_ac.filter(Campaign.created_at >= start)
         active_camps = q_ac.scalar() or 0
         
-        return float(attempted), float(sent_success), float(opens), float(clicks), float(bounces), float(active_camps)
+        return attempted, sent_success, opens, clicks, bounces, active_camps
 
     cur_att, cur_s, cur_o, cur_c, cur_b, cur_ac = get_period_counts(last_month)
     prev_att, prev_s, prev_o, prev_c, prev_b, prev_ac = get_period_counts(prev_month, last_month)
@@ -361,13 +360,10 @@ def compute_stats(db: Session, days: int = 30):
             return 100.0 if cur > 0 else 0.0
         return ((cur - prev) / prev) * 100.0
         
-    # Standardize rates on "Successfully Sent" (cur_s)
     cur_orate = calc_rate(cur_o, cur_s)
     prev_orate = calc_rate(prev_o, prev_s)
     cur_crate = calc_rate(cur_c, cur_s)
     prev_crate = calc_rate(prev_c, prev_s)
-    
-    # Bounce rate relative to total attempts
     cur_brate = calc_rate(cur_b, cur_att)
     prev_brate = calc_rate(prev_b, prev_att)
     
@@ -375,9 +371,9 @@ def compute_stats(db: Session, days: int = 30):
     prev_urate = 100.0 - prev_orate if prev_s > 0 else 0.0
 
     return {
-        "totalEmails": int(cur_s), # Users expect this to be successful sends
+        "totalEmails": int(cur_s),
         "totalAttempted": int(cur_att),
-        "deliveredEmails": int(cur_s), # Syncing these two for consistency
+        "deliveredEmails": int(cur_s), 
         "openRate": round(float(cur_orate), 1),
         "clickRate": round(float(cur_crate), 1),
         "bounceRate": round(float(cur_brate), 1),
