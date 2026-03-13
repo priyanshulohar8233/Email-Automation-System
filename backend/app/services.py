@@ -310,16 +310,16 @@ def compute_stats(db: Session, days: int = 30):
     def get_period_counts(start, end=None):
         # 1. Total Attempted (Raw count in DB)
         q_t = db.query(func.count(Email.id))
-        if start: q_t = q_t.filter(Email.created_at >= start)
-        if end: q_t = q_t.filter(Email.created_at < end)
+        if start: q_t = q_t.filter(Email.sent_at >= start)
+        if end: q_t = q_t.filter(Email.sent_at < end)
         attempted = q_t.scalar() or 0
         
         # 2. Successfully Sent (SENT or DELIVERED)
         q_s = db.query(func.count(Email.id)).filter(
             Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
         )
-        if start: q_s = q_s.filter(Email.created_at >= start)
-        if end: q_s = q_s.filter(Email.created_at < end)
+        if start: q_s = q_s.filter(Email.sent_at >= start)
+        if end: q_s = q_s.filter(Email.sent_at < end)
         sent_success = q_s.scalar() or 0
         
         # 3. Unique opens
@@ -342,8 +342,8 @@ def compute_stats(db: Session, days: int = 30):
         q_b = db.query(func.count(Email.id)).filter(
             Email.status == EmailStatus.BOUNCED
         )
-        if start: q_b = q_b.filter(Email.created_at >= start)
-        if end: q_b = q_b.filter(Email.created_at < end)
+        if start: q_b = q_b.filter(Email.sent_at >= start)
+        if end: q_b = q_b.filter(Email.sent_at < end)
         bounces = q_b.scalar() or 0
 
         # 6. Active Campaigns
