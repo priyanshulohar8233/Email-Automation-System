@@ -356,7 +356,7 @@ def compute_stats(db: Session, days: int = 30):
         )
         active_camps = q_ac.scalar() or 0
         
-        return attempted, sent_success, opens, clicks, bounces, active_camps
+        return attempted, sent_activity, opens, clicks, bounces, active_camps
 
     cur_att, cur_s, cur_o, cur_c, cur_b, cur_ac = get_period_counts(last_month)
     prev_att, prev_s, prev_o, prev_c, prev_b, prev_ac = get_period_counts(prev_month, last_month)
