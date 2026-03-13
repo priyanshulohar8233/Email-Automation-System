@@ -221,22 +221,27 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
 
     # 1. Period Metrics
     def get_period_stats(start, end=None):
+        # Unify Sent: Definition = SENT or DELIVERED
+        sent_success = count_metric(email_status=EmailStatus.SENT, start=start, end=end) + \
+                      count_metric(email_status=EmailStatus.DELIVERED, start=start, end=end)
+        
         delivered = count_metric(email_status=EmailStatus.DELIVERED, start=start, end=end)
         opens = count_metric(event_type=EventType.OPENED, start=start, end=end)
         clicks = count_metric(event_type=EventType.CLICKED, start=start, end=end)
         spam = count_metric(event_type=EventType.SPAM_REPORT, start=start, end=end)
         bounces = count_metric(email_status=EmailStatus.BOUNCED, start=start, end=end)
         
-        orate = (opens / delivered * 100) if delivered > 0 else 0
-        crate = (clicks / delivered * 100) if delivered > 0 else 0
-        srate = (spam / delivered * 100) if delivered > 0 else 0
-        brate = (bounces / (delivered + bounces) * 100) if (delivered + bounces) > 0 else 0
+        # Rates relative to Sent (Consistent with Dashboard)
+        orate = (opens / sent * 100) if sent > 0 else 0
+        crate = (clicks / sent * 100) if sent > 0 else 0
+        srate = (spam / sent * 100) if sent > 0 else 0
+        brate = (bounces / (sent + bounces) * 100) if (sent + bounces) > 0 else 0
         
-        return delivered, orate, crate, srate, brate
+        return sent, orate, crate, srate, brate
 
     prev_month_start = limit_date - timedelta(days=days)
-    cur_d, cur_orate, cur_crate, cur_srate, cur_brate = get_period_stats(limit_date)
-    prev_d, prev_orate, prev_crate, prev_srate, prev_brate = get_period_stats(prev_month_start, limit_date)
+    cur_s, cur_orate, cur_crate, cur_srate, cur_brate = get_period_stats(limit_date)
+    prev_s, prev_orate, prev_crate, prev_srate, prev_brate = get_period_stats(prev_month_start, limit_date)
     
     def calc_growth(cur, prev):
         if prev == 0: return 100.0 if cur > 0 else 0.0
@@ -277,12 +282,12 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
     recent = recent_events(db, campaign_name=campaign_name, limit=10)
 
     return {
-        "deliveredEmails": int(cur_d),
+        "deliveredEmails": int(cur_s),
         "openRate": round(cur_orate, 1),
         "clickRate": round(cur_crate, 1),
         "spamRate": round(cur_srate, 1),
         "bounceRate": round(cur_brate, 1),
-        "deliveredEmailsGrowth": calc_growth(cur_d, prev_d),
+        "deliveredEmailsGrowth": calc_growth(cur_s, prev_s),
         "openRateGrowth": calc_growth(cur_orate, prev_orate),
         "clickRateGrowth": calc_growth(cur_crate, prev_crate),
         "spamRateGrowth": calc_growth(cur_srate, prev_srate),
@@ -305,16 +310,16 @@ def compute_stats(db: Session, days: int = 30):
     def get_period_counts(start, end=None):
         # 1. Total Attempted (Raw count in DB)
         q_t = db.query(func.count(Email.id))
-        if start: q_t = q_t.filter(Email.sent_at >= start)
-        if end: q_t = q_t.filter(Email.sent_at < end)
+        if start: q_t = q_t.filter(Email.created_at >= start)
+        if end: q_t = q_t.filter(Email.created_at < end)
         attempted = q_t.scalar() or 0
         
         # 2. Successfully Sent (SENT or DELIVERED)
         q_s = db.query(func.count(Email.id)).filter(
             Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
         )
-        if start: q_s = q_s.filter(Email.sent_at >= start)
-        if end: q_s = q_s.filter(Email.sent_at < end)
+        if start: q_s = q_s.filter(Email.created_at >= start)
+        if end: q_s = q_s.filter(Email.created_at < end)
         sent_success = q_s.scalar() or 0
         
         # 3. Unique opens
@@ -337,8 +342,8 @@ def compute_stats(db: Session, days: int = 30):
         q_b = db.query(func.count(Email.id)).filter(
             Email.status == EmailStatus.BOUNCED
         )
-        if start: q_b = q_b.filter(Email.sent_at >= start)
-        if end: q_b = q_b.filter(Email.sent_at < end)
+        if start: q_b = q_b.filter(Email.created_at >= start)
+        if end: q_b = q_b.filter(Email.created_at < end)
         bounces = q_b.scalar() or 0
 
         # 6. Active Campaigns
@@ -367,9 +372,7 @@ def compute_stats(db: Session, days: int = 30):
     cur_brate = calc_rate(cur_b, cur_att)
     prev_brate = calc_rate(prev_b, prev_att)
     
-    cur_urate = 100.0 - cur_orate if cur_s > 0 else 0.0
-    prev_urate = 100.0 - prev_orate if prev_s > 0 else 0.0
-
+    # Standardize rates (Sent = SENT+DELIVERED)
     return {
         "totalEmails": int(cur_s),
         "totalAttempted": int(cur_att),
@@ -377,7 +380,7 @@ def compute_stats(db: Session, days: int = 30):
         "openRate": round(float(cur_orate), 1),
         "clickRate": round(float(cur_crate), 1),
         "bounceRate": round(float(cur_brate), 1),
-        "unread": round(float(cur_urate), 1),
+        "unread": round(float(100.0 - cur_orate if cur_s > 0 else 0.0), 1),
         "activeCampaigns": int(cur_ac),
         
         "totalEmailsGrowth": round(float(calc_growth(cur_s, prev_s)), 1),
@@ -389,6 +392,7 @@ def compute_stats(db: Session, days: int = 30):
             "bounced": int(cur_b),
             "opened": int(cur_o),
             "delivered": int(cur_s),
+            "unread": int(max(0, cur_s - cur_o)),
             "attempted": int(cur_att)
         }
     }
@@ -577,9 +581,9 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
             "sent": sent,
             "delivered": delivered,
             "failed": failed,
-            "opens": f"{opens} ({round(opens/delivered*100, 1) if delivered > 0 else 0}%)",
+            "opens": f"{opens} ({round(opens/sent*100, 1) if sent > 0 else 0}%)",
             "unread": f"{unread} ({round(unread/sent*100, 1) if sent > 0 else 0}%)",
-            "bounce": f"{failed} ({round(failed/sent*100, 1) if sent > 0 else 0}%)",
+            "bounce": f"{failed} ({round(failed/(sent+failed)*100, 1) if (sent+failed) > 0 else 0}%)",
             "scheduled": c.scheduled_for or "Not scheduled",
         })
     return results
