@@ -380,8 +380,6 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
 
 def compute_stats(db: Session, days: int = 30):
     from datetime import datetime, timedelta
-    from . import debug
-    debug.file_log("analytics", f"REQUEST: compute_stats days={days}")
 
     now = datetime.utcnow()
     last_month = now - timedelta(days=days)
@@ -488,8 +486,7 @@ def compute_stats(db: Session, days: int = 30):
 
 def emails_over_time(db: Session, days: int = 7):
     from datetime import datetime, timedelta
-    from . import debug
-    debug.file_log("analytics", f"REQUEST: emails_over_time days={days}")
+    now = datetime.utcnow()
     
     if days == 7:
         # 1. Monday-Sunday Daily View

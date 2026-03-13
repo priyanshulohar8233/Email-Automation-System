@@ -32,17 +32,26 @@ const fetchWithTimeout = (url: string, timeout: number = 10000): Promise<Respons
 export const dashboardAPI = {
     getStats: async (days?: number): Promise<DashboardStats> => {
         try {
-            // In a real application we would use the actual backend URL here.
-            // Currently assuming the proxy or relative path routes mapped to FastAPI.
             const url = days ? `/api/dashboard/stats?days=${days}` : '/api/dashboard/stats';
-            const response = await fetchWithTimeout(url, 10000);
+            // Increased timeout to 30s to handle remote database latency
+            const response = await fetchWithTimeout(url, 30000);
 
             if (!response.ok) {
                 const errorText = await response.text();
                 console.error(`Dashboard API Stats Error [${response.status}]: ${response.statusText}`, errorText);
                 throw new Error(`Error fetching dashboard stats: ${response.status} ${response.statusText}`);
             }
-            return await response.json();
+            const data = await response.json();
+            // Ensure numeric values are valid
+            return {
+                ...data,
+                totalEmails: data.totalEmails || 0,
+                openRate: data.openRate || 0,
+                clickRate: data.clickRate || 0,
+                unread: data.unread || 0,
+                bounceRate: data.bounceRate || 0,
+                activeCampaigns: data.activeCampaigns || 0
+            };
         } catch (error) {
             console.error("Dashboard API Error:", error);
             throw error;
@@ -51,7 +60,8 @@ export const dashboardAPI = {
     // New function to fetch email stats (same shape as DashboardStats but could be extended)
     getEmailStats: async (days?: number): Promise<any> => {
         const url = days ? `/api/dashboard/email-stats?days=${days}` : '/api/dashboard/email-stats';
-        const response = await fetchWithTimeout(url, 10000);
+        // Increased timeout to 30s to handle remote database latency
+        const response = await fetchWithTimeout(url, 30000);
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Dashboard API Email Stats Error [${response.status}]: ${response.statusText}`, errorText);
@@ -62,7 +72,8 @@ export const dashboardAPI = {
     // New function to fetch recent events for activity table
     getRecentEvents: async (days?: number): Promise<any[]> => {
         const url = days ? `/api/dashboard/recent-events?days=${days}` : '/api/dashboard/recent-events';
-        const response = await fetchWithTimeout(url, 10000);
+        // Increased timeout to 30s to handle remote database latency
+        const response = await fetchWithTimeout(url, 30000);
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Dashboard API Recent Events Error [${response.status}]: ${response.statusText}`, errorText);
