@@ -1,3 +1,4 @@
+from typing import List
 import smtplib
 from datetime import datetime
 from sqlalchemy import func, distinct
@@ -177,7 +178,7 @@ def get_link_performance(db: Session, campaign_name: str = "all"):
     results = q.group_by(EmailEvent.url).order_by(func.count(EmailEvent.id).desc()).limit(10).all()
     return [{"url": r.url or "Direct/Unknown", "clicks": r.clicks} for r in results]
 
-def process_sendgrid_webhook(db: Session, events: List[dict]):
+def process_sendgrid_webhook(db: Session, events: list[dict]):
     """
     Processes a list of events from the SendGrid Event Webhook.
     Reference: https://sendgrid.com/docs/for-developers/tracking-events/event-webhook-reference/
