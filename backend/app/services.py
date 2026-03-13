@@ -221,23 +221,27 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
 
     # 1. Period Metrics
     def get_period_stats(start, end=None):
-        # Unify Sent: Definition = SENT or DELIVERED
-        sent_success = count_metric(email_status=EmailStatus.SENT, start=start, end=end) + \
-                      count_metric(email_status=EmailStatus.DELIVERED, start=start, end=end)
+        # Unify Sent: Definition = Total Attempts (SENT, DELIVERED, or BOUNCED)
+        total_attempts = count_metric(email_status=EmailStatus.SENT, start=start, end=end) + \
+                         count_metric(email_status=EmailStatus.DELIVERED, start=start, end=end) + \
+                         count_metric(email_status=EmailStatus.BOUNCED, start=start, end=end)
         
-        delivered = count_metric(email_status=EmailStatus.DELIVERED, start=start, end=end)
+        # Delivered = SENT or DELIVERED (Excludes BOUNCES for rate accuracy)
+        delivered = count_metric(email_status=EmailStatus.SENT, start=start, end=end) + \
+                    count_metric(email_status=EmailStatus.DELIVERED, start=start, end=end)
+        
         opens = count_metric(event_type=EventType.OPENED, start=start, end=end)
         clicks = count_metric(event_type=EventType.CLICKED, start=start, end=end)
         spam = count_metric(event_type=EventType.SPAM_REPORT, start=start, end=end)
         bounces = count_metric(email_status=EmailStatus.BOUNCED, start=start, end=end)
         
-        # Rates relative to Sent (Consistent with Dashboard)
-        orate = (opens / sent * 100) if sent > 0 else 0
-        crate = (clicks / sent * 100) if sent > 0 else 0
-        srate = (spam / sent * 100) if sent > 0 else 0
-        brate = (bounces / (sent + bounces) * 100) if (sent + bounces) > 0 else 0
+        # Rates relative to correctly delivered or total attempts
+        orate = (opens / delivered * 100) if delivered > 0 else 0
+        crate = (clicks / delivered * 100) if delivered > 0 else 0
+        srate = (spam / delivered * 100) if delivered > 0 else 0
+        brate = (bounces / total_attempts * 100) if total_attempts > 0 else 0
         
-        return sent, orate, crate, srate, brate
+        return total_attempts, orate, crate, srate, brate
 
     prev_month_start = limit_date - timedelta(days=days)
     cur_s, cur_orate, cur_crate, cur_srate, cur_brate = get_period_stats(limit_date)
@@ -314,13 +318,13 @@ def compute_stats(db: Session, days: int = 30):
         if end: q_t = q_t.filter(Email.sent_at < end)
         attempted = q_t.scalar() or 0
         
-        # 2. Successfully Sent (SENT or DELIVERED)
+        # 2. Total Sent (SENT, DELIVERED, or BOUNCED) - This reflects total activity
         q_s = db.query(func.count(Email.id)).filter(
-            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
+            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
         )
         if start: q_s = q_s.filter(Email.sent_at >= start)
         if end: q_s = q_s.filter(Email.sent_at < end)
-        sent_success = q_s.scalar() or 0
+        sent_activity = q_s.scalar() or 0
         
         # 3. Unique opens
         q_o = db.query(func.count(distinct(EmailEvent.email_id))).filter(
@@ -357,6 +361,11 @@ def compute_stats(db: Session, days: int = 30):
     cur_att, cur_s, cur_o, cur_c, cur_b, cur_ac = get_period_counts(last_month)
     prev_att, prev_s, prev_o, prev_c, prev_b, prev_ac = get_period_counts(prev_month, last_month)
     
+    # Define Delivered (for unread/open rate denominators)
+    # Delivered = SENT or DELIVERED (Excludes BOUNCES for rate accuracy)
+    cur_delivered = cur_s - cur_b
+    prev_delivered = prev_s - prev_b
+
     def calc_rate(num, den):
         return (num / den * 100.0) if den > 0 else 0.0
         
@@ -365,22 +374,22 @@ def compute_stats(db: Session, days: int = 30):
             return 100.0 if cur > 0 else 0.0
         return ((cur - prev) / prev) * 100.0
         
-    cur_orate = calc_rate(cur_o, cur_s)
-    prev_orate = calc_rate(prev_o, prev_s)
-    cur_crate = calc_rate(cur_c, cur_s)
-    prev_crate = calc_rate(prev_c, prev_s)
-    cur_brate = calc_rate(cur_b, cur_att)
-    prev_brate = calc_rate(prev_b, prev_att)
+    cur_orate = calc_rate(cur_o, cur_delivered)
+    prev_orate = calc_rate(prev_o, prev_delivered)
+    cur_crate = calc_rate(cur_c, cur_delivered)
+    prev_crate = calc_rate(prev_c, prev_delivered)
+    cur_brate = calc_rate(cur_b, cur_s)
+    prev_brate = calc_rate(prev_b, prev_s)
     
     # Standardize rates (Sent = SENT+DELIVERED)
     return {
         "totalEmails": int(cur_s),
         "totalAttempted": int(cur_att),
-        "deliveredEmails": int(cur_s), 
+        "deliveredEmails": int(cur_delivered), 
         "openRate": round(float(cur_orate), 1),
         "clickRate": round(float(cur_crate), 1),
         "bounceRate": round(float(cur_brate), 1),
-        "unread": round(float(100.0 - cur_orate if cur_s > 0 else 0.0), 1),
+        "unread": round(float(100.0 - cur_orate if cur_delivered > 0 else 0.0), 1),
         "activeCampaigns": int(cur_ac),
         
         "totalEmailsGrowth": round(float(calc_growth(cur_s, prev_s)), 1),
@@ -414,9 +423,9 @@ def emails_over_time(db: Session, days: int = 7):
             date_str = d.strftime('%Y-%m-%d')
             counts[date_str] = 0
             
-        # Chart should show all attempted/successful deliveries
+        # Chart should show all attempted/successful/bounced deliveries (Total activity)
         rows = db.query(Email.sent_at).filter(
-            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), 
+            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED]), 
             Email.sent_at >= limit_date
         ).all()
         for r in rows:
@@ -443,7 +452,7 @@ def emails_over_time(db: Session, days: int = 7):
             })
             
         rows = db.query(Email.sent_at).filter(
-            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), 
+            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED]), 
             Email.sent_at >= limit_date
         ).all()
         
