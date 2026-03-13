@@ -380,6 +380,8 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
 
 def compute_stats(db: Session, days: int = 30):
     from datetime import datetime, timedelta
+    from . import debug
+    debug.file_log("analytics", f"REQUEST: compute_stats days={days}")
 
     now = datetime.utcnow()
     last_month = now - timedelta(days=days)
@@ -486,7 +488,8 @@ def compute_stats(db: Session, days: int = 30):
 
 def emails_over_time(db: Session, days: int = 7):
     from datetime import datetime, timedelta
-    now = datetime.utcnow()
+    from . import debug
+    debug.file_log("analytics", f"REQUEST: emails_over_time days={days}")
     
     if days == 7:
         # 1. Monday-Sunday Daily View
@@ -1050,6 +1053,8 @@ def generate_ai_template(topic: str, tone: str) -> dict:
             return {"subject": data.get("subject", "Generated Subject"), "body": data.get("body", content)}
         except json.JSONDecodeError:
             return {"subject": "Email Subject", "body": content}
+    except Exception as e:
+        print(f"ERROR: OpenAI failure: {str(e)}")
         # Fallback to local generation if API fails (e.g. quota limit)
         return fallback_generation(topic, tone)
 
