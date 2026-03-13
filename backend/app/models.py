@@ -109,6 +109,7 @@ class Settings(Base):
     smtp_port = Column(Integer, default=587)
     smtp_username = Column(String, default="admin@mailflow.com")
     smtp_password = Column(String, default="")
+    sendgrid_api_key = Column(String, nullable=True)
     base_url = Column(String, default="http://localhost:8000")
     webhook_url = Column(String, nullable=True)
     monthly_limit = Column(Integer, default=500000)

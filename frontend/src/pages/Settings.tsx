@@ -15,6 +15,7 @@ interface SettingsState {
   monthlyLimit: number;
   monthlySent: number;
   baseUrl: string;
+  sendgridApiKey: string;
 }
 
 export default function Settings() {
@@ -27,6 +28,7 @@ export default function Settings() {
     monthlyLimit: 500000,
     monthlySent: 0,
     baseUrl: "",
+    sendgridApiKey: "",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -47,6 +49,7 @@ export default function Settings() {
             monthlyLimit: data.monthly_limit ?? 500000,
             monthlySent: data.monthly_sent ?? 0,
             baseUrl: data.base_url || "",
+            sendgridApiKey: data.sendgrid_api_key || "",
           });
         }
       } catch (error) {
@@ -73,6 +76,7 @@ export default function Settings() {
           webhook_url: settings.webhookUrl,
           monthly_limit: settings.monthlyLimit,
           base_url: settings.baseUrl,
+          sendgrid_api_key: settings.sendgridApiKey,
         }),
       });
       if (!response.ok) throw new Error("Failed to save settings");
@@ -150,6 +154,26 @@ export default function Settings() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Password</label>
                     <Input name="smtpPassword" type="password" value={settings.smtpPassword} onChange={handleChange} placeholder="••••••••••••" />
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-border">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Key className="h-4 w-4 text-indigo-600" />
+                    <label className="text-sm font-semibold">SendGrid API Key (Optional)</label>
+                    <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200">REST API Mode</Badge>
+                  </div>
+                  <div className="space-y-1">
+                    <Input 
+                      name="sendgridApiKey" 
+                      type="password"
+                      value={settings.sendgridApiKey} 
+                      onChange={handleChange} 
+                      placeholder="SG.xxxxxxxxxxxxxxxxxxxxxx" 
+                      style={{ borderRadius: "14px" }}
+                      className="h-10 border-border bg-card text-xs font-semibold"
+                    />
+                    <p className="text-[10px] text-muted-foreground mt-1">If provided, the system will prioritize the SendGrid REST API over SMTP for faster delivery.</p>
                   </div>
                 </div>
                 <div className="flex justify-end gap-3">

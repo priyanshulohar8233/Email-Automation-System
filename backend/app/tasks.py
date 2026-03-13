@@ -61,16 +61,17 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         smtp_port = s.smtp_port if (s and s.smtp_port) else settings.SMTP_PORT
         smtp_user = s.smtp_username if (s and s.smtp_username) else settings.SMTP_USER
         smtp_pass = s.smtp_password if (s and s.smtp_password) else settings.SMTP_PASS
+        sendgrid_key = s.sendgrid_api_key if (s and s.sendgrid_api_key) else os.getenv("SENDGRID_API_KEY")
         
         # Dynamic BASE_URL from DB
         base_url = s.base_url if (s and s.base_url) else settings.BASE_URL
         if base_url.endswith("/"):
             base_url = base_url[:-1]
         
-        # Check if we have valid settings
-        if not smtp_host or not smtp_user:
-            debug.debug_log(f"ERROR: Email {email_id} failed: SMTP settings missing")
-            raise Exception("SMTP settings missing in DB and .env")
+        # Check if we have valid settings (Either API or SMTP)
+        if not sendgrid_key and (not smtp_host or not smtp_user):
+            debug.debug_log(f"ERROR: Email {email_id} failed: No sending provider configured")
+            raise Exception("SMTP or SendGrid settings missing in DB and .env")
 
         # Look up email record
         email_record = db.query(Email).get(email_id)
@@ -207,6 +208,7 @@ def send_email_task(email_id: int, subject: str, body: str, attachments: list = 
         smtp_port = s.smtp_port if (s and s.smtp_port) else settings.SMTP_PORT
         smtp_user = s.smtp_username if (s and s.smtp_username) else settings.SMTP_USER
         smtp_pass = s.smtp_password if (s and s.smtp_password) else settings.SMTP_PASS
+        sendgrid_key = s.sendgrid_api_key if (s and s.sendgrid_api_key) else os.getenv("SENDGRID_API_KEY")
         base_url = s.base_url if (s and s.base_url) else settings.BASE_URL
         if base_url.endswith("/"): base_url = base_url[:-1]
 
@@ -226,9 +228,11 @@ def send_email_task(email_id: int, subject: str, body: str, attachments: list = 
 
         to_addr = email_record.recipient_email
         
-        # 3. Tracking Logic
+        # 3. Tracking Logic (Hardened with cache-busting)
+        import time as pytime
+        cache_buster = int(pytime.time())
         unsubscribe_url = f"{base_url}/api/contacts/unsubscribe?email={quote(to_addr)}"
-        tracking_pixel = f"<img src='{base_url}/api/track/open/{email_id}' width='1' height='1' border='0' style='display:block; margin:0; padding:0; line-height:0; color:transparent; pointer-events:none;' alt=''/>"
+        tracking_pixel = f"<img src='{base_url}/api/track/open/{email_id}?cb={cache_buster}' width='1' height='1' border='0' style='display:block; margin:0; padding:0; line-height:0; color:transparent; pointer-events:none;' alt=''/>"
         
         final_body = body
         if "{{unsubscribe}}" in final_body:
@@ -245,26 +249,47 @@ def send_email_task(email_id: int, subject: str, body: str, attachments: list = 
             
         final_body = re.sub(r'href="([^"]+)"', replace_link, final_body)
 
-        # 4. SMTP Send
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
-        
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = f"Email System <{smtp_user}>"
-        msg["To"] = to_addr
-        msg.attach(MIMEText(final_body, "html"))
-        
-        debug.debug_log(f"SMTP: Connecting to {smtp_host}:{smtp_port}")
-        try:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=45) as server:
-                server.starttls()
-                server.login(smtp_user, smtp_pass)
-                server.sendmail(smtp_user, [to_addr], msg.as_string())
-            debug.debug_log(f"SMTP: Success for email {email_id}")
-        except Exception as smtp_err:
-            debug.debug_log(f"SMTP: Failed for email {email_id}: {str(smtp_err)}")
-            raise Exception(f"SMTP_DELIVERY_FAILURE: {str(smtp_err)}")
+        # 4. Delivery Method Selection
+        if sendgrid_key:
+            # 4a. Send via SendGrid REST API
+            from sendgrid import SendGridAPIClient
+            from sendgrid.helpers.mail import Mail as SGMail, Email as SGEmail, To, Content
+            
+            sg_message = SGMail(
+                from_email=SGEmail(smtp_user or "noreply@mailflow.com"),
+                to_emails=To(to_addr),
+                subject=subject,
+                html_content=Content("text/html", final_body)
+            )
+            
+            try:
+                sg = SendGridAPIClient(sendgrid_key)
+                response = sg.send(sg_message)
+                debug.debug_log(f"SENDGRID SUCCESS: Status {response.status_code}")
+            except Exception as sg_err:
+                debug.debug_log(f"SENDGRID ERROR for email {email_id}: {str(sg_err)}")
+                raise Exception(f"SENDGRID_DELIVERY_FAILURE: {str(sg_err)}")
+        else:
+            # 4b. SMTP Send (Fallback)
+            from email.mime.multipart import MIMEMultipart
+            from email.mime.text import MIMEText
+            
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"Email System <{smtp_user}>"
+            msg["To"] = to_addr
+            msg.attach(MIMEText(final_body, "html"))
+            
+            debug.debug_log(f"SMTP: Connecting to {smtp_host}:{smtp_port}")
+            try:
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=45) as server:
+                    server.starttls()
+                    server.login(smtp_user, smtp_pass)
+                    server.sendmail(smtp_user, [to_addr], msg.as_string())
+                debug.debug_log(f"SMTP: Success for email {email_id}")
+            except Exception as smtp_err:
+                debug.debug_log(f"SMTP: Failed for email {email_id}: {str(smtp_err)}")
+                raise Exception(f"SMTP_DELIVERY_FAILURE: {str(smtp_err)}")
 
         # 5. Success Updates (Ultra-Robust)
         def finalize_task(current_db):
