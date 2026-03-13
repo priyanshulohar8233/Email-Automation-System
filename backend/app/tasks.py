@@ -17,6 +17,25 @@ celery = Celery(
     backend=settings.REDIS_URL
 )
 
+def retry_db_write(db, func, *args, **kwargs):
+    import time
+    import random
+    max_retries = 5
+    for attempt in range(max_retries):
+        try:
+            result = func(db, *args, **kwargs)
+            db.commit()
+            return result
+        except Exception as e:
+            db.rollback()
+            if "busy" in str(e).lower() or "locked" in str(e).lower():
+                wait = (attempt + 1) + random.random()
+                debug.debug_log(f"DB_BUSY: Write attempt {attempt+1} failed. Retrying in {wait:.2f}s...")
+                time.sleep(wait)
+            else:
+                raise e
+    raise Exception("DB_WRITE_FAILED_AFTER_RETRIES")
+
 def send_email_fn(email_id: int, subject: str, body: str, attachments: list = None):
     debug.debug_log(f"DEBUG: Background task starting for email {email_id}")
     db = SessionLocal()
@@ -112,14 +131,20 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         
         debug.debug_log(f"SUCCESS: Email {email_id} sent")
         
-        # 5. Update Status & Log Events
-        email_record.status = EmailStatus.SENT
-        email_record.subject = subject
-        email_record.body = final_body
+        # 5. Update Status & Log Events (Wrapped in Ultra-Robust Retry)
+        def finalize_send(current_db):
+            email_rec = current_db.query(Email).get(email_id)
+            if email_rec:
+                email_rec.status = EmailStatus.SENT
+                email_rec.subject = subject
+                email_rec.body = final_body
+                log_event(current_db, email_id, EventType.SENT)
+                log_event(current_db, email_id, EventType.DELIVERED)
+                # Check for campaign completion
+                if email_rec.campaign_id:
+                    check_and_complete_campaign(current_db, email_rec.campaign_id)
         
-        log_event(db, email_id, EventType.SENT)
-        log_event(db, email_id, EventType.DELIVERED)
-        db.commit()
+        retry_db_write(db, finalize_send)
         
     except Exception as ex:
         error_msg = f"{type(ex).__name__}: {str(ex)}"
@@ -127,31 +152,23 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         
         # Use a fresh session for error recovery in case the original one died (e.g. 'Closed Database')
         db_recovery = SessionLocal()
-        try:
-            email_record = db_recovery.query(Email).get(email_id)
-            if email_record:
-                email_record.status = EmailStatus.BOUNCED
-                email_record.failure_reason = error_msg
+        def recovery_cleanup(recovery_db):
+            email_rec = recovery_db.query(Email).get(email_id)
+            if email_rec:
+                email_rec.status = EmailStatus.BOUNCED
+                email_rec.failure_reason = error_msg
+                
+                # Log bounce event
+                log_event(recovery_db, email_id, EventType.BOUNCED)
                 
                 # Check for campaign completion
-                if email_record.campaign_id:
-                    pending_count = db_recovery.query(Email).filter(
-                        Email.campaign_id == email_record.campaign_id, 
-                        Email.status == EmailStatus.PENDING
-                    ).count()
-                    if pending_count == 0:
-                        camp = db_recovery.query(Campaign).get(email_record.campaign_id)
-                        if camp:
-                            camp.status = CampaignStatus.COMPLETED
-                
-                db_recovery.add(EmailEvent(
-                    email_id=email_id, 
-                    event_type=EventType.BOUNCED, 
-                    timestamp=datetime.utcnow()
-                ))
-                db_recovery.commit()
+                if email_rec.campaign_id:
+                    check_and_complete_campaign(recovery_db, email_rec.campaign_id)
+
+        try:
+            retry_db_write(db_recovery, recovery_cleanup)
         except Exception as recovery_ex:
-            debug.debug_log(f"RECOVERY ERROR for email {email_id}: {str(recovery_ex)}")
+            debug.debug_log(f"RECOVERY ERROR (Final): {str(recovery_ex)}")
         finally:
             db_recovery.close()
             
@@ -249,18 +266,21 @@ def send_email_task(email_id: int, subject: str, body: str, attachments: list = 
             debug.debug_log(f"SMTP: Failed for email {email_id}: {str(smtp_err)}")
             raise Exception(f"SMTP_DELIVERY_FAILURE: {str(smtp_err)}")
 
-        # 5. Success Updates
-        try:
-            email_record.status = EmailStatus.SENT
-            email_record.subject = subject
-            email_record.body = final_body
-            log_event(db, email_id, EventType.SENT)
-            log_event(db, email_id, EventType.DELIVERED)
-            db.commit()
-            debug.debug_log(f"DONE: Email {email_id} fully processed")
-        except Exception as db_err:
-            debug.debug_log(f"DB_ERROR: Final status update failed for {email_id}: {str(db_err)}")
-            raise db_err
+        # 5. Success Updates (Ultra-Robust)
+        def finalize_task(current_db):
+            email_rec = current_db.query(Email).get(email_id)
+            if email_rec:
+                email_rec.status = EmailStatus.SENT
+                email_rec.subject = subject
+                email_rec.body = final_body
+                log_event(current_db, email_id, EventType.SENT)
+                log_event(current_db, email_id, EventType.DELIVERED)
+                # Campaign completion check
+                if email_rec.campaign_id:
+                    check_and_complete_campaign(current_db, email_rec.campaign_id)
+        
+        retry_db_write(db, finalize_task)
+        debug.debug_log(f"DONE: Email {email_id} fully processed")
 
     except Exception as ex:
         err_str = f"{type(ex).__name__}: {str(ex)}"
@@ -268,13 +288,18 @@ def send_email_task(email_id: int, subject: str, body: str, attachments: list = 
         
         # Recovery block with fresh session
         db_rec = SessionLocal()
-        try:
-            rec_email = db_rec.query(Email).get(email_id)
+        def final_recovery(recovery_db):
+            rec_email = recovery_db.query(Email).get(email_id)
             if rec_email:
                 rec_email.status = EmailStatus.BOUNCED
                 rec_email.failure_reason = err_str
-                db_rec.add(EmailEvent(email_id=email_id, event_type=EventType.BOUNCED, timestamp=datetime.utcnow()))
-                db_rec.commit()
+                log_event(recovery_db, email_id, EventType.BOUNCED)
+                # Check for campaign completion
+                if rec_email.campaign_id:
+                    check_and_complete_campaign(recovery_db, rec_email.campaign_id)
+        
+        try:
+            retry_db_write(db_rec, final_recovery)
         except:
             pass
         finally:
