@@ -157,26 +157,7 @@ export default function Settings() {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-border">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Key className="h-4 w-4 text-indigo-600" />
-                    <label className="text-sm font-semibold">SendGrid API Key (Optional)</label>
-                    <Badge variant="outline" className="text-[10px] bg-indigo-50 text-indigo-700 border-indigo-200">REST API Mode</Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <Input 
-                      name="sendgridApiKey" 
-                      type="password"
-                      value={settings.sendgridApiKey} 
-                      onChange={handleChange} 
-                      placeholder="SG.xxxxxxxxxxxxxxxxxxxxxx" 
-                      style={{ borderRadius: "14px" }}
-                      className="h-10 border-border bg-card text-xs font-semibold"
-                    />
-                    <p className="text-[10px] text-muted-foreground mt-1">If provided, the system will prioritize the SendGrid REST API over SMTP for faster delivery.</p>
-                  </div>
-                </div>
-                <div className="flex justify-end gap-3">
+                <div className="flex justify-end gap-3 pt-4 border-t border-border">
                   <Button
                     onClick={async () => {
                       try {
@@ -207,7 +188,7 @@ export default function Settings() {
                     className="h-9 px-4 text-xs font-semibold gap-2 bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md text-white border-transparent"
                   >
                     <Save className="h-3.5 w-3.5" />
-                    {isSaving ? "Saving..." : "Save Changes"}
+                    {isSaving ? "Saving..." : "Save Settings"}
                   </Button>
                 </div>
               </>
@@ -218,24 +199,46 @@ export default function Settings() {
         {/* API Keys */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <Key className="h-5 w-5 text-indigo-600" />
-              <CardTitle>API Keys</CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Key className="h-5 w-5 text-indigo-600" />
+                <CardTitle>API Configuration</CardTitle>
+              </div>
+              <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-200">REST API Mode</Badge>
             </div>
-            <CardDescription>Manage your API keys for external integrations.</CardDescription>
+            <CardDescription>Configure your SendGrid API key for high-performance delivery.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-4 border border-border rounded-xl bg-muted/30">
-              <div className="flex flex-col">
-                <span className="font-semibold text-sm text-foreground">Production Key</span>
-                <span className="text-[10px] text-muted-foreground font-mono mt-0.5 tracking-wider">pk_live_51Mz...92x</span>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">SendGrid API Key</label>
+              <div className="flex gap-2">
+                <Input
+                  name="sendgridApiKey"
+                  type="password"
+                  value={settings.sendgridApiKey}
+                  onChange={handleChange}
+                  placeholder="SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                  style={{ borderRadius: "14px" }}
+                  className="h-10 border-border bg-card text-xs font-semibold focus:ring-indigo-500"
+                />
               </div>
-              <div className="flex items-center gap-3">
-                <Badge variant="success">Active</Badge>
-                <Button variant="ghost" size="sm" className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10 text-[10px] font-bold uppercase tracking-wider">Revoke</Button>
-              </div>
+              <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                <Info className="h-3 w-3" />
+                When provided, SendGrid API is used instead of SMTP.
+              </p>
             </div>
-            <Button variant="outline" size="sm">Generate New Key</Button>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                onClick={handleSave}
+                disabled={isSaving}
+                style={{ borderRadius: "14px" }}
+                className="h-10 px-6 text-xs font-bold gap-2 bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md text-white"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {isSaving ? "Saving..." : "Save API Settings"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

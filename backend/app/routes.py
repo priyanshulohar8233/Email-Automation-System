@@ -133,6 +133,8 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     s.smtp_user = req.smtp_user
     if req.smtp_pass:
         s.smtp_pass = req.smtp_pass
+    if req.sendgrid_api_key:
+        s.sendgrid_api_key = req.sendgrid_api_key
     if req.base_url:
         s.base_url = req.base_url
     s.monthly_limit = req.monthly_limit
