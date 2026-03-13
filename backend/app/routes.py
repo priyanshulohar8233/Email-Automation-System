@@ -273,7 +273,15 @@ def generate_template(req: AIGenerateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-from .schemas import BulkContactsRequest
+from .schemas import BulkContactsRequest, AIChatRequest
+
+@router.post("/ai/chat")
+def ai_chat(req: AIChatRequest):
+    try:
+        response = services.process_ai_chat(req.message, req.history)
+        return {"response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/contacts/import")
 def import_contacts(req: BulkContactsRequest, db: Session = Depends(get_db)):

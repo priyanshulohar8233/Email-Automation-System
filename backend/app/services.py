@@ -1050,7 +1050,49 @@ def generate_ai_template(topic: str, tone: str) -> dict:
             return {"subject": data.get("subject", "Generated Subject"), "body": data.get("body", content)}
         except json.JSONDecodeError:
             return {"subject": "Email Subject", "body": content}
-    except Exception as e:
-        print(f"ERROR: OpenAI failure: {str(e)}")
         # Fallback to local generation if API fails (e.g. quota limit)
         return fallback_generation(topic, tone)
+
+def process_ai_chat(message: str, history: list = None) -> str:
+    """
+    Powers the 'Clawd Assistant' using OpenAI/Claude.
+    Tailored for a professional Email SaaS experience.
+    """
+    from .config import settings
+    from openai import OpenAI
+    
+    api_key = settings.OPENAI_API_KEY
+    if not api_key:
+        return "Hey! I'm Clawd, your email assistant. I'm currently in 'Offline Mode' because no AI API key is configured in your settings. Please add an OpenAI API Key to start a real conversation!"
+
+    try:
+        client = OpenAI(api_key=api_key)
+        
+        system_prompt = (
+            "You are 'Clawd', a senior Email Growth Specialist and AI Assistant for this Email Automation SaaS platform.\n"
+            "Your personality: Professional, encouraging, highly technical yet accessible, and slightly witty.\n"
+            "Your goals:\n"
+            "1. Help users with email copywriting (subject lines, body, calls-to-action).\n"
+            "2. Explain technical concepts like SMTP, SendGrid, deliverability, and tracking pixels.\n"
+            "3. Help users navigate the dashboard and campaigns.\n"
+            "4. Provide growth strategies for email marketing.\n\n"
+            "Tone: SaaS Executive meets helpful Engineer. Use Markdown for formatting (bold, lists, etc.). Keep responses concise."
+        )
+
+        messages = [{"role": "system", "content": system_prompt}]
+        if history:
+            # History is expected as list of {"role": "user|assistant", "content": "..."}
+            messages.extend(history[-10:]) # Keep last 10 messages for context
+        
+        messages.append({"role": "user", "content": message})
+
+        response = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=messages,
+            temperature=0.7,
+            max_tokens=500
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"CLAWDBOT_ERROR: {str(e)}")
+        return f"I'm sorry, I'm having a bit of a technical hiccup (AI engine error). But as your assistant, I'm here to help! Error details: {str(e)}"

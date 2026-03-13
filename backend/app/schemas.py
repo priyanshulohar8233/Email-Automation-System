@@ -116,3 +116,7 @@ class TestEmailRequest(BaseModel):
     body: str
     recipient: EmailStr
     attachments: Optional[List[str]] = None
+
+class AIChatRequest(BaseModel):
+    message: str
+    history: Optional[List[dict]] = None
