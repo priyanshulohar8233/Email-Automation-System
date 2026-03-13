@@ -470,6 +470,8 @@ def compute_stats(db: Session, days: int = 30):
         "totalEmailsGrowth": round(float(calc_growth(cur_s, prev_s)), 1),
         "openRateGrowth": round(float(calc_growth(cur_orate, prev_orate)), 1),
         "clickRateGrowth": round(float(calc_growth(cur_crate, prev_crate)), 1),
+        "bounceRateGrowth": round(float(calc_growth(cur_brate, prev_brate)), 1),
+        "unreadGrowth": round(float(calc_growth(100.0 - cur_orate, 100.0 - prev_orate)), 1),
         "activeCampaignsGrowth": round(float(calc_growth(cur_ac, prev_ac)), 1),
 
         "raw": {
