@@ -624,16 +624,24 @@ def update_campaign(db: Session, campaign_id: int, data):
         raise e
 
 def delete_campaign(db: Session, campaign_id: int):
-    from .models import Campaign, Email
+    from .models import Campaign, Email, EmailEvent
     try:
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
         if not campaign:
             raise ValueError("Campaign not found")
         
-        # Delete all emails associated with this campaign
-        db.query(Email).filter(Email.campaign_id == campaign_id).delete()
+        # 1. Delete all tracking events associated with this campaign's emails 
+        # (This avoids foreign key constraint violations)
+        db.query(EmailEvent).filter(
+            EmailEvent.email_id.in_(
+                db.query(Email.id).filter(Email.campaign_id == campaign_id)
+            )
+        ).delete(synchronize_session=False)
         
-        # Delete the campaign
+        # 2. Delete all emails associated with this campaign
+        db.query(Email).filter(Email.campaign_id == campaign_id).delete(synchronize_session=False)
+        
+        # 3. Delete the campaign
         db.delete(campaign)
         db.commit()
         
