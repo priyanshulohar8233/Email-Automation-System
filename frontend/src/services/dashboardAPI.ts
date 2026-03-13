@@ -38,8 +38,14 @@ export const dashboardAPI = {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`Dashboard API Stats Error [${response.status}]: ${response.statusText}`, errorText);
-                throw new Error(`Error fetching dashboard stats: ${response.status} ${response.statusText}`);
+                let message = `Error ${response.status}: ${response.statusText}`;
+                try {
+                    const errorJson = JSON.parse(errorText);
+                    if (errorJson.detail) message = errorJson.detail;
+                } catch (e) { /* use default message */ }
+                
+                console.error(`Dashboard API Stats Error:`, message);
+                throw new Error(message);
             }
             const data = await response.json();
             // Ensure numeric values are valid

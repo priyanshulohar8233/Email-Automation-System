@@ -37,7 +37,7 @@ export default function Dashboard() {
       const data = await dashboardAPI.getStats(days);
       setStats(data);
     } catch (err) {
-      setError("Failed to load dashboard metrics. Please try again.");
+      setError(err instanceof Error ? err.message : "Failed to load dashboard metrics. Please try again.");
     } finally {
       setLoading(false);
     }

@@ -5,8 +5,16 @@ import traceback
 from .database import engine, Base
 from .routes import router
 
-# create tables
-Base.metadata.create_all(bind=engine)
+# create tables with safety
+try:
+    print(f"DATABASE_INIT: Connecting to {engine.url.drivername}...")
+    Base.metadata.create_all(bind=engine)
+    print("DATABASE_INIT: Success.")
+except Exception as e:
+    print(f"DATABASE_INIT_ERROR: {str(e)}")
+    # We don't crash here; we let the app start so the global exception handler 
+    # can report the error to the UI for easier debugging.
+    pass
 
 app = FastAPI(title="Email Tracking API")
 
