@@ -77,8 +77,10 @@ class SettingsResponse(BaseModel):
     smtp_username: str
     smtp_password: str
     sendgrid_api_key: Optional[str] = None
+    email_provider: Optional[str] = "SMTP"
+    from_email: Optional[str] = "noreply@mailflow.com"
     base_url: Optional[str] = "http://localhost:8000"
-    webhook_url: Optional[str]
+    webhook_url: Optional[str] = None
     monthly_limit: Optional[int] = 500000
     monthly_sent: Optional[int] = 0
 
@@ -88,6 +90,8 @@ class SettingsUpdate(BaseModel):
     smtp_username: Optional[str] = None
     smtp_password: Optional[str] = None
     sendgrid_api_key: Optional[str] = None
+    email_provider: Optional[str] = None
+    from_email: Optional[str] = None
     base_url: Optional[str] = None
     webhook_url: Optional[str] = None
     monthly_limit: Optional[int] = None

@@ -67,11 +67,14 @@ def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: S
         if eta and can_use_celery:
             # Scheduled tasks require Celery
             send_email_task.apply_async(args=[e.id, req.subject, req.body, req.attachments], eta=eta)
+        elif can_use_celery:
+            # SaaS Grade: Immediate sends use the optimized raw Redis queue with our custom worker
+            services.push_to_email_queue(e.id, req.subject, req.body, req.attachments)
         else:
             # Immediate sends use background_tasks (native to FastAPI/Uvicorn)
             background_tasks.add_task(send_email_fn, e.id, req.subject, req.body, req.attachments)
             
-    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value, "mode": "celery" if (eta and can_use_celery) else "background_tasks"}
+    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value, "mode": "custom_redis" if (not eta and can_use_celery) else ("celery" if (eta and can_use_celery) else "background_tasks")}
 
 @router.get("/campaigns")
 def get_campaigns(search: str | None = None, status: str | None = None, db: Session = Depends(get_db)):
@@ -135,6 +138,10 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
         s.smtp_pass = req.smtp_pass
     if req.sendgrid_api_key:
         s.sendgrid_api_key = req.sendgrid_api_key
+    if req.email_provider:
+        s.email_provider = req.email_provider
+    if req.from_email:
+        s.from_email = req.from_email
     if req.base_url:
         s.base_url = req.base_url
     s.monthly_limit = req.monthly_limit
@@ -207,6 +214,29 @@ def track_click(email_id: int, url: str, request: Request, db: Session = Depends
 @router.get("/analytics/links")
 def get_link_performance(campaign: str = "all", db: Session = Depends(get_db)):
     return services.get_link_performance(db, campaign)
+
+@router.post("/settings/test-sendgrid")
+def test_sendgrid(db: Session = Depends(get_db)):
+    from .models import Settings as DBSettings
+    from .sendgrid_bridge import send_email_sendgrid
+    s = db.query(DBSettings).first()
+    if not s or not s.sendgrid_api_key:
+        raise HTTPException(status_code=400, detail="SendGrid API Key not configured")
+    
+    res = send_email_sendgrid(
+        api_key=s.sendgrid_api_key,
+        from_email=s.from_email or s.smtp_username or "noreply@mailflow.com",
+        to_email=s.from_email or s.smtp_username or "admin@mailflow.com",
+        subject="SendGrid Connection Test",
+        html_content="<h1>Connection Successful!</h1><p>Your SendGrid REST API bridge is now operational.</p>"
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=500, detail=res.get("error"))
+    return {"status": "success"}
+
+@router.post("/webhook/sendgrid")
+def sendgrid_webhook(payload: List[dict], db: Session = Depends(get_db)):
+    return services.process_sendgrid_webhook(db, payload)
 
 @router.post("/webhook/email-events")
 def email_events_webhook(payload: dict, db: Session = Depends(get_db)):

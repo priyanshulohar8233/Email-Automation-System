@@ -16,6 +16,8 @@ interface SettingsState {
   monthlySent: number;
   baseUrl: string;
   sendgridApiKey: string;
+  emailProvider: string;
+  fromEmail: string;
 }
 
 export default function Settings() {
@@ -29,6 +31,8 @@ export default function Settings() {
     monthlySent: 0,
     baseUrl: "",
     sendgridApiKey: "",
+    emailProvider: "SMTP",
+    fromEmail: "noreply@mailflow.com",
   });
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -50,6 +54,8 @@ export default function Settings() {
             monthlySent: data.monthly_sent ?? 0,
             baseUrl: data.base_url || "",
             sendgridApiKey: data.sendgrid_api_key || "",
+            emailProvider: data.email_provider || "SMTP",
+            fromEmail: data.from_email || "noreply@mailflow.com",
           });
         }
       } catch (error) {
@@ -77,6 +83,8 @@ export default function Settings() {
           monthly_limit: settings.monthlyLimit,
           base_url: settings.baseUrl,
           sendgrid_api_key: settings.sendgridApiKey,
+          email_provider: settings.emailProvider,
+          from_email: settings.fromEmail,
         }),
       });
       if (!response.ok) throw new Error("Failed to save settings");
@@ -127,17 +135,41 @@ export default function Settings() {
         {/* SMTP Configuration */}
         <Card>
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <Server className="h-5 w-5 text-indigo-600" />
-              <CardTitle>SMTP Configuration</CardTitle>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Server className="h-5 w-5 text-indigo-600" />
+                <CardTitle>Delivery Provider</CardTitle>
+              </div>
+              <div className="flex bg-muted p-1 rounded-lg gap-1 border border-border">
+                <Button 
+                  variant={settings.emailProvider === "SMTP" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  className="h-7 text-[10px] px-3 font-bold uppercase rounded-md"
+                  onClick={() => setSettings(prev => ({ ...prev, emailProvider: "SMTP" }))}
+                >
+                  SMTP
+                </Button>
+                <Button 
+                  variant={settings.emailProvider === "SENDGRID" ? "secondary" : "ghost"} 
+                  size="sm" 
+                  className="h-7 text-[10px] px-3 font-bold uppercase rounded-md"
+                  onClick={() => setSettings(prev => ({ ...prev, emailProvider: "SENDGRID" }))}
+                >
+                  SendGrid API
+                </Button>
+              </div>
             </div>
-            <CardDescription>Configure your outgoing mail server settings.</CardDescription>
+            <CardDescription>Choose how your emails are delivered to recipients.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {isLoading ? (
-              <p className="text-sm text-slate-500">Loading settings...</p>
-            ) : (
-              <>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Default From Email</label>
+              <Input name="fromEmail" value={settings.fromEmail} onChange={handleChange} placeholder="noreply@mailflow.com" style={{ borderRadius: "14px" }} className="h-10 text-xs font-semibold" />
+              <p className="text-[10px] text-muted-foreground">The email address recipients will see in their inbox.</p>
+            </div>
+
+            {settings.emailProvider === "SMTP" ? (
+              <div className="pt-4 border-t border-border space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Host</label>
@@ -156,43 +188,63 @@ export default function Settings() {
                     <Input name="smtpPassword" type="password" value={settings.smtpPassword} onChange={handleChange} placeholder="••••••••••••" />
                   </div>
                 </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t border-border">
-                  <Button
-                    onClick={async () => {
-                      try {
-                        setSaveMessage({ type: "success", text: "Testing connection..." });
-                        const res = await fetch("/api/settings/test-smtp", { method: "POST" });
-                        if (!res.ok) {
-                          const err = await res.json().catch(() => ({ detail: "Unknown error" }));
-                          throw new Error(err.detail || "Connection failed");
-                        }
-                        setSaveMessage({ type: "success", text: "Test email sent successfully! Please check your inbox." });
-                      } catch (e: any) {
-                        setSaveMessage({ type: "error", text: `Connection failed: ${e.message}` });
-                      } finally {
-                        setTimeout(() => setSaveMessage(null), 5000);
-                      }
-                    }}
-                    variant="outline"
-                    style={{ borderRadius: "14px" }}
-                    className="h-9 px-4 text-xs font-semibold gap-2 border-indigo-500/20 text-indigo-600 hover:bg-indigo-50"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                    Test Connection
-                  </Button>
-                  <Button
-                    onClick={handleSave}
-                    disabled={isSaving}
-                    style={{ borderRadius: "14px" }}
-                    className="h-9 px-4 text-xs font-semibold gap-2 bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md text-white border-transparent"
-                  >
-                    <Save className="h-3.5 w-3.5" />
-                    {isSaving ? "Saving..." : "Save Settings"}
-                  </Button>
+              </div>
+            ) : (
+              <div className="pt-4 border-t border-border space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">SendGrid API Key</label>
+                  <div className="flex gap-2">
+                    <Input
+                      name="sendgridApiKey"
+                      type="password"
+                      value={settings.sendgridApiKey}
+                      onChange={handleChange}
+                      placeholder="SG.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                      style={{ borderRadius: "14px" }}
+                      className="h-10 border-border bg-card text-xs font-semibold focus:ring-indigo-500"
+                    />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <Info className="h-3 w-3" />
+                    Emails will be sent via high-performance SendGrid REST API bridge.
+                  </p>
                 </div>
-              </>
+              </div>
             )}
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-border">
+              <Button
+                onClick={async () => {
+                  try {
+                    setSaveMessage({ type: "success", text: "Testing provider connection..." });
+                    // Logic to test either SMTP or SG
+                    const endpoint = settings.emailProvider === "SMTP" ? "/api/settings/test-smtp" : "/api/settings/test-sendgrid";
+                    const res = await fetch(endpoint, { method: "POST" });
+                    if (!res.ok) throw new Error("Connection failed");
+                    setSaveMessage({ type: "success", text: "Test successful! Check your inbox." });
+                  } catch (e: any) {
+                    setSaveMessage({ type: "error", text: `Test failed: ${e.message}` });
+                  } finally {
+                    setTimeout(() => setSaveMessage(null), 5000);
+                  }
+                }}
+                variant="outline"
+                style={{ borderRadius: "14px" }}
+                className="h-9 px-4 text-xs font-semibold gap-2 border-indigo-500/20 text-indigo-600 hover:bg-indigo-50"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Test {settings.emailProvider}
+              </Button>
+              <Button
+                onClick={handleSave}
+                disabled={isSaving}
+                style={{ borderRadius: "14px" }}
+                className="h-9 px-4 text-xs font-semibold gap-2 bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md text-white border-transparent"
+              >
+                <Save className="h-3.5 w-3.5" />
+                {isSaving ? "Saving..." : "Save Delivery Settings"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
 

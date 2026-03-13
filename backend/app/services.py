@@ -143,10 +143,19 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
         
         email = db.query(Email).get(email_id)
         if email:
-            if event_type == EventType.DELIVERED: email.status = EmailStatus.DELIVERED
-            elif event_type == EventType.BOUNCED: email.status = EmailStatus.BOUNCED
+            if event_type == EventType.DELIVERED: 
+                email.status = EmailStatus.DELIVERED
+                email.delivery_status = "delivered"
+            elif event_type == EventType.BOUNCED: 
+                email.status = EmailStatus.BOUNCED
+            elif event_type == EventType.OPENED:
+                if not email.opened_at:
+                    email.opened_at = datetime.utcnow()
             elif event_type == EventType.CLICKED:
-                pass # Stats calculated dynamically in get_campaigns
+                if not email.clicked_at:
+                    email.clicked_at = datetime.utcnow()
+            elif event_type == EventType.SPAM_REPORT:
+                email.status = EmailStatus.SPAM
                 
             db.commit()
             
@@ -167,6 +176,72 @@ def get_link_performance(db: Session, campaign_name: str = "all"):
     
     results = q.group_by(EmailEvent.url).order_by(func.count(EmailEvent.id).desc()).limit(10).all()
     return [{"url": r.url or "Direct/Unknown", "clicks": r.clicks} for r in results]
+
+def process_sendgrid_webhook(db: Session, events: List[dict]):
+    """
+    Processes a list of events from the SendGrid Event Webhook.
+    Reference: https://sendgrid.com/docs/for-developers/tracking-events/event-webhook-reference/
+    """
+    from datetime import datetime
+    for event in events:
+        email_id = event.get("email_id") # We'll need to pass this as a custom arg in SendGrid
+        # If email_id isn't in top level, check if it's in personalizations metadata
+        # But usually we send it as a custom argument
+        
+        # If email_id is missing, we try to find by recipient_email (less reliable)
+        to_email = event.get("email")
+        type_str = event.get("event", "").upper()
+        
+        # Map SendGrid event types to our EventType enum
+        event_mapping = {
+            "PROCESSED": EventType.SENT,
+            "DELIVERED": EventType.DELIVERED,
+            "OPEN": EventType.OPENED,
+            "CLICK": EventType.CLICKED,
+            "BOUNCE": EventType.BOUNCED,
+            "SPAMREPORT": EventType.SPAM_REPORT,
+            "UNSUBSCRIBE": EventType.UNSUBSCRIBED,
+            "DEFERRED": EventType.DEFERRED,
+            "DROPPED": EventType.DROPPED,
+        }
+        
+        etype = event_mapping.get(type_str)
+        if not etype:
+            debug.debug_log(f"WEBHOOK: Unknown SendGrid event type: {type_str}")
+            continue
+
+        # Find email record
+        from .models import Email
+        email_rec = None
+        if email_id:
+            email_rec = db.query(Email).get(email_id)
+        
+        if not email_rec and to_email:
+            # Fallback: Find most recent email for this recipient
+            email_rec = db.query(Email).filter(Email.recipient_email == to_email).order_by(Email.sent_at.desc()).first()
+
+        if email_rec:
+            debug.debug_log(f"WEBHOOK: Processing {etype} for email {email_rec.id}")
+            log_event(
+                db, 
+                email_rec.id, 
+                etype, 
+                ip=event.get("ip"), 
+                ua=event.get("useragent"), 
+                url=event.get("url")
+            )
+            
+            # Additional metadata mapping
+            if etype == EventType.BOUNCED:
+                email_rec.bounce_reason = event.get("reason")
+            if event.get("status"):
+                email_rec.delivery_status = event.get("status")
+            
+            db.commit()
+        else:
+            debug.debug_log(f"WEBHOOK: Could not find email for event: {event}")
+
+    return {"status": "success"}
 
 def process_webhook_event(db: Session, payload: dict):
     # Standard format: { "id": "email_id", "event": "opened|clicked|bounced", "url": "...", "timestamp": "..." }
@@ -545,6 +620,31 @@ def create_campaign(db: Session, data):
         db.rollback()
         print(f"CRITICAL ERROR in create_campaign: {str(e)}")
         raise e
+
+def process_sendgrid_webhook(db: Session, events: List[dict]):
+    # ... (existing logic)
+    pass
+
+def push_to_email_queue(email_id: int, subject: str, body: str, attachments: list = None):
+    """
+    Pushes a job to the raw Redis queue for custom worker consumption.
+    """
+    import redis
+    import json
+    import os
+    try:
+        REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        r = redis.from_url(REDIS_URL)
+        job_data = {
+            "email_id": email_id,
+            "subject": subject,
+            "body": body,
+            "attachments": attachments or []
+        }
+        r.lpush("email_queue", json.dumps(job_data))
+        debug.debug_log(f"REDIS_QUEUE: Pushed email {email_id} to 'email_queue'")
+    except Exception as e:
+        debug.debug_log(f"REDIS_QUEUE_ERROR: {str(e)}")
 
 def get_campaigns(db: Session, search: str | None = None, status: str | None = None):
     from .models import Campaign

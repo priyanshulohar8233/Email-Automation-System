@@ -46,7 +46,11 @@ class Email(Base):
     subject = Column(String, nullable=True)
     body = Column(String, nullable=True)
     failure_reason = Column(String, nullable=True)
+    bounce_reason = Column(String, nullable=True)
+    delivery_status = Column(String, nullable=True) # e.g., "delivered", "processed", "deferred"
     sent_at = Column(DateTime, default=func.now())
+    opened_at = Column(DateTime, nullable=True)
+    clicked_at = Column(DateTime, nullable=True)
 
     events = relationship("EmailEvent", back_populates="email", order_by="EmailEvent.timestamp.asc()")
 
@@ -110,6 +114,8 @@ class Settings(Base):
     smtp_username = Column(String, default="admin@mailflow.com")
     smtp_password = Column(String, default="")
     sendgrid_api_key = Column(String, nullable=True)
+    email_provider = Column(String, default="SMTP") # SMTP or SENDGRID
+    from_email = Column(String, default="noreply@mailflow.com")
     base_url = Column(String, default="http://localhost:8000")
     webhook_url = Column(String, nullable=True)
     monthly_limit = Column(Integer, default=500000)
