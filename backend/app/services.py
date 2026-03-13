@@ -484,6 +484,14 @@ def compute_stats(db: Session, days: int = 30):
         }
     }
 
+def get_dashboard_stats(days: int = 30):
+    from .database import SessionLocal
+    db = SessionLocal()
+    try:
+        return compute_stats(db, days)
+    finally:
+        db.close()
+
 
 def emails_over_time(db: Session, days: int = 7):
     from datetime import datetime, timedelta

@@ -186,8 +186,12 @@ def get_realtime_analytics(campaign: str = "all", limit: int = 10, db: Session =
     return services.recent_events(db, days=30, limit=limit, campaign_name=campaign)
 
 @router.get("/dashboard/stats")
-def get_dashboard_stats(days: int = 30, db: Session = Depends(get_db)):
-    return services.compute_stats(db, days)
+def dashboard_stats(days: int = 30):
+    try:
+        data = services.get_dashboard_stats(days)
+        return data
+    except Exception as e:
+        return {"error": str(e)}
 
 @router.get("/dashboard/email-stats")
 def get_email_stats(days: int = 30, db: Session = Depends(get_db)):
