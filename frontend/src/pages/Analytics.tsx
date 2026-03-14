@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import {
   LineChart,
@@ -16,6 +17,7 @@ import { ChevronRight, Check, Layers, FastForward, MousePointer2, AlertCircle, E
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { RealtimeFeed } from "@/components/dashboard/RealtimeFeed";
+import { SystemHealth } from "@/components/analytics/SystemHealth";
 
 export default function Analytics() {
   const [analyticsData, setAnalyticsData] = useState<any>({
@@ -30,7 +32,9 @@ export default function Analytics() {
     locationsData: [],
   });
   const [isLoading, setIsLoading] = useState(true);
-  const [campaign, setCampaign] = useState("all");
+  const [searchParams] = useSearchParams();
+  const initialCampaign = searchParams.get("campaign") || "all";
+  const [campaign, setCampaign] = useState(initialCampaign);
   const [showCampaignMenu, setShowCampaignMenu] = useState(false);
   const campaignMenuRef = useRef<HTMLDivElement>(null);
   const [availableCampaigns, setAvailableCampaigns] = useState<string[]>([]);
@@ -183,11 +187,14 @@ export default function Analytics() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1 h-[600px]">
-          <RealtimeFeed campaignName={campaign} />
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-1 h-[600px] space-y-6">
+          <SystemHealth />
+          <div className="h-[232px]">
+            <RealtimeFeed campaignName={campaign} limit={5} />
+          </div>
         </div>
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-3 space-y-6">
           {/* Charts */}
           <Card>
             <CardHeader>

@@ -19,14 +19,14 @@ interface RealtimeEvent {
     };
 }
 
-export function RealtimeFeed({ campaignName = "all" }: { campaignName?: string }) {
+export function RealtimeFeed({ campaignName = "all", limit = 10 }: { campaignName?: string, limit?: number }) {
     const [events, setEvents] = useState<RealtimeEvent[]>([]);
     const [isPaused, setIsPaused] = useState(false);
     const [lastFetch, setLastFetch] = useState<Date>(new Date());
 
     const fetchEvents = async () => {
         try {
-            const url = campaignName === "all" ? "/api/analytics/realtime?limit=10" : `/api/analytics/realtime?limit=10&campaign=${encodeURIComponent(campaignName)}`;
+            const url = campaignName === "all" ? `/api/analytics/realtime?limit=${limit}` : `/api/analytics/realtime?limit=${limit}&campaign=${encodeURIComponent(campaignName)}`;
             const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();

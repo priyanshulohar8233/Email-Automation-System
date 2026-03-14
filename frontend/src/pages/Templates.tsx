@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Type,
-  Image as ImageIcon,
+  ImageIcon,
   MousePointerClick,
   Minus,
   Save,
@@ -22,9 +22,20 @@ import {
   Upload,
   Link,
   Sparkles,
-  Plus
+  Plus,
+  Library,
+  ChevronRight,
+  Smartphone,
+  Monitor,
+  Edit2,
+  X,
+  History,
+  Check,
+  RefreshCw,
+  EyeOff
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { Badge } from "@/components/ui/badge";
 
 type BlockType = 'text' | 'image' | 'button' | 'divider' | 'columns' | 'social' | 'attachment' | 'imageContent';
 
@@ -33,6 +44,13 @@ interface Block {
   type: BlockType;
   content: string;
   styles: Record<string, any>;
+}
+
+interface SavedTemplate {
+  id: number;
+  name: string;
+  content: string;
+  updated_at: string;
 }
 
 export default function Templates() {
@@ -84,11 +102,92 @@ export default function Templates() {
     }
   ]);
 
+  const [templateId, setTemplateId] = useState<number | null>(null);
+  const [templateName, setTemplateName] = useState("Untitled Template");
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
+  const [showLibrary, setShowLibrary] = useState(false);
+  const [isPreviewMode, setIsPreviewMode] = useState(false);
+  const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
+  const [isAIGenerating, setIsAIGenerating] = useState(false);
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiTone, setAiTone] = useState("C-Executive Level");
+  const [showAIModal, setShowAIModal] = useState(false);
+
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
   const selectedBlock = blocks.find(b => b.id === selectedBlockId);
 
   const [saving, setSaving] = useState(false);
   const [activeInsertType, setActiveInsertType] = useState<BlockType | null>(null);
+
+  useEffect(() => {
+    fetchTemplates();
+  }, []);
+
+  const fetchTemplates = async () => {
+    try {
+      const res = await fetch('/api/templates');
+      if (res.ok) setSavedTemplates(await res.json());
+    } catch (e) {
+      console.error("Failed to fetch templates:", e);
+    }
+  };
+
+  const handleAIGenerate = async () => {
+    if (!aiTopic) return;
+    setIsAIGenerating(true);
+    try {
+      const res = await fetch("/api/templates/generate-blocks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: aiTopic, tone: aiTone })
+      });
+      if (res.ok) {
+        const aiBlocks = await res.json();
+        setBlocks(aiBlocks);
+        setShowAIModal(false);
+      }
+    } catch (e) {
+      console.error("AI Generation failed:", e);
+    } finally {
+      setIsAIGenerating(false);
+    }
+  };
+
+  const loadSavedTemplate = (tpl: SavedTemplate) => {
+    setTemplateId(tpl.id);
+    setTemplateName(tpl.name);
+    setBlocks(JSON.parse(tpl.content));
+    setShowLibrary(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const url = templateId ? `/api/templates/${templateId}` : '/api/templates';
+      const method = templateId ? 'PUT' : 'POST';
+      
+      const res = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: templateName,
+          content: JSON.stringify(blocks)
+        })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (!templateId) setTemplateId(data.id);
+        fetchTemplates();
+      }
+    } catch (err) {
+      console.error('Error saving template:', err);
+    }
+    setSaving(false);
+  };
 
   const addBlock = (type: BlockType, atIndex?: number) => {
     const defaultStyles: Record<string, any> = { padding: "16px", margin: "0 auto", width: "100%", maxWidth: "100%", boxSizing: "border-box" };
@@ -159,162 +258,271 @@ export default function Templates() {
     if (selectedBlockId === id) setSelectedBlockId(null);
   }
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await fetch('/api/templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name: "My Custom Template",
-          content: JSON.stringify(blocks)
-        })
-      });
-      alert('Template saved successfully!');
-    } catch (err) {
-      alert('Error saving template');
-    }
-    setSaving(false);
-  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-8rem)]">
-      {/* Top Bar */}
-      <PageHeader
-        title="Template Builder"
-        subtitle="Design your email templates visually."
-      >
-        <div className="flex items-center gap-2">
+      {/* Top Bar Overhaul */}
+      <div className="flex items-center justify-between mb-8 pb-6 border-b border-border">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <Sparkles className="h-6 w-6 text-white" />
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 group">
+              {isRenaming ? (
+                <Input
+                  className="h-8 w-64 text-xl font-bold bg-transparent border-b-2 border-indigo-500 rounded-none px-0"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  onBlur={() => setIsRenaming(false)}
+                  onKeyDown={(e) => e.key === 'Enter' && setIsRenaming(false)}
+                  autoFocus
+                />
+              ) : (
+                <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsRenaming(true)}>
+                  <h1 className="text-xl font-bold tracking-tight text-foreground">{templateName}</h1>
+                  <Edit2 className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground font-medium flex items-center gap-2">
+              <History className="h-3 w-3" />
+              Last edited {new Date().toLocaleTimeString()}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-muted/50 p-1 rounded-xl border border-border mr-4">
+            <button
+              onClick={() => setIsPreviewMode(false)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2",
+                !isPreviewMode ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Edit2 className="h-3.5 w-3.5" />
+              Design
+            </button>
+            <button
+              onClick={() => setIsPreviewMode(true)}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2",
+                isPreviewMode ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Preview
+            </button>
+          </div>
+
           <Button
             variant="outline"
-            onClick={() => alert("Preview feature is ready to be hooked up!")}
-            style={{ borderRadius: "14px" }}
-            className="h-9 px-4 text-xs font-semibold gap-2"
+            onClick={() => setShowLibrary(!showLibrary)}
+            className={cn("h-10 px-4 rounded-xl gap-2 font-semibold", showLibrary && "bg-indigo-50 border-indigo-200 text-indigo-600")}
           >
-            <Eye className="h-3.5 w-3.5" />
-            Preview
+            <Library className="h-4 w-4" />
+            Library
           </Button>
+
           <Button
+            onClick={() => setShowAIModal(true)}
             variant="outline"
-            onClick={async () => {
-              const email = prompt("Enter recipient email for test send:");
-              if (!email) return;
-
-              // Convert blocks to HTML (simple version)
-              const body = blocks.map(b => {
-                if (b.type === 'text') return `<p style="font-size: ${b.styles.fontSize}; text-align: ${b.styles.textAlign}; font-weight: ${b.styles.fontWeight}">${b.content.replace(/\n/g, '<br/>')}</p>`;
-                if (b.type === 'image') return `<div style="text-align: center"><img src="${b.content}" style="max-width: 100%; border-radius: ${b.styles.borderRadius}" /></div>`;
-                if (b.type === 'button') return `<div style="text-align: ${b.styles.textAlign}"><a href="#" style="background: ${b.styles.backgroundColor}; color: ${b.styles.color}; padding: ${b.styles.padding}; border-radius: ${b.styles.borderRadius}; text-decoration: none; display: inline-block;">${b.content}</a></div>`;
-                if (b.type === 'divider') return `<hr style="height: ${b.styles.height}; background: ${b.styles.backgroundColor}; border: none;" />`;
-                return "";
-              }).join("\n");
-
-              try {
-                const res = await fetch("/api/templates/test-send", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    subject: "Template Test Send",
-                    body: body,
-                    recipient: email
-                  })
-                });
-                if (res.ok) alert("Test email sent!");
-                else alert("Failed to send: " + await res.text());
-              } catch (e) {
-                alert("Error: " + e);
-              }
-            }}
-            style={{ borderRadius: "14px" }}
-            className="h-9 px-4 text-xs font-semibold gap-2"
+            className="h-10 px-4 rounded-xl gap-2 font-semibold border-indigo-200 text-indigo-600 hover:bg-indigo-50"
           >
-            <Send className="h-3.5 w-3.5" />
-            Test Send
+            <Sparkles className="h-4 w-4" />
+            IA Generate
           </Button>
+
+          <div className="w-px h-6 bg-border mx-2" />
+
           <Button
             onClick={handleSave}
             disabled={saving}
-            style={{ borderRadius: "14px" }}
-            className="h-9 px-4 text-xs font-semibold gap-2 bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md text-white border-transparent"
+            className="h-10 px-6 rounded-xl gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg shadow-indigo-600/20 border-0"
           >
-            <Save className="h-3.5 w-3.5" />
-            {saving ? "Saving..." : "Save Template"}
+            {saving ? <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="h-4 w-4" />}
+            {saving ? "Saving..." : templateId ? "Save Changes" : "Save Template"}
           </Button>
         </div>
-      </PageHeader>
+      </div>
 
-      {/* Builder Area */}
-      <div className="flex flex-1 gap-6 overflow-hidden">
-        {/* Left Sidebar - Blocks */}
-        <Card className="w-[280px] flex flex-col overflow-y-auto border-border bg-card shadow-sm">
-          <div className="p-4 border-b border-border">
-            <h3 className="font-semibold text-foreground">Content Blocks</h3>
+      {/* Main Content Area */}
+      <div className="flex flex-1 gap-6 overflow-hidden relative">
+        {/* Blueprint Library Overlay */}
+        {showLibrary && (
+          <div className="absolute inset-0 z-50 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200 flex items-center justify-center p-12">
+            <Card className="w-full h-full max-w-6xl flex flex-col shadow-2xl border-border rounded-3xl overflow-hidden">
+              <div className="p-8 border-b border-border flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Template Library</h2>
+                  <p className="text-sm text-muted-foreground mt-1">Select a blueprint to kickstart your campaign.</p>
+                </div>
+                <button onClick={() => setShowLibrary(false)} className="h-10 w-10 rounded-full hover:bg-muted flex items-center justify-center transition-colors">
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                {savedTemplates.map((tpl) => (
+                  <div
+                    key={tpl.id}
+                    onClick={() => loadSavedTemplate(tpl)}
+                    className="group cursor-pointer flex flex-col gap-4"
+                  >
+                    <div className="aspect-[3/4] rounded-2xl bg-muted border-2 border-border group-hover:border-indigo-500 transition-all overflow-hidden flex items-center justify-center relative bg-gradient-to-br from-card to-muted shadow-sm group-hover:shadow-xl group-hover:-translate-y-1">
+                      <div className="flex flex-col items-center gap-3 opacity-20 group-hover:opacity-100 transition-opacity">
+                        <Library className="h-12 w-12 text-indigo-600" />
+                        <span className="text-xs font-bold uppercase tracking-widest text-indigo-600">Select Template</span>
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-foreground group-hover:text-indigo-600 transition-colors">{tpl.name}</h4>
+                      <p className="text-xs text-muted-foreground">Updated {new Date(tpl.updated_at).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                ))}
+                
+                {/* New Template Card */}
+                <div onClick={() => { setBlocks([]); setTemplateId(null); setTemplateName("New Template"); setShowLibrary(false); }} className="group cursor-pointer flex flex-col gap-4">
+                  <div className="aspect-[3/4] rounded-2xl border-2 border-dashed border-border hover:border-indigo-400 transition-all flex items-center justify-center bg-muted/20">
+                    <div className="flex flex-col items-center gap-3">
+                      <Plus className="h-10 w-10 text-muted-foreground group-hover:text-indigo-500 transition-colors" />
+                      <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground group-hover:text-indigo-500">New Design</span>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-foreground">Blank Slate</h4>
+                    <p className="text-xs text-muted-foreground">Start from absolute scratch</p>
+                  </div>
+                </div>
+              </div>
+            </Card>
           </div>
-          <div className="p-4 grid grid-cols-2 gap-3">
-            <BlockButton
-              icon={Type}
-              label="Text"
-              active={activeInsertType === 'text'}
-              onClick={() => setActiveInsertType(activeInsertType === 'text' ? null : 'text')}
-            />
-            <BlockButton
-              icon={ImageIcon}
-              label="Image"
-              active={activeInsertType === 'image'}
-              onClick={() => setActiveInsertType(activeInsertType === 'image' ? null : 'image')}
-            />
-            <BlockButton
-              icon={Sparkles}
-              label="AI Media"
-              active={activeInsertType === 'imageContent'}
-              onClick={() => setActiveInsertType(activeInsertType === 'imageContent' ? null : 'imageContent')}
-            />
-            <BlockButton
-              icon={MousePointerClick}
-              label="Button"
-              active={activeInsertType === 'button'}
-              onClick={() => setActiveInsertType(activeInsertType === 'button' ? null : 'button')}
-            />
-            <BlockButton
-              icon={Minus}
-              label="Divider"
-              active={activeInsertType === 'divider'}
-              onClick={() => setActiveInsertType(activeInsertType === 'divider' ? null : 'divider')}
-            />
-            <BlockButton
-              icon={Paperclip}
-              label="Attach"
-              active={activeInsertType === 'attachment'}
-              onClick={() => setActiveInsertType(activeInsertType === 'attachment' ? null : 'attachment')}
-            />
-            <BlockButton icon={AlignLeft} label="Columns" onClick={() => addBlock("columns")} />
-            <BlockButton icon={ShareIcon} label="Social" onClick={() => addBlock("social")} />
+        )}
+
+        {/* AI Modal Overlay */}
+        {showAIModal && (
+          <div className="absolute inset-0 z-50 bg-black/40 backdrop-blur-md animate-in fade-in duration-300 flex items-center justify-center p-6">
+            <Card className="w-full max-w-lg p-8 rounded-3xl shadow-2xl border-indigo-500/20 bg-card">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="h-12 w-12 rounded-2xl bg-indigo-600 flex items-center justify-center">
+                  <Sparkles className="h-6 w-6 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">AI Layout Generator</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Prompt your vision, we'll build the structure.</p>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Campaign Topic</label>
+                  <textarea
+                    className="w-full h-32 bg-muted/50 border border-border rounded-2xl p-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all resize-none"
+                    placeholder="e.g. A premium welcome email for our new luxury watch collection..."
+                    value={aiTopic}
+                    onChange={(e) => setAiTopic(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Brand Tone</label>
+                  <div className="grid grid-cols-2 gap-3">
+                    {["C-Executive Level", "Professional", "Friendly", "Hype / Bold"].map((tone) => (
+                      <button
+                        key={tone}
+                        onClick={() => setAiTone(tone)}
+                        className={cn(
+                          "px-4 py-3 rounded-xl text-xs font-bold transition-all border",
+                          aiTone === tone ? "bg-indigo-600 text-white border-transparent" : "bg-card border-border hover:bg-muted"
+                        )}
+                      >
+                        {tone}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 pt-4">
+                  <Button variant="outline" className="flex-1 h-12 rounded-xl font-bold" onClick={() => setShowAIModal(false)}>Cancel</Button>
+                  <Button
+                    className="flex-[2] h-12 rounded-xl font-bold bg-indigo-600 hover:bg-indigo-700 text-white gap-2 shadow-lg shadow-indigo-600/20 border-0"
+                    disabled={isAIGenerating || !aiTopic}
+                    onClick={handleAIGenerate}
+                  >
+                    {isAIGenerating ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    {isAIGenerating ? "Generating Magic..." : "Generate Template"}
+                  </Button>
+                </div>
+              </div>
+            </Card>
           </div>
-          {activeInsertType && (
-            <div className="p-3 m-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl animate-pulse">
-              <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase text-center">Click in body to insert {activeInsertType}</p>
+        )}
+
+        {/* Builder Sidebar - Integrated into Main View */}
+        {!isPreviewMode && (
+          <Card className="w-[320px] shrink-0 flex flex-col border-border bg-card shadow-sm rounded-2xl overflow-hidden">
+            <div className="p-5 border-b border-border bg-muted/20 flex items-center justify-between">
+              <h3 className="font-bold text-foreground flex items-center gap-2">
+                <Library className="h-4 w-4 text-indigo-600" />
+                Components
+              </h3>
+              <Badge variant="outline" className="bg-white/50 text-[10px] font-bold uppercase tracking-tight">V2.0</Badge>
             </div>
-          )}
-        </Card>
+            
+            <div className="flex-1 overflow-y-auto p-5 pb-20 custom-scrollbar">
+              <div className="grid grid-cols-2 gap-4">
+                <BlockButton icon={Type} label="Text" active={activeInsertType === 'text'} onClick={() => setActiveInsertType(activeInsertType === 'text' ? null : 'text')} />
+                <BlockButton icon={ImageIcon} label="Image" active={activeInsertType === 'image'} onClick={() => setActiveInsertType(activeInsertType === 'image' ? null : 'image')} />
+                <BlockButton icon={Sparkles} label="AI Media" active={activeInsertType === 'imageContent'} onClick={() => setActiveInsertType(activeInsertType === 'imageContent' ? null : 'imageContent')} />
+                <BlockButton icon={MousePointerClick} label="Button" active={activeInsertType === 'button'} onClick={() => setActiveInsertType(activeInsertType === 'button' ? null : 'button')} />
+                <BlockButton icon={Minus} label="Divider" active={activeInsertType === 'divider'} onClick={() => setActiveInsertType(activeInsertType === 'divider' ? null : 'divider')} />
+                <BlockButton icon={Paperclip} label="Attach" active={activeInsertType === 'attachment'} onClick={() => setActiveInsertType(activeInsertType === 'attachment' ? null : 'attachment')} />
+              </div>
+
+              {activeInsertType && (
+                <div className="mt-6 p-4 bg-indigo-50 border border-indigo-100 rounded-2xl animate-pulse flex items-center gap-3">
+                  <div className="h-2 w-2 rounded-full bg-indigo-500" />
+                  <p className="text-[11px] font-bold text-indigo-600 uppercase">Click canvas to insert</p>
+                </div>
+              )}
+            </div>
+          </Card>
+        )}
 
         {/* Center - Canvas */}
-        <div className="flex-1 bg-background/50 dark:bg-black/20 rounded-xl border border-border flex flex-col items-center p-8 overflow-y-auto scrollbar-hide">
+        <div className={cn(
+          "flex-1 flex flex-col items-center p-8 overflow-y-auto scrollbar-hide bg-muted/10 rounded-3xl border border-border/50",
+          isPreviewMode && "bg-muted/30"
+        )}>
+          {isPreviewMode && (
+            <div className="flex items-center gap-2 mb-8 bg-card border border-border p-1.5 rounded-2xl shadow-xl">
+              <button
+                onClick={() => setPreviewDevice('desktop')}
+                className={cn("p-2 rounded-xl transition-all", previewDevice === 'desktop' ? "bg-indigo-600 text-white" : "hover:bg-muted text-muted-foreground")}
+              >
+                <Monitor className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => setPreviewDevice('mobile')}
+                className={cn("p-2 rounded-xl transition-all", previewDevice === 'mobile' ? "bg-indigo-600 text-white" : "hover:bg-muted text-muted-foreground")}
+              >
+                <Smartphone className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+
           <div
             onClick={(e) => {
-              if (activeInsertType) {
-                // If clicking directly on a block insert zone, it will be handled by the zone's onClick
-                // But for general click in gaps or at the end:
-                if (e.target === e.currentTarget) {
-                  addBlock(activeInsertType);
-                  setActiveInsertType(null);
-                }
+              if (activeInsertType && e.target === e.currentTarget) {
+                addBlock(activeInsertType);
+                setActiveInsertType(null);
               }
             }}
             className={cn(
-              "w-full max-w-[640px] bg-card shadow-2xl rounded-2xl p-12 relative border border-border/50 transition-all duration-300 flex flex-col gap-8 mb-32",
-              activeInsertType ? "cursor-crosshair ring-2 ring-indigo-500/20" : ""
+              "bg-card shadow-2xl rounded-3xl p-12 relative border border-border/50 transition-all duration-500 flex flex-col gap-8 mb-32",
+              previewDevice === 'mobile' ? "w-[385px]" : "w-full max-w-[680px]",
+              activeInsertType ? "cursor-crosshair ring-4 ring-indigo-500/10" : ""
             )}
             style={{ minHeight: '800px', height: 'fit-content', flexShrink: 0 }}
           >
@@ -478,127 +686,75 @@ export default function Templates() {
             <h3 className="font-semibold text-foreground">Properties</h3>
           </div>
           {selectedBlock ? (
-            <div className="p-4 space-y-6">
-
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-muted-foreground">
-                  {selectedBlock.type === 'image' ? 'Image Source URL' : selectedBlock.type === 'imageContent' ? 'Media Data' : 'Content'}
+            <div className="p-6 space-y-8 pb-32">
+              <div className="space-y-4">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest flex items-center justify-between">
+                  {selectedBlock.type === 'image' ? 'Source URL' : selectedBlock.type === 'imageContent' ? 'Dynamic Data' : 'Block Content'}
+                  <Badge variant="outline" className="text-[9px] px-1 py-0">{selectedBlock.type}</Badge>
                 </label>
-                <div className="relative group/input">
-                  {selectedBlock.type === 'imageContent' ? (() => {
-                    const data = JSON.parse(selectedBlock.content || '{}');
-                    return (
-                      <div className="space-y-3">
-                        <Input
-                          placeholder="Title"
-                          value={data.title}
-                          onChange={e => updateBlockContent(selectedBlock.id, JSON.stringify({ ...data, title: e.target.value }))}
-                          className="bg-muted/50 border-border"
-                        />
-                        <Input
-                          placeholder="Subtitle"
-                          value={data.subtitle}
-                          onChange={e => updateBlockContent(selectedBlock.id, JSON.stringify({ ...data, subtitle: e.target.value }))}
-                          className="bg-muted/50 border-border"
-                        />
-                        <Input
-                          placeholder="Image URL"
-                          value={data.image}
-                          onChange={e => updateBlockContent(selectedBlock.id, JSON.stringify({ ...data, image: e.target.value }))}
-                          className="bg-muted/50 border-border"
-                        />
-                      </div>
-                    );
-                  })() : (
-                    <textarea
-                      value={selectedBlock.content}
-                      placeholder={selectedBlock.type === 'image' ? "https://example.com/image.jpg" : "Enter text content..."}
-                      onChange={(e) => updateBlockContent(selectedBlock.id, e.target.value)}
-                      className="w-full text-sm p-3 border border-border rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 min-h-[80px] bg-muted/50 text-foreground transition-all focus:bg-card"
-                    />
-                  )}
-                  {selectedBlock.type === 'image' && (
-                    <div className="absolute right-3 top-3 pointer-events-none opacity-20">
-                      <Link className="w-4 h-4" />
+                
+                {selectedBlock.type === 'imageContent' ? (() => {
+                  const data = JSON.parse(selectedBlock.content || '{}');
+                  return (
+                    <div className="space-y-3">
+                      <Input placeholder="Title" value={data.title} onChange={e => updateBlockContent(selectedBlock.id, JSON.stringify({ ...data, title: e.target.value }))} className="rounded-xl border-border bg-muted/30" />
+                      <Input placeholder="Subtitle" value={data.subtitle} onChange={e => updateBlockContent(selectedBlock.id, JSON.stringify({ ...data, subtitle: e.target.value }))} className="rounded-xl border-border bg-muted/30" />
+                      <Input placeholder="Image URL" value={data.image} onChange={e => updateBlockContent(selectedBlock.id, JSON.stringify({ ...data, image: e.target.value }))} className="rounded-xl border-border bg-muted/30" />
                     </div>
-                  )}
-                </div>
+                  );
+                })() : (
+                  <textarea
+                    value={selectedBlock.content}
+                    placeholder={selectedBlock.type === 'image' ? "https://images.unsplash.com/..." : "Write something..."}
+                    onChange={(e) => updateBlockContent(selectedBlock.id, e.target.value)}
+                    className="w-full text-sm p-4 border border-border rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 min-h-[120px] bg-muted/30 text-foreground transition-all resize-none font-medium"
+                  />
+                )}
               </div>
 
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-muted-foreground">Typography</label>
-                <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-xl border border-border">
+              <div className="space-y-4">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Typography</label>
+                <div className="flex items-center gap-1.5 bg-muted/30 p-1.5 rounded-2xl border border-border">
                   <PropertyButton icon={Bold} active={selectedBlock.styles.fontWeight === 'bold'} onClick={() => updateBlockStyles(selectedBlock.id, { fontWeight: selectedBlock.styles.fontWeight === 'bold' ? 'normal' : 'bold' })} />
                   <PropertyButton icon={Italic} active={selectedBlock.styles.fontStyle === 'italic'} onClick={() => updateBlockStyles(selectedBlock.id, { fontStyle: selectedBlock.styles.fontStyle === 'italic' ? 'normal' : 'italic' })} />
                   <PropertyButton icon={Underline} active={selectedBlock.styles.textDecoration === 'underline'} onClick={() => updateBlockStyles(selectedBlock.id, { textDecoration: selectedBlock.styles.textDecoration === 'underline' ? 'none' : 'underline' })} />
-                  <div className="w-px h-4 bg-border mx-1" />
+                  <div className="w-px h-6 bg-border mx-1" />
                   <PropertyButton icon={AlignLeft} active={selectedBlock.styles.textAlign === 'left'} onClick={() => updateBlockStyles(selectedBlock.id, { textAlign: 'left' })} />
                   <PropertyButton icon={AlignCenter} active={selectedBlock.styles.textAlign === 'center'} onClick={() => updateBlockStyles(selectedBlock.id, { textAlign: 'center' })} />
                   <PropertyButton icon={AlignRight} active={selectedBlock.styles.textAlign === 'right'} onClick={() => updateBlockStyles(selectedBlock.id, { textAlign: 'right' })} />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    type="number"
-                    placeholder="Size"
-                    value={parseInt(selectedBlock.styles.fontSize) || 16}
-                    onChange={e => updateBlockStyles(selectedBlock.id, { fontSize: `${e.target.value}px` })}
-                  />
-                  <Input
-                    type="color"
-                    className="h-10 p-1 w-full"
-                    value={selectedBlock.styles.color || '#000000'}
-                    onChange={e => updateBlockStyles(selectedBlock.id, { color: e.target.value })}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 ml-1">Size (px)</span>
+                    <Input type="number" value={parseInt(selectedBlock.styles.fontSize) || 16} onChange={e => updateBlockStyles(selectedBlock.id, { fontSize: `${e.target.value}px` })} className="rounded-xl" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 ml-1">Color</span>
+                    <Input type="color" className="h-10 p-1 w-full rounded-xl cursor-pointer" value={selectedBlock.styles.color || '#000000'} onChange={e => updateBlockStyles(selectedBlock.id, { color: e.target.value })} />
+                  </div>
                 </div>
               </div>
 
               {selectedBlock.type === 'button' && (
-                <div className="space-y-3">
-                  <label className="text-sm font-medium text-muted-foreground">Background Color</label>
-                  <Input
-                    type="color"
-                    className="h-10 p-1 w-full bg-muted/50 border-border"
-                    value={selectedBlock.styles.backgroundColor || '#4f46e5'}
-                    onChange={e => updateBlockStyles(selectedBlock.id, { backgroundColor: e.target.value })}
-                  />
+                <div className="space-y-4">
+                  <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Button Style</label>
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 ml-1">Background</span>
+                    <Input type="color" className="h-10 p-1 w-full rounded-xl cursor-pointer" value={selectedBlock.styles.backgroundColor || '#4f46e5'} onChange={e => updateBlockStyles(selectedBlock.id, { backgroundColor: e.target.value })} />
+                  </div>
                 </div>
               )}
 
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-muted-foreground">Spacing</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 mb-1 block">Padding (px)</span>
-                    <Input
-                      type="number"
-                      className="bg-muted/50 border-border"
-                      value={parseInt(selectedBlock.styles.padding) || 0}
-                      onChange={e => updateBlockStyles(selectedBlock.id, { padding: `${e.target.value}px` })}
-                    />
+              <div className="space-y-4">
+                <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Layout & Space</label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 ml-1">Padding</span>
+                    <Input type="number" value={parseInt(selectedBlock.styles.padding) || 0} onChange={e => updateBlockStyles(selectedBlock.id, { padding: `${e.target.value}px` })} className="rounded-xl" />
                   </div>
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 mb-1 block">Margin (px)</span>
-                    <Input
-                      type="number"
-                      className="bg-muted/50 border-border"
-                      value={parseInt(selectedBlock.styles.margin) || 0}
-                      onChange={e => updateBlockStyles(selectedBlock.id, { margin: `${e.target.value}px auto` })} // For button centering mainly
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-sm font-medium text-muted-foreground">Border</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 mb-1 block">Radius</span>
-                    <Input
-                      type="number"
-                      className="bg-muted/50 border-border"
-                      value={parseInt(selectedBlock.styles.borderRadius) || 0}
-                      onChange={e => updateBlockStyles(selectedBlock.id, { borderRadius: `${e.target.value}px` })}
-                    />
+                  <div className="space-y-1.5">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground/60 ml-1">Radius</span>
+                    <Input type="number" value={parseInt(selectedBlock.styles.borderRadius) || 0} onChange={e => updateBlockStyles(selectedBlock.id, { borderRadius: `${e.target.value}px` })} className="rounded-xl" />
                   </div>
                 </div>
               </div>
@@ -631,8 +787,10 @@ function BlockButton({ icon: Icon, label, active, onClick }: { icon: any, label:
       <div className="p-2 rounded-xl bg-muted/50 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/40 transition-colors">
         <Icon className="h-5 w-5 text-muted-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400" />
       </div>
-      <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/80 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">{label}</span>
-    </button >
+      <span className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground/80 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -670,5 +828,5 @@ function ShareIcon(props: any) {
       <polyline points="16 6 12 2 8 6" />
       <line x1="12" x2="12" y1="2" y2="15" />
     </svg>
-  )
+  );
 }

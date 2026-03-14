@@ -17,6 +17,9 @@ export interface DashboardStats {
         delivered: number;
         unread: number;
     };
+    openedCount?: number;
+    deliveredCount?: number;
+    bouncedCount?: number;
 }
 
 // Helper function to add timeout to fetch calls
@@ -48,15 +51,17 @@ export const dashboardAPI = {
                 throw new Error(message);
             }
             const data = await response.json();
-            // Ensure numeric values are valid
+            // Map snake_case backend keys to camelCase frontend keys
             return {
-                ...data,
-                totalEmails: data.totalEmails || 0,
-                openRate: data.openRate || 0,
-                clickRate: data.clickRate || 0,
-                unread: data.unread || 0,
-                bounceRate: data.bounceRate || 0,
-                activeCampaigns: data.activeCampaigns || 0
+                totalEmails: data.total_emails_sent || 0,
+                openRate: data.open_rate || 0,
+                clickRate: data.click_rate || 0,
+                unread: Math.max(0, 100 - (data.open_rate || 0)),
+                bounceRate: data.bounce_rate || 0,
+                activeCampaigns: data.active_campaigns || 0,
+                openedCount: Math.round((data.total_emails_sent || 0) * ((data.open_rate || 0) / 100)),
+                deliveredCount: data.delivered_count || 0,
+                bouncedCount: data.bounced_count || 0
             };
         } catch (error) {
             console.error("Dashboard API Error:", error);

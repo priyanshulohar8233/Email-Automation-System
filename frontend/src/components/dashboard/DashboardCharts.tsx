@@ -58,30 +58,27 @@ export function DashboardCharts({ days = 30 }: { days?: number }) {
       dashboardAPI.getStats(days)
     ])
       .then(([emailStats, stats]) => {
-        // Process email stats for line chart
-        if (Array.isArray(emailStats)) {
-          setLineData(emailStats.map((r: any) => ({ day: r.day, emails: r.emails })));
+        // Process email stats for line chart (dates/emails object)
+        if (emailStats && emailStats.dates && emailStats.emails) {
+          const formatted = emailStats.dates.map((date: string, i: number) => ({
+            day: new Date(date).toLocaleDateString("en-US", { weekday: "short" }),
+            emails: emailStats.emails[i]
+          }));
+          setLineData(formatted);
         }
 
-        if (stats.raw) {
-          setPieData([
-            { name: "Opened", value: stats.raw.opened },
-            { name: "Unread", value: stats.raw.unread },
-            { name: "Bounced", value: stats.raw.bounced },
-          ]);
-        } else {
-          // Fallback to rate-based approximation if raw is missing
-          const total = stats.totalEmails || 0;
-          const opened = Math.round(total * (stats.openRate / 100));
-          const bounced = Math.round(total * (stats.bounceRate / 100));
-          const unread = Math.max(0, total - opened - bounced);
+        // Process stats for pie chart
+        const total = stats.deliveredCount || stats.totalEmails || 0;
+        const opened = stats.openedCount || 0;
+        const bounced = stats.bouncedCount || 0;
+        const unread = Math.max(0, total - opened);
 
-          setPieData([
-            { name: "Opened", value: opened },
-            { name: "Unread", value: unread },
-            { name: "Bounced", value: bounced },
-          ]);
-        }
+        setPieData([
+          { name: "Opened", value: opened },
+          { name: "Unread", value: unread },
+          { name: "Bounced", value: bounced },
+        ]);
+        
         setLoading(false);
       })
       .catch((err) => {

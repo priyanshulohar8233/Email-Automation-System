@@ -3,7 +3,7 @@ import smtplib
 from datetime import datetime
 from sqlalchemy import func, distinct
 from sqlalchemy.orm import Session
-from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, Settings
+from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, Settings, Suppression, SuppressionReason, BounceType
 
 
 # low-level mail sender
@@ -149,6 +149,11 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
                 email.delivery_status = "delivered"
             elif event_type == EventType.BOUNCED: 
                 email.status = EmailStatus.BOUNCED
+                # 2. Automated Deliverability: Classify and Suppress
+                bounce_info = classify_bounce(email.bounce_reason or "Unknown bounce")
+                email.bounce_type = bounce_info["type"]
+                if bounce_info["type"] == BounceType.HARD:
+                    add_to_suppression(db, email.recipient_email, SuppressionReason.BOUNCE, metadata={"reason": email.bounce_reason})
             elif event_type == EventType.OPENED:
                 if not email.opened_at:
                     email.opened_at = datetime.utcnow()
@@ -157,6 +162,9 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
                     email.clicked_at = datetime.utcnow()
             elif event_type == EventType.SPAM_REPORT:
                 email.status = EmailStatus.SPAM
+                add_to_suppression(db, email.recipient_email, SuppressionReason.SPAM)
+            elif event_type == EventType.UNSUBSCRIBED:
+                add_to_suppression(db, email.recipient_email, SuppressionReason.UNSUBSCRIBE)
                 
             db.commit()
             
@@ -381,107 +389,61 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
 
 def compute_stats(db: Session, days: int = 30):
     from datetime import datetime, timedelta
-
     now = datetime.utcnow()
-    last_month = now - timedelta(days=days)
-    prev_month = last_month - timedelta(days=days)
-    
-    # Function to get counts
-    def get_period_counts(start, end=None):
-        # 1. Total Attempted (Raw count in DB)
-        q_t = db.query(func.count(Email.id))
-        if start: q_t = q_t.filter(Email.sent_at >= start)
-        if end: q_t = q_t.filter(Email.sent_at < end)
-        attempted = q_t.scalar() or 0
-        
-        # 2. Total Sent (SENT, DELIVERED, or BOUNCED) - This reflects total activity
-        q_s = db.query(func.count(Email.id)).filter(
-            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
-        )
-        if start: q_s = q_s.filter(Email.sent_at >= start)
-        if end: q_s = q_s.filter(Email.sent_at < end)
-        sent_activity = q_s.scalar() or 0
-        
-        # 3. Unique opens
-        q_o = db.query(func.count(distinct(EmailEvent.email_id))).filter(
-            EmailEvent.event_type == EventType.OPENED
-        )
-        if start: q_o = q_o.filter(EmailEvent.timestamp >= start)
-        if end: q_o = q_o.filter(EmailEvent.timestamp < end)
-        opens = q_o.scalar() or 0
-        
-        # 4. Unique clicks
-        q_c = db.query(func.count(distinct(EmailEvent.email_id))).filter(
-            EmailEvent.event_type == EventType.CLICKED
-        )
-        if start: q_c = q_c.filter(EmailEvent.timestamp >= start)
-        if end: q_c = q_c.filter(EmailEvent.timestamp < end)
-        clicks = q_c.scalar() or 0
-        
-        # 5. Bounces
-        q_b = db.query(func.count(Email.id)).filter(
-            Email.status == EmailStatus.BOUNCED
-        )
-        if start: q_b = q_b.filter(Email.sent_at >= start)
-        if end: q_b = q_b.filter(Email.sent_at < end)
-        bounces = q_b.scalar() or 0
+    limit_date = now - timedelta(days=days)
 
-        # 6. Active Campaigns
-        q_ac = db.query(func.count(Campaign.id)).filter(
-            Campaign.status == CampaignStatus.RUNNING
-        )
-        active_camps = q_ac.scalar() or 0
-        
-        return attempted, sent_activity, opens, clicks, bounces, active_camps
-
-    cur_att, cur_s, cur_o, cur_c, cur_b, cur_ac = get_period_counts(last_month)
-    prev_att, prev_s, prev_o, prev_c, prev_b, prev_ac = get_period_counts(prev_month, last_month)
+    # 1. Total Attempted
+    attempted = db.query(func.count(Email.id)).filter(Email.sent_at >= limit_date).scalar() or 0
     
-    # Define Delivered (for unread/open rate denominators)
-    # Delivered = SENT or DELIVERED (Excludes BOUNCES for rate accuracy)
-    cur_delivered = cur_s - cur_b
-    prev_delivered = prev_s - prev_b
+    # 2. Total Sent (Success activity: SENT, DELIVERED, BOUNCED)
+    total_sent = db.query(func.count(Email.id)).filter(
+        Email.sent_at >= limit_date,
+        Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
+    ).scalar() or 0
+
+    # 3. Delivered (SENT or DELIVERED, excludes BOUNCED)
+    delivered = db.query(func.count(Email.id)).filter(
+        Email.sent_at >= limit_date,
+        Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
+    ).scalar() or 0
+
+    # 4. Unique Opens
+    opens = db.query(func.count(distinct(EmailEvent.email_id))).filter(
+        EmailEvent.event_type == EventType.OPENED,
+        EmailEvent.timestamp >= limit_date
+    ).scalar() or 0
+
+    # 5. Unique Clicks
+    clicks = db.query(func.count(distinct(EmailEvent.email_id))).filter(
+        EmailEvent.event_type == EventType.CLICKED,
+        EmailEvent.timestamp >= limit_date
+    ).scalar() or 0
+
+    # 6. Bounces
+    bounces = db.query(func.count(Email.id)).filter(
+        Email.sent_at >= limit_date,
+        Email.status == EmailStatus.BOUNCED
+    ).scalar() or 0
+
+    # 7. Active Campaigns
+    active_camps = db.query(func.count(Campaign.id)).filter(
+        Campaign.status == CampaignStatus.RUNNING
+    ).scalar() or 0
 
     def calc_rate(num, den):
-        return (num / den * 100.0) if den > 0 else 0.0
-        
-    def calc_growth(cur, prev):
-        if prev == 0:
-            return 100.0 if cur > 0 else 0.0
-        return ((cur - prev) / prev) * 100.0
-        
-    cur_orate = calc_rate(cur_o, cur_delivered)
-    prev_orate = calc_rate(prev_o, prev_delivered)
-    cur_crate = calc_rate(cur_c, cur_delivered)
-    prev_crate = calc_rate(prev_c, prev_delivered)
-    cur_brate = calc_rate(cur_b, cur_s)
-    prev_brate = calc_rate(prev_b, prev_s)
-    
-    # Standardize rates (Sent = SENT+DELIVERED)
-    return {
-        "totalEmails": int(cur_s),
-        "totalAttempted": int(cur_att),
-        "deliveredEmails": int(cur_delivered), 
-        "openRate": round(float(cur_orate), 1),
-        "clickRate": round(float(cur_crate), 1),
-        "bounceRate": round(float(cur_brate), 1),
-        "unread": round(float(100.0 - cur_orate if cur_delivered > 0 else 0.0), 1),
-        "activeCampaigns": int(cur_ac),
-        
-        "totalEmailsGrowth": round(float(calc_growth(cur_s, prev_s)), 1),
-        "openRateGrowth": round(float(calc_growth(cur_orate, prev_orate)), 1),
-        "clickRateGrowth": round(float(calc_growth(cur_crate, prev_crate)), 1),
-        "bounceRateGrowth": round(float(calc_growth(cur_brate, prev_brate)), 1),
-        "unreadGrowth": round(float(calc_growth(100.0 - cur_orate, 100.0 - prev_orate)), 1),
-        "activeCampaignsGrowth": round(float(calc_growth(cur_ac, prev_ac)), 1),
+        return round((num / den * 100.0), 1) if den > 0 else 0.0
 
-        "raw": {
-            "bounced": int(cur_b),
-            "opened": int(cur_o),
-            "delivered": int(cur_s),
-            "unread": int(max(0, cur_s - cur_o)),
-            "attempted": int(cur_att)
-        }
+    # As per Dashboard expectations
+    return {
+        "days": days,
+        "total_emails_sent": int(total_sent),
+        "open_rate": calc_rate(opens, delivered),
+        "click_rate": calc_rate(clicks, delivered),
+        "delivery_rate": calc_rate(delivered, total_sent),
+        "bounce_rate": calc_rate(bounces, total_sent),
+        "active_campaigns": int(active_camps),
+        "delivered_count": int(delivered),
+        "bounced_count": int(bounces),
     }
 
 def get_dashboard_stats(days: int = 30):
@@ -497,65 +459,27 @@ def emails_over_time(db: Session, days: int = 7):
     from datetime import datetime, timedelta
     now = datetime.utcnow()
     
-    if days == 7:
-        # 1. Monday-Sunday Daily View
-        current_weekday = now.weekday()
-        start_of_week = (now - timedelta(days=current_weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
-        limit_date = start_of_week
+    dates = []
+    vals = []
+    
+    for i in range(days - 1, -1, -1):
+        d = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+        date_str = d.strftime('%Y-%m-%d')
         
-        counts = {}
-        for i in range(7):
-            d = start_of_week + timedelta(days=i)
-            date_str = d.strftime('%Y-%m-%d')
-            counts[date_str] = 0
-            
-        # Chart should show all attempted/successful/bounced deliveries (Total activity)
-        rows = db.query(Email.sent_at).filter(
-            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED]), 
-            Email.sent_at >= limit_date
-        ).all()
-        for r in rows:
-            if r.sent_at:
-                key = (datetime.fromisoformat(r.sent_at.replace(' ', 'T')) if isinstance(r.sent_at, str) else r.sent_at).strftime('%Y-%m-%d')
-                if key in counts: counts[key] += 1
-                    
-        return [{"day": (start_of_week + timedelta(days=i)).strftime('%a'), "emails": counts.get((start_of_week + timedelta(days=i)).strftime('%Y-%m-%d'), 0)} for i in range(7)]
-
-    else:
-        # 2. Weekly Aggregation for 30, 90, 365 Days
-        num_weeks = (days // 7) + (1 if days % 7 > 0 else 0)
-        total_days = num_weeks * 7
-        limit_date = (now - timedelta(days=total_days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        count = db.query(func.count(Email.id)).filter(
+            Email.sent_at >= d,
+            Email.sent_at < d + timedelta(days=1),
+            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
+        ).scalar() or 0
         
-        buckets = []
-        for i in range(num_weeks):
-            week_start = limit_date + timedelta(days=i*7)
-            buckets.append({
-                "day": f"Week {i+1}", 
-                "start": week_start, 
-                "end": week_start + timedelta(days=7), 
-                "emails": 0
-            })
-            
-        rows = db.query(Email.sent_at).filter(
-            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED]), 
-            Email.sent_at >= limit_date
-        ).all()
-        
-        for r in rows:
-            if not r.sent_at: continue
-            
-            # Robust datetime parsing
-            try:
-                dt = r.sent_at if isinstance(r.sent_at, datetime) else datetime.fromisoformat(str(r.sent_at).replace(' ', 'T').split('.')[0])
-                for b in buckets:
-                    if b["start"] <= dt < b["end"]:
-                        b["emails"] += 1
-                        break
-            except:
-                continue
+        dates.append(date_str)
+        vals.append(count)
                         
-        return [{"day": b["day"], "emails": b["emails"]} for b in buckets]
+    # Step 6: Return structured daily data
+    return {
+        "dates": dates,
+        "emails": vals
+    }
 
 
 
@@ -636,7 +560,7 @@ def process_sendgrid_webhook(db: Session, events: List[dict]):
     # ... (existing logic)
     pass
 
-def push_to_email_queue(email_id: int, subject: str, body: str, attachments: list = None):
+def push_to_email_queue(email_id: int, subject: str, body: str, attachments: list = None, queue: str = "marketing"):
     """
     Pushes a job to the raw Redis queue for custom worker consumption.
     """
@@ -652,8 +576,8 @@ def push_to_email_queue(email_id: int, subject: str, body: str, attachments: lis
             "body": body,
             "attachments": attachments or []
         }
-        r.lpush("email_queue", json.dumps(job_data))
-        debug.debug_log(f"REDIS_QUEUE: Pushed email {email_id} to 'email_queue'")
+        r.lpush(queue, json.dumps(job_data))
+        debug.debug_log(f"REDIS_QUEUE: Pushed email {email_id} to '{queue}'")
     except Exception as e:
         debug.debug_log(f"REDIS_QUEUE_ERROR: {str(e)}")
 
@@ -814,6 +738,85 @@ def create_contacts(db: Session, contacts_data: list):
     db.commit()
     return {"added": len(new_contacts)}
 
+def get_segments(db: Session):
+    from .models import Segment
+    return db.query(Segment).all()
+
+def create_segment(db: Session, data):
+    from .models import Segment
+    s = Segment(
+        name=data.name,
+        description=data.description,
+        criteria=data.criteria
+    )
+    db.add(s)
+    db.commit()
+    db.refresh(s)
+    return s
+
+def delete_segment(db: Session, segment_id: int):
+    from .models import Segment
+    s = db.query(Segment).filter(Segment.id == segment_id).first()
+    if not s:
+        raise ValueError("Segment not found")
+    db.delete(s)
+    db.commit()
+    return {"status": "success"}
+
+def get_contact_profile(db: Session, contact_id: int):
+    from .models import Contact, Email, EmailEvent, Campaign
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        return None
+    
+    # Get all events for this contact's email
+    events = db.query(EmailEvent, Email, Campaign)\
+        .join(Email, EmailEvent.email_id == Email.id)\
+        .outerjoin(Campaign, Email.campaign_id == Campaign.id)\
+        .filter(Email.recipient_email == contact.email)\
+        .order_by(EmailEvent.timestamp.desc())\
+        .all()
+        
+    activity = []
+    for ev, email, campaign in events:
+        activity.append({
+            "id": ev.id,
+            "event_type": ev.event_type.value,
+            "timestamp": ev.timestamp,
+            "metadata": {
+                "ip": ev.ip_address,
+                "browser": ev.browser,
+                "os": ev.os,
+                "device": ev.device,
+                "location": f"{ev.city}, {ev.country}" if ev.city else "Unknown"
+            },
+            "campaign_name": campaign.name if campaign else "Direct Email"
+        })
+        
+    return {
+        "id": contact.id,
+        "name": contact.name,
+        "email": contact.email,
+        "company": contact.company,
+        "industry": contact.industry,
+        "tags": [t.strip() for t in contact.tags_raw.split(',') if t.strip()] if contact.tags_raw else [],
+        "score": contact.engagement_score,
+        "status": contact.status,
+        "total_opens": contact.total_opens,
+        "total_clicks": contact.total_clicks,
+        "created_at": contact.created_at,
+        "activity": activity
+    }
+
+def update_contact_tags(db: Session, contact_id: int, tags: list):
+    from .models import Contact
+    contact = db.query(Contact).filter(Contact.id == contact_id).first()
+    if not contact:
+        raise ValueError("Contact not found")
+    contact.tags_raw = ",".join(tags)
+    db.commit()
+    return {"status": "success", "tags": tags}
+
 
 
 def get_settings(db: Session):
@@ -893,13 +896,96 @@ def update_template(db: Session, template_id: int, data):
     t = db.query(Template).filter(Template.id == template_id).first()
     if not t:
         raise HTTPException(status_code=404, detail="Template not found")
-    if data.name is not None:
-        t.name = data.name
-    if data.content is not None:
-        t.content = data.content
+    return {"id": t.id, "name": t.name, "content": t.content, "created_at": t.created_at.isoformat(), "updated_at": t.updated_at.isoformat()}
+
+def update_template(db: Session, template_id: int, name: str | None = None, content: str | None = None):
+    from .models import Template
+    t = db.query(Template).filter(Template.id == template_id).first()
+    if not t:
+        raise ValueError("Template not found")
+    if name is not None:
+        t.name = name
+    if content is not None:
+        t.content = content
     db.commit()
     db.refresh(t)
-    return {"id": t.id, "name": t.name, "content": t.content, "created_at": t.created_at.isoformat(), "updated_at": t.updated_at.isoformat()}
+    return {"id": t.id, "name": t.name, "content": t.content}
+
+def delete_template(db: Session, template_id: int):
+    from .models import Template
+    t = db.query(Template).filter(Template.id == template_id).first()
+    if not t:
+        raise ValueError("Template not found")
+    db.delete(t)
+    db.commit()
+    return {"status": "success", "message": "Template deleted"}
+
+def generate_block_template(topic: str, tone: str) -> list:
+    """Generates a list of blocks for the visual template builder."""
+    from .config import settings
+    # For now, let's return a set of blocks based on the tone.
+    # In a real production app, this would use OpenAI to return a JSON list of blocks.
+    
+    blocks = [
+        {
+            "id": "header",
+            "type": "image",
+            "content": "https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format",
+            "styles": {"borderRadius": "14px", "width": "100%"}
+        }
+    ]
+    
+    if tone == "C-Executive Level":
+        blocks.extend([
+            {
+                "id": "headline",
+                "type": "text",
+                "content": f"Executive Summary: {topic}",
+                "styles": {"fontSize": "24px", "fontWeight": "800", "padding": "16px"}
+            },
+            {
+                "id": "body",
+                "type": "text",
+                "content": f"Dear Stakeholders,\n\nWe are pleased to present the strategic roadmap for {topic}. This initiative aligns with our quarterly objectives...",
+                "styles": {"fontSize": "16px", "lineHeight": "1.6", "padding": "16px"}
+            },
+            {
+                "id": "cta",
+                "type": "button",
+                "content": "Review Roadmap",
+                "styles": {"backgroundColor": "#4f46e5", "color": "#ffffff", "padding": "12px 24px", "borderRadius": "12px", "textAlign": "center"}
+            }
+        ])
+    else:
+        blocks.extend([
+            {
+                "id": "headline",
+                "type": "text",
+                "content": f"New Update: {topic}",
+                "styles": {"fontSize": "22px", "fontWeight": "700", "padding": "16px"}
+            },
+            {
+                "id": "body",
+                "type": "text",
+                "content": f"Hi team!\n\nJust wanted to share some exciting news about {topic}. We've been working hard on this and can't wait to see it live!",
+                "styles": {"fontSize": "16px", "lineHeight": "1.5", "padding": "16px"}
+            },
+            {
+                "id": "cta",
+                "type": "button",
+                "content": "Learn More",
+                "styles": {"backgroundColor": "#10b981", "color": "#ffffff", "padding": "10px 20px", "borderRadius": "10px", "textAlign": "center"}
+            }
+        ])
+        
+    blocks.append({
+        "id": "footer",
+        "type": "text",
+        "content": "© 2024 MailFlow Analytics. All rights reserved.",
+        "styles": {"fontSize": "12px", "color": "#94a3b8", "textAlign": "center", "padding": "24px"}
+    })
+    
+    return blocks
 
 def generate_ai_template(topic: str, tone: str) -> dict:
     import json
@@ -1107,3 +1193,221 @@ def process_ai_chat(message: str, history: list = None) -> str:
     except Exception as e:
         print(f"CLAWDBOT_ERROR: {str(e)}")
         return f"I'm sorry, I'm having a bit of a technical hiccup (AI engine error). But as your assistant, I'm here to help! Error details: {str(e)}"
+def get_system_health(db: Session) -> dict:
+    """
+    Returns real-time health metrics including Redis queue depth and 
+    the 'Reputation Guard' status based on recent bounce rates.
+    """
+    import redis
+    import os
+    from datetime import datetime, timedelta
+    
+    # 1. Queue Depth (Redis)
+    queue_stats = {"marketing": 0, "transactional": 0, "status": "Healthy"}
+    try:
+        REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        r = redis.from_url(REDIS_URL)
+        queue_stats["marketing"] = r.llen("marketing")
+        queue_stats["transactional"] = r.llen("transactional")
+        
+        if queue_stats["marketing"] > 500 or queue_stats["transactional"] > 50:
+            queue_stats["status"] = "Congested"
+    except Exception as e:
+        queue_stats["status"] = f"Redis Error: {str(e)}"
+
+    # 2. Reputation Guard (Recent Bounce Rate Check)
+    # Check last 100 emails for bounce rate
+    recent_emails = db.query(Email.status).order_by(Email.sent_at.desc()).limit(100).all()
+    if recent_emails:
+        bounces = len([e for e in recent_emails if e.status == EmailStatus.BOUNCED])
+        bounce_rate = (bounces / len(recent_emails)) * 100
+    else:
+        bounce_rate = 0
+
+    reputation = "Optimal"
+    if bounce_rate > 3.0: # Professional threshold is often < 2-3%
+        reputation = "Critical (High Bounces)"
+    elif bounce_rate > 1.0:
+        reputation = "Warning"
+
+    # 3. Delivery Velocity (Last Hour)
+    hour_ago = datetime.utcnow() - timedelta(hours=1)
+    vel_sent = db.query(Email).filter(Email.sent_at >= hour_ago, Email.status == EmailStatus.SENT).count()
+    vel_delivered = db.query(Email).filter(Email.sent_at >= hour_ago, Email.status == EmailStatus.DELIVERED).count()
+
+    return {
+        "queues": queue_stats,
+        "reputation": {
+            "status": reputation,
+            "bounce_rate": round(bounce_rate, 2),
+            "threshold": 3.0
+        },
+        "velocity": {
+            "sent_last_hour": vel_sent,
+            "delivered_last_hour": vel_delivered
+        },
+        "timestamp": datetime.utcnow().isoformat()
+    }
+
+def check_reputation_guard(db: Session):
+    """
+    Internal circuit breaker to pause all running campaigns if reputation is critical.
+    """
+    health = get_system_health(db)
+    if health["reputation"]["status"] == "Critical (High Bounces)":
+        # Professional Safeguard: Pause all running campaigns
+        from .models import Campaign, CampaignStatus
+        db.query(Campaign).filter(Campaign.status == CampaignStatus.RUNNING).update({"status": "PAUSED"})
+        db.commit()
+        from . import debug
+        debug.debug_log("REPUTATION_GUARD: All campaigns PAUSED due to high bounce rate.")
+        return True
+    return False
+def is_suppressed(db: Session, email: str) -> bool:
+    """Checks if an email is in the global suppression list."""
+    existing = db.query(Suppression).filter(Suppression.email == email).first()
+    return existing is not None
+
+def add_to_suppression(db: Session, email: str, reason: SuppressionReason, metadata: dict = None):
+    """Adds an address to the suppression list to prevent future sends."""
+    import json
+    existing = db.query(Suppression).filter(Suppression.email == email).first()
+    if existing:
+        return existing
+    
+    supp = Suppression(
+        email=email,
+        reason=reason,
+        metadata_raw=json.dumps(metadata) if metadata else None
+    )
+    db.add(supp)
+    # Also update contact status if exists
+    from .models import Contact
+    contact = db.query(Contact).filter(Contact.email == email).first()
+    if contact:
+        contact.status = "suppressed"
+    
+    db.commit()
+    debug.debug_log(f"SUPPRESSION: Added {email} (Reason: {reason})")
+    return supp
+
+def get_suppressions(db: Session):
+    return db.query(Suppression).order_by(Suppression.created_at.desc()).all()
+
+def delete_suppression(db: Session, suppression_id: int):
+    supp = db.query(Suppression).filter(Suppression.id == suppression_id).first()
+    if supp:
+        # If deleted, we might want to set contact back to active
+        from .models import Contact
+        contact = db.query(Contact).filter(Contact.email == supp.email).first()
+        if contact and contact.status == "suppressed":
+            contact.status = "active"
+        db.delete(supp)
+        db.commit()
+        return True
+    return False
+
+def classify_bounce(error_msg: str) -> dict:
+    """
+    Categorizes bounces into HARD or SOFT based on SMTP codes and patterns.
+    Hard: Permanent (e.g., User not found)
+    Soft: Temporary (e.g., Mailbox full, Greylisting)
+    """
+    msg = error_msg.lower()
+    
+    hard_patterns = [
+        "550", "5.1.1", "user unknown", "no such user", "does not exist", 
+        "recipient rejected", "invalid recipient", "permanent failure",
+        "access denied", "account disabled"
+    ]
+    
+    soft_patterns = [
+        "421", "450", "451", "452", "mailbox full", "quota exceeded",
+        "too many messages", "try again", "temporary", "timeout", 
+        "connection refused", "deferred", "greylist"
+    ]
+    
+    for pattern in hard_patterns:
+        if pattern in msg:
+            return {"type": BounceType.HARD, "pattern": pattern}
+            
+    for pattern in soft_patterns:
+        if pattern in msg:
+            return {"type": BounceType.SOFT, "pattern": pattern}
+            
+    return {"type": BounceType.UNKNOWN, "pattern": None}
+
+def get_automations(db: Session):
+    from .models import Automation
+    return db.query(Automation).order_by(Automation.created_at.desc()).all()
+
+def create_automation(db: Session, data):
+    from .models import Automation, AutomationStep, AutomationTrigger
+    import json
+    
+    # Map string trigger to enum
+    try:
+        t_enum = AutomationTrigger[data.trigger_type.upper()]
+    except:
+        t_enum = AutomationTrigger.WELCOME
+        
+    new_auto = Automation(
+        name=data.name,
+        trigger_type=t_enum,
+        trigger_config=data.trigger_config or "{}"
+    )
+    db.add(new_auto)
+    db.flush() # Get ID
+    
+    for step in data.steps:
+        s = AutomationStep(
+            automation_id=new_auto.id,
+            type=step.type.lower(),
+            config=step.config or "{}",
+            position=step.position
+        )
+        db.add(s)
+    
+    db.commit()
+    db.refresh(new_auto)
+    return new_auto
+
+def delete_automation(db: Session, id: int):
+    from .models import Automation
+    auto = db.query(Automation).filter(Automation.id == id).first()
+    if auto:
+        db.delete(auto)
+        db.commit()
+        return True
+    return False
+
+def update_automation(db: Session, id: int, data):
+    from .models import Automation, AutomationStep, AutomationTrigger
+    
+    auto = db.query(Automation).filter(Automation.id == id).first()
+    if not auto:
+        raise ValueError("Automation not found")
+    
+    if hasattr(data, 'name') and data.name is not None: auto.name = data.name
+    if hasattr(data, 'trigger_type') and data.trigger_type is not None: 
+        try:
+            auto.trigger_type = AutomationTrigger[data.trigger_type.upper()]
+        except:
+            pass
+    if hasattr(data, 'trigger_config') and data.trigger_config is not None: auto.trigger_config = data.trigger_config
+    
+    if hasattr(data, 'steps') and data.steps is not None:
+        # Clear and recreate steps for simplicity in this MVP
+        db.query(AutomationStep).filter(AutomationStep.automation_id == id).delete()
+        for step in data.steps:
+            s = AutomationStep(
+                automation_id=id,
+                type=step.type.lower(),
+                config=step.config or "{}",
+                position=step.position
+            )
+            db.add(s)
+            
+    db.commit()
+    db.refresh(auto)
+    return auto

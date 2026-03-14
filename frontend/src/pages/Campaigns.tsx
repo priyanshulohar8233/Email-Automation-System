@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Table,
   TableBody,
@@ -11,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Search, Filter, MoreHorizontal, Edit, Trash, Play, ChevronRight, Sparkles, Check } from "lucide-react";
+import { Plus, Search, Filter, MoreHorizontal, Edit, Trash, Play, ChevronRight, Sparkles, Check, BarChart3 } from "lucide-react";
 import { CreateCampaignModal } from "@/components/dashboard/CreateCampaignModal";
 import { PageHeader } from "@/components/layout/PageHeader";
 
@@ -49,6 +50,7 @@ export default function Campaigns() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [campaignToDelete, setCampaignToDelete] = useState<string | null>(null);
   const statusMenuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -172,7 +174,7 @@ export default function Campaigns() {
         <Button
           onClick={() => setShowCreateModal(true)}
           style={{ borderRadius: "14px" }}
-          className="gap-2 h-9 px-4 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 transition-all shadow-md text-white border-transparent"
+          className="gap-2 h-9 px-4 text-xs font-semibold bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 transition-all shadow-lg shadow-indigo-500/20 text-white border-transparent"
         >
           <Plus className="h-3.5 w-3.5" />
           Create Campaign
@@ -268,9 +270,20 @@ export default function Campaigns() {
                 <TableRow key={campaign.id}>
                   <TableCell className="font-medium">{campaign.name}</TableCell>
                   <TableCell>
-                    <Badge variant={statusStyles[campaign.status.toLowerCase() as keyof typeof statusStyles] as any}>
-                      {campaign.status}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {campaign.status.toLowerCase() === 'running' && (
+                        <div className="flex h-2 w-2 relative">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </div>
+                      )}
+                      <Badge 
+                        className="rounded-lg font-bold uppercase tracking-tight text-[10px]"
+                        variant={statusStyles[campaign.status.toLowerCase() as keyof typeof statusStyles] as any}
+                      >
+                        {campaign.status}
+                      </Badge>
+                    </div>
                   </TableCell>
                   <TableCell>{campaign.sent}</TableCell>
                   <TableCell className="text-emerald-600 font-bold">{campaign.delivered}</TableCell>
@@ -282,15 +295,26 @@ export default function Campaigns() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        title="View Analytics"
                         className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                        onClick={() => handleToggleCampaign(campaign.id)}
+                        onClick={() => navigate(`/analytics?campaign=${encodeURIComponent(campaign.name)}`)}
                       >
-                        <Play className={`h-4 w-4 ${campaign.status.toLowerCase() === 'running' ? 'fill-indigo-600' : ''}`} />
+                        <BarChart3 className="h-4 w-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        title={campaign.status.toLowerCase() === 'running' ? 'Pause Campaign' : 'Start Campaign'}
+                        className="h-8 w-8 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => handleToggleCampaign(campaign.id)}
+                      >
+                        <Play className={`h-4 w-4 ${campaign.status.toLowerCase() === 'running' ? 'fill-emerald-600' : ''}`} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Edit Details"
+                        className="h-8 w-8 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
                         onClick={() => handleEditCampaign(campaign)}
                       >
                         <Edit className="h-4 w-4" />
@@ -298,6 +322,7 @@ export default function Campaigns() {
                       <Button
                         variant="ghost"
                         size="icon"
+                        title="Delete"
                         className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
                         onClick={() => {
                           setCampaignToDelete(campaign.id);

@@ -17,6 +17,19 @@ celery = Celery(
     backend=settings.REDIS_URL
 )
 
+# Priority Queue Configuration
+celery.conf.task_default_queue = 'marketing'
+celery.conf.task_queues = {
+    'transactional': {
+        'exchange': 'transactional',
+        'routing_key': 'transactional',
+    },
+    'marketing': {
+        'exchange': 'marketing',
+        'routing_key': 'marketing',
+    },
+}
+
 def retry_db_write(db, func, *args, **kwargs):
     import time
     import random
@@ -84,7 +97,7 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         
         # 2. Tracking Pixel & Link Replacement
         unsubscribe_url = f"{base_url}/api/contacts/unsubscribe?email={quote(to_addr)}"
-        tracking_pixel = f"<img src='{base_url}/api/track/open/{email_id}' width='1' height='1' border='0' style='display:block; margin:0; padding:0; line-height:0; color:transparent; pointer-events:none;' alt=''/>"
+        tracking_pixel = f"<img src='{base_url}/api/t/o/{email_id}' width='1' height='1' border='0' style='display:block; margin:0; padding:0; line-height:0; color:transparent; pointer-events:none;' alt=''/>"
         
         final_body = body
         if "{{unsubscribe}}" in final_body:
@@ -96,9 +109,9 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         
         def replace_link(match):
             url = match.group(1)
-            if "/api/track/" in url or "/api/contacts/unsubscribe" in url:
+            if "/api/t/" in url or "/api/track/" in url or "/api/contacts/unsubscribe" in url:
                 return match.group(0)
-            tracked_url = f"{base_url}/api/track/click/{email_id}?url={quote(url)}"
+            tracked_url = f"{base_url}/api/t/c/{email_id}?url={quote(url)}"
             return f'href="{tracked_url}"'
             
         final_body = re.sub(r'href="([^"]+)"', replace_link, final_body)
@@ -181,12 +194,30 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
 
     debug.debug_log(f"DEBUG: Background task finished for email {email_id}")
 
-@celery.task
-def send_email_task(email_id: int, subject: str, body: str, attachments: list = None):
-    debug.debug_log(f"CELERY_TASK: Processing email {email_id}")
+@celery.task(
+    bind=True,
+    max_retries=5,
+    default_retry_delay=60,
+    rate_limit='50/m', # Global rate limit for marketing blasts
+    queue='marketing'
+)
+def send_email_task(self, email_id: int, subject: str, body: str, attachments: list = None):
+    debug.debug_log(f"CELERY_TASK: Processing email {email_id} (Attempt {self.request.retries + 1})")
     db = SessionLocal()
     
     try:
+        # Pre-flight Check: Suppression List
+        email_to_check = db.query(Email.recipient_email).filter(Email.id == email_id).scalar()
+        if services.is_suppressed(db, email_to_check):
+             debug.debug_log(f"CELERY_TASK: Skipping suppressed email {email_id}")
+             # Update status to DROPPED if it was in suppression
+             email_rec = db.query(Email).get(email_id)
+             if email_rec:
+                 email_rec.status = EmailStatus.DROPPED
+                 email_rec.failure_reason = "Recipient is in global suppression list."
+                 db.commit()
+             return {"status": "skipped", "reason": "suppressed"}
+
         # 1. Fetch Settings (Source of Truth)
         # We use a retry loop directly around the query to handle transient SQLite busy state
         from .models import Settings as DBSettings
@@ -234,7 +265,7 @@ def send_email_task(email_id: int, subject: str, body: str, attachments: list = 
         import uuid
         tracking_token = str(uuid.uuid4())
         unsubscribe_url = f"{base_url}/api/contacts/unsubscribe?email={quote(to_addr)}"
-        tracking_pixel = f"<img src='{base_url}/api/track/open/{email_id}?t={tracking_token}' width='1' height='1' border='0' style='display:block; margin:0; padding:0; line-height:0; color:transparent; pointer-events:none;' alt=''/>"
+        tracking_pixel = f"<img src='{base_url}/api/t/o/{email_id}?t={tracking_token}' width='1' height='1' border='0' style='display:block; margin:0; padding:0; line-height:0; color:transparent; pointer-events:none;' alt=''/>"
         
         final_body = body
         if "{{unsubscribe}}" in final_body:
@@ -245,9 +276,9 @@ def send_email_task(email_id: int, subject: str, body: str, attachments: list = 
         
         def replace_link(match):
             url = match.group(1)
-            if "/api/track/" in url or "/api/contacts/unsubscribe" in url:
+            if "/api/t/" in url or "/api/track/" in url or "/api/contacts/unsubscribe" in url:
                 return match.group(0)
-            return f'href="{base_url}/api/track/click/{email_id}?url={quote(url)}"'
+            return f'href="{base_url}/api/t/c/{email_id}?url={quote(url)}"'
             
         final_body = re.sub(r'href="([^"]+)"', replace_link, final_body)
 
@@ -286,8 +317,17 @@ def send_email_task(email_id: int, subject: str, body: str, attachments: list = 
                     server.sendmail(from_mail, [to_addr], msg.as_string())
                 debug.debug_log(f"SMTP: Success for email {email_id}")
             except Exception as smtp_err:
-                debug.debug_log(f"SMTP: Failed for email {email_id}: {str(smtp_err)}")
-                raise Exception(f"SMTP_DELIVERY_FAILURE: {str(smtp_err)}")
+                err_str = str(smtp_err)
+                debug.debug_log(f"SMTP: Failed for email {email_id}: {err_str}")
+                
+                # Adaptive Backoff: If it's a rate limit or temp error, retry with delay
+                temp_errors = ["421", "450", "451", "452", "429", "timeout", "connection refused"]
+                if any(err in err_str.lower() for err in temp_errors):
+                    countdown = (2 ** self.request.retries) * 60 # Exponential: 1m, 2m, 4m, 8m...
+                    debug.debug_log(f"RETRY_LOGIC: Temp error detected. Retrying in {countdown}s...")
+                    raise self.retry(exc=smtp_err, countdown=countdown)
+                
+                raise Exception(f"SMTP_DELIVERY_FAILURE: {err_str}")
 
         # 5. Success Updates (Ultra-Robust)
         def finalize_task(current_db):

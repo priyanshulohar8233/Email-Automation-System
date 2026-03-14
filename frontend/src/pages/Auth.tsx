@@ -22,7 +22,7 @@ export default function Auth() {
         <CardHeader className="space-y-1 items-center text-center">
           <div className="flex items-center gap-2 text-indigo-600 mb-2">
             <Zap className="h-8 w-8 fill-current" />
-            <span className="text-2xl font-bold tracking-tight text-foreground">MailFlow</span>
+            <span className="text-2xl font-bold tracking-tight text-foreground">Email Automation System</span>
           </div>
           <CardTitle className="text-2xl">{isLogin ? "Welcome back" : "Create an account"}</CardTitle>
           <CardDescription className="text-muted-foreground">

@@ -1,5 +1,31 @@
 from pydantic import BaseModel, EmailStr, AnyHttpUrl
 from typing import List, Optional
+import datetime
+
+class AutomationStepSchema(BaseModel):
+    id: Optional[int] = None
+    type: str
+    config: Optional[str] = "{}"
+    position: int
+
+class AutomationCreate(BaseModel):
+    name: str
+    trigger_type: str
+    trigger_config: Optional[str] = "{}"
+    steps: List[AutomationStepSchema]
+
+class AutomationResponse(BaseModel):
+    id: int
+    name: str
+    status: str
+    trigger_type: str
+    trigger_config: str
+    steps: List[AutomationStepSchema]
+    created_at: datetime.datetime
+    updated_at: datetime.datetime
+
+    class Config:
+        from_attributes = True
 
 
 class CampaignRequest(BaseModel):
@@ -70,6 +96,39 @@ class ContactCreate(BaseModel):
 
 class BulkContactsRequest(BaseModel):
     contacts: List[ContactCreate]
+
+class SegmentCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    criteria: str # JSON string
+
+class SegmentResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    criteria: str
+    created_at: datetime.datetime
+
+class ContactActivityItem(BaseModel):
+    id: int
+    event_type: str
+    timestamp: datetime.datetime
+    metadata: Optional[dict] = None
+    campaign_name: Optional[str] = None
+
+class ContactProfileResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    company: Optional[str] = None
+    industry: Optional[str] = None
+    tags: List[str]
+    score: int
+    status: str
+    total_opens: int
+    total_clicks: int
+    created_at: datetime.datetime
+    activity: List[ContactActivityItem]
 
 class SettingsResponse(BaseModel):
     smtp_host: str

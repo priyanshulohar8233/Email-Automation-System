@@ -1,4 +1,5 @@
 import os
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
@@ -69,7 +70,8 @@ def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: S
             send_email_task.apply_async(args=[e.id, req.subject, req.body, req.attachments], eta=eta)
         elif can_use_celery:
             # SaaS Grade: Immediate sends use the optimized raw Redis queue with our custom worker
-            services.push_to_email_queue(e.id, req.subject, req.body, req.attachments)
+            # Priority logic: Campaigns use 'marketing' queue by default
+            services.push_to_email_queue(e.id, req.subject, req.body, req.attachments, queue="marketing")
         else:
             # Immediate sends use background_tasks (native to FastAPI/Uvicorn)
             background_tasks.add_task(send_email_fn, e.id, req.subject, req.body, req.attachments)
@@ -185,32 +187,38 @@ def list_campaign_names(db: Session = Depends(get_db)):
 def get_realtime_analytics(campaign: str = "all", limit: int = 10, db: Session = Depends(get_db)):
     return services.recent_events(db, days=30, limit=limit, campaign_name=campaign)
 
+@router.get("/analytics/system-health")
+def get_system_health(db: Session = Depends(get_db)):
+    return services.get_system_health(db)
+
 @router.get("/dashboard/stats")
-def dashboard_stats(days: int = 30):
+async def dashboard_stats(days: int = 30):
     try:
+        # Step 5: Real database aggregations
         data = services.get_dashboard_stats(days)
         return data
     except Exception as e:
         return {"error": str(e)}
 
 @router.get("/dashboard/email-stats")
-def get_email_stats(days: int = 30, db: Session = Depends(get_db)):
+def get_email_stats(days: int = 7, db: Session = Depends(get_db)):
+    # Step 6: Daily chart data
     return services.emails_over_time(db, days)
 
 @router.get("/dashboard/recent-events")
 def get_recent_events(days: int = 30, campaign: str = "all", db: Session = Depends(get_db)):
     return services.recent_events(db, days, campaign_name=campaign)
 
-@router.get("/track/open/{email_id}")
-def track_open(email_id: int, request: Request, db: Session = Depends(get_db)):
+@router.get("/t/o/{email_id}")
+def tracking_pixel(email_id: int, request: Request, db: Session = Depends(get_db)):
     services.log_event(db, email_id, EventType.OPENED, ip=request.client.host, ua=request.headers.get("user-agent"))
     # Return 1x1 transparent pixel
     import base64
     pixel = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
     return Response(content=pixel, media_type="image/gif")
 
-@router.get("/track/click/{email_id}")
-def track_click(email_id: int, url: str, request: Request, db: Session = Depends(get_db)):
+@router.get("/t/c/{email_id}")
+def tracking_click(email_id: int, url: str, request: Request, db: Session = Depends(get_db)):
     from urllib.parse import unquote
     services.log_event(db, email_id, EventType.CLICKED, ip=request.client.host, ua=request.headers.get("user-agent"), url=url)
     return RedirectResponse(url=unquote(url))
@@ -260,6 +268,27 @@ def create_template(req: TemplateCreate, db: Session = Depends(get_db)):
     db.refresh(t)
     return t
 
+@router.put("/templates/{id}")
+def update_template(id: int, req: TemplateUpdate, db: Session = Depends(get_db)):
+    try:
+        return services.update_template(db, id, name=req.name, content=req.content)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.delete("/templates/{id}")
+def delete_template(id: int, db: Session = Depends(get_db)):
+    try:
+        return services.delete_template(db, id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.post("/templates/generate-blocks")
+def generate_template_blocks(req: AIGenerateRequest):
+    try:
+        return services.generate_block_template(req.topic, req.tone)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/contacts/unsubscribe")
 def unsubscribe(email: str, db: Session = Depends(get_db)):
     from .models import Contact
@@ -277,7 +306,11 @@ def generate_template(req: AIGenerateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-from .schemas import BulkContactsRequest, AIChatRequest
+    SegmentResponse, 
+    TestEmailRequest,
+    AutomationCreate,
+    AutomationResponse
+)
 
 @router.post("/ai/chat")
 def ai_chat(req: AIChatRequest):
@@ -290,6 +323,29 @@ def ai_chat(req: AIChatRequest):
 @router.post("/contacts/import")
 def import_contacts(req: BulkContactsRequest, db: Session = Depends(get_db)):
     return services.create_contacts(db, req.contacts)
+
+@router.get("/contacts/{id}/profile", response_model=ContactProfileResponse)
+def get_contact_profile(id: int, db: Session = Depends(get_db)):
+    profile = services.get_contact_profile(db, id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return profile
+
+@router.put("/contacts/{id}/tags")
+def update_contact_tags(id: int, tags: List[str], db: Session = Depends(get_db)):
+    return services.update_contact_tags(db, id, tags)
+
+@router.get("/segments", response_model=List[SegmentResponse])
+def get_segments(db: Session = Depends(get_db)):
+    return services.get_segments(db)
+
+@router.post("/segments", response_model=SegmentResponse)
+def create_segment(req: SegmentCreate, db: Session = Depends(get_db)):
+    return services.create_segment(db, req)
+
+@router.delete("/segments/{id}")
+def delete_segment(id: int, db: Session = Depends(get_db)):
+    return services.delete_segment(db, id)
 
 @router.get("/contacts/export")
 def export_contacts(db: Session = Depends(get_db)):
@@ -332,3 +388,48 @@ def test_send_template(req: TestEmailRequest, db: Session = Depends(get_db)):
         return {"status": "success"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@router.get("/suppressions")
+def get_suppressions(db: Session = Depends(get_db)):
+    return services.get_suppressions(db)
+
+@router.delete("/suppressions/{id}")
+def delete_suppression(id: int, db: Session = Depends(get_db)):
+    if services.delete_suppression(db, id):
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Suppression not found")
+
+@router.post("/suppressions/manual")
+def add_manual_suppression(payload: dict, db: Session = Depends(get_db)):
+    email = payload.get("email")
+    reason = payload.get("reason", "MANUAL")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    from .models import SuppressionReason
+    try:
+        r_enum = SuppressionReason[reason.upper()]
+    except:
+        r_enum = SuppressionReason.MANUAL
+        
+    services.add_to_suppression(db, email, r_enum)
+    return {"status": "success"}
+
+@router.get("/automations", response_model=List[AutomationResponse])
+def get_automations(db: Session = Depends(get_db)):
+    return services.get_automations(db)
+
+@router.post("/automations", response_model=AutomationResponse)
+def create_automation(req: AutomationCreate, db: Session = Depends(get_db)):
+    return services.create_automation(db, req)
+
+@router.put("/automations/{id}", response_model=AutomationResponse)
+def update_automation(id: int, req: AutomationCreate, db: Session = Depends(get_db)):
+    try:
+        return services.update_automation(db, id, req)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@router.delete("/automations/{id}")
+def delete_automation(id: int, db: Session = Depends(get_db)):
+    if services.delete_automation(db, id):
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Automation not found")
