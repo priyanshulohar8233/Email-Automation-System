@@ -1,6 +1,6 @@
 from typing import List
 import smtplib
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy import func, distinct, case, select, and_
 from sqlalchemy.orm import Session
 from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, Settings, Suppression, SuppressionReason, BounceType
