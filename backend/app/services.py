@@ -435,15 +435,24 @@ def compute_stats(db: Session, days: int = 30):
 
     # As per Dashboard expectations
     return {
-        "days": days,
-        "total_emails_sent": int(total_sent),
-        "open_rate": calc_rate(opens, delivered),
-        "click_rate": calc_rate(clicks, delivered),
-        "delivery_rate": calc_rate(delivered, total_sent),
-        "bounce_rate": calc_rate(bounces, total_sent),
-        "active_campaigns": int(active_camps),
-        "delivered_count": int(delivered),
-        "bounced_count": int(bounces),
+        "totalEmails": int(total_sent),
+        "openRate": calc_rate(opens, delivered),
+        "clickRate": calc_rate(clicks, delivered),
+        "bounceRate": calc_rate(bounces, total_sent),
+        "unread": 100.0 - calc_rate(opens, delivered) if delivered > 0 else 0.0,
+        "activeCampaigns": int(active_camps),
+        
+        "totalEmailsGrowth": 0.0,
+        "openRateGrowth": 0.0,
+        "clickRateGrowth": 0.0,
+        "activeCampaignsGrowth": 0.0,
+        
+        "raw": {
+            "bounced": int(bounces),
+            "opened": int(opens),
+            "delivered": int(delivered),
+            "unread": int(delivered - opens) if delivered > opens else 0
+        }
     }
 
 def get_dashboard_stats(days: int = 30):
@@ -475,11 +484,16 @@ def emails_over_time(db: Session, days: int = 7):
         dates.append(date_str)
         vals.append(count)
                         
-    # Step 6: Return structured daily data
-    return {
-        "dates": dates,
-        "emails": vals
-    }
+    chart_data = []
+    for i in range(len(dates)):
+        # Convert date_str to Short Day name if needed, or just use date_str
+        dt = datetime.strptime(dates[i], '%Y-%m-%d')
+        chart_data.append({
+            "day": dt.strftime('%a'),
+            "emails": vals[i]
+        })
+                        
+    return chart_data
 
 
 

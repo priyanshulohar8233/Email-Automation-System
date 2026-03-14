@@ -7,7 +7,7 @@ from urllib.parse import unquote
 
 from .database import get_db
 from . import services
-from .schemas import CampaignRequest, SettingsUpdate, CampaignCreate, TemplateCreate, TemplateUpdate, AIGenerateRequest, TestEmailRequest
+from .schemas import CampaignRequest, SettingsUpdate, CampaignCreate, TemplateCreate, TemplateUpdate, AIGenerateRequest, TestEmailRequest, DashboardStats
 from .models import Email, EmailStatus, EventType
 from .config import settings
 from .tasks import send_email_task, send_email_fn
@@ -191,8 +191,8 @@ def get_realtime_analytics(campaign: str = "all", limit: int = 10, db: Session =
 def get_system_health(db: Session = Depends(get_db)):
     return services.get_system_health(db)
 
-@router.get("/dashboard/stats")
-async def dashboard_stats(days: int = 30):
+@router.get("/dashboard/stats", response_model=DashboardStats)
+def dashboard_stats(days: int = 30):
     try:
         # Step 5: Real database aggregations
         data = services.get_dashboard_stats(days)
@@ -306,11 +306,6 @@ def generate_template(req: AIGenerateRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-    SegmentResponse, 
-    TestEmailRequest,
-    AutomationCreate,
-    AutomationResponse
-)
 
 @router.post("/ai/chat")
 def ai_chat(req: AIChatRequest):
