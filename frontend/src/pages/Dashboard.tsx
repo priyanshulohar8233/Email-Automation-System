@@ -30,21 +30,35 @@ export default function Dashboard() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const fetchStats = async () => {
+  const fetchStats = async (signal?: AbortSignal, silently: boolean = false) => {
     try {
-      setLoading(true);
-      setError(null);
-      const data = await dashboardAPI.getStats(days);
+      if (!silently) {
+        setLoading(true);
+        setError(null);
+      }
+      const data = await dashboardAPI.getStats(days, signal);
       setStats(data);
     } catch (err) {
-      setError("Failed to load dashboard metrics. Please try again.");
+      if (err instanceof Error && err.name === 'AbortError') return;
+      if (!silently) setError("Failed to load dashboard metrics. Please try again.");
     } finally {
-      setLoading(false);
+      if (!silently) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStats();
+    const controller = new AbortController();
+    fetchStats(controller.signal);
+
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      fetchStats(undefined, true); // Silent refresh
+    }, 30000);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [days]);
 
   return (

@@ -6,7 +6,7 @@ from urllib.parse import quote
 from .config import settings
 from .debug import debug_log
 from .database import SessionLocal
-from .models import Email, EmailStatus, EmailEvent, Campaign, CampaignStatus
+from .models import Email, EmailStatus, EmailEvent, Campaign, CampaignStatus, EventType
 
 from celery import Celery
 

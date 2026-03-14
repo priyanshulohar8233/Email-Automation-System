@@ -20,22 +20,34 @@ export interface DashboardStats {
 }
 
 // Helper function to add timeout to fetch calls
-const fetchWithTimeout = (url: string, timeout: number = 10000): Promise<Response> => {
-    return Promise.race([
-        fetch(url),
-        new Promise<Response>((_, reject) =>
-            setTimeout(() => reject(new Error(`Request timeout after ${timeout}ms`)), timeout)
-        )
-    ]);
+const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: number = 10000): Promise<Response> => {
+    const controller = new AbortController();
+    const { signal } = controller;
+    
+    // If a signal was passed in, we need to handle it
+    if (options.signal) {
+        options.signal.addEventListener('abort', () => controller.abort());
+    }
+
+    const fetchPromise = fetch(url, { ...options, signal });
+    const timeoutPromise = new Promise<Response>((_, reject) =>
+        setTimeout(() => {
+            controller.abort();
+            reject(new Error(`Request timeout after ${timeout}ms`));
+        }, timeout)
+    );
+
+    return Promise.race([fetchPromise, timeoutPromise]);
 };
 
 export const dashboardAPI = {
-    getStats: async (days?: number): Promise<DashboardStats> => {
+    getStats: async (days?: number, signal?: AbortSignal): Promise<DashboardStats> => {
         try {
-            // In a real application we would use the actual backend URL here.
-            // Currently assuming the proxy or relative path routes mapped to FastAPI.
             const url = days ? `/api/dashboard/stats?days=${days}` : '/api/dashboard/stats';
-            const response = await fetchWithTimeout(url, 10000);
+            const response = await fetchWithTimeout(url, { 
+                signal,
+                cache: 'no-store'
+            }, 10000);
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -44,14 +56,20 @@ export const dashboardAPI = {
             }
             return await response.json();
         } catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') {
+                console.log('Fetch aborted');
+                throw error;
+            }
             console.error("Dashboard API Error:", error);
             throw error;
         }
     },
-    // New function to fetch email stats (same shape as DashboardStats but could be extended)
-    getEmailStats: async (days?: number): Promise<any> => {
+    getEmailStats: async (days?: number, signal?: AbortSignal): Promise<any> => {
         const url = days ? `/api/dashboard/email-stats?days=${days}` : '/api/dashboard/email-stats';
-        const response = await fetchWithTimeout(url, 10000);
+        const response = await fetchWithTimeout(url, { 
+            signal,
+            cache: 'no-store'
+        }, 10000);
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Dashboard API Email Stats Error [${response.status}]: ${response.statusText}`, errorText);
@@ -59,10 +77,12 @@ export const dashboardAPI = {
         }
         return await response.json();
     },
-    // New function to fetch recent events for activity table
-    getRecentEvents: async (days?: number): Promise<any[]> => {
+    getRecentEvents: async (days?: number, signal?: AbortSignal): Promise<any[]> => {
         const url = days ? `/api/dashboard/recent-events?days=${days}` : '/api/dashboard/recent-events';
-        const response = await fetchWithTimeout(url, 10000);
+        const response = await fetchWithTimeout(url, { 
+            signal,
+            cache: 'no-store'
+        }, 10000);
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Dashboard API Recent Events Error [${response.status}]: ${response.statusText}`, errorText);

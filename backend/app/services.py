@@ -1,7 +1,7 @@
 from typing import List
 import smtplib
 from datetime import datetime
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, case
 from sqlalchemy.orm import Session
 from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, Settings, Suppression, SuppressionReason, BounceType
 
@@ -14,10 +14,11 @@ from email.mime.multipart import MIMEMultipart
 from email import encoders
 import requests
 import io
+from . import debug
 
 def check_and_complete_campaign(db: Session, campaign_id: int):
     from .models import Email, EmailStatus, Campaign, CampaignStatus
-    from . import debug
+    
     
     # Reload campaign
     camp = db.query(Campaign).get(campaign_id)
@@ -97,8 +98,7 @@ def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_p
 # functions used by API
 
 def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None, ua: str = None, url: str = None):
-    from . import debug
-    from datetime import datetime, timedelta
+    from .models import Email, EmailEvent, Campaign, Suppression, SuppressionReason
     
     # 1. Professional Security: Prevent duplicate open tracking (60s window)
     if event_type == EventType.OPENED:
@@ -392,40 +392,29 @@ def compute_stats(db: Session, days: int = 30):
     now = datetime.utcnow()
     limit_date = now - timedelta(days=days)
 
-    # 1. Total Attempted
-    attempted = db.query(func.count(Email.id)).filter(Email.sent_at >= limit_date).scalar() or 0
-    
-    # 2. Total Sent (Success activity: SENT, DELIVERED, BOUNCED)
-    total_sent = db.query(func.count(Email.id)).filter(
-        Email.sent_at >= limit_date,
-        Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
-    ).scalar() or 0
+    # 1-3 & 6. Combined Email Metrics (Single Roundtrip)
+    email_metrics = db.query(
+        func.count(Email.id).label("attempted"),
+        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED]), Email.id))).label("total_sent"),
+        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("delivered"),
+        func.count(case((Email.status == EmailStatus.BOUNCED, Email.id))).label("bounces")
+    ).filter(Email.sent_at >= limit_date).first()
 
-    # 3. Delivered (SENT or DELIVERED, excludes BOUNCED)
-    delivered = db.query(func.count(Email.id)).filter(
-        Email.sent_at >= limit_date,
-        Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
-    ).scalar() or 0
+    attempted = email_metrics.attempted or 0
+    total_sent = email_metrics.total_sent or 0
+    delivered = email_metrics.delivered or 0
+    bounces = email_metrics.bounces or 0
 
-    # 4. Unique Opens
-    opens = db.query(func.count(distinct(EmailEvent.email_id))).filter(
-        EmailEvent.event_type == EventType.OPENED,
-        EmailEvent.timestamp >= limit_date
-    ).scalar() or 0
+    # 4-5. Unique Opens & Clicks (Can also be combined)
+    event_metrics = db.query(
+        func.count(distinct(case((EmailEvent.event_type == EventType.OPENED, EmailEvent.email_id)))).label("opens"),
+        func.count(distinct(case((EmailEvent.event_type == EventType.CLICKED, EmailEvent.email_id)))).label("clicks")
+    ).filter(EmailEvent.timestamp >= limit_date).first()
 
-    # 5. Unique Clicks
-    clicks = db.query(func.count(distinct(EmailEvent.email_id))).filter(
-        EmailEvent.event_type == EventType.CLICKED,
-        EmailEvent.timestamp >= limit_date
-    ).scalar() or 0
+    opens = event_metrics.opens or 0
+    clicks = event_metrics.clicks or 0
 
-    # 6. Bounces
-    bounces = db.query(func.count(Email.id)).filter(
-        Email.sent_at >= limit_date,
-        Email.status == EmailStatus.BOUNCED
-    ).scalar() or 0
-
-    # 7. Active Campaigns
+    # 7. Active Campaigns (Fast query, less critical but good to keep separate if needed)
     active_camps = db.query(func.count(Campaign.id)).filter(
         Campaign.status == CampaignStatus.RUNNING
     ).scalar() or 0
@@ -467,30 +456,29 @@ def get_dashboard_stats(days: int = 30):
 def emails_over_time(db: Session, days: int = 7):
     from datetime import datetime, timedelta
     now = datetime.utcnow()
+    limit_date = (now - timedelta(days=days-1)).replace(hour=0, minute=0, second=0, microsecond=0)
     
-    dates = []
-    vals = []
+    # 1. Fetch aggregated counts in one query
+    # Note: func.date works in both SQLite and Postgres
+    results = db.query(
+        func.date(Email.sent_at).label("day_date"),
+        func.count(Email.id).label("count")
+    ).filter(
+        Email.sent_at >= limit_date,
+        Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
+    ).group_by(func.date(Email.sent_at)).all()
     
-    for i in range(days - 1, -1, -1):
-        d = (now - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
-        date_str = d.strftime('%Y-%m-%d')
-        
-        count = db.query(func.count(Email.id)).filter(
-            Email.sent_at >= d,
-            Email.sent_at < d + timedelta(days=1),
-            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
-        ).scalar() or 0
-        
-        dates.append(date_str)
-        vals.append(count)
-                        
+    # 2. Map results to a dict for easy lookup
+    data_map = {str(r.day_date): r.count for r in results}
+    
+    # 3. Fill in all days in the range (ensuring 0 for missing days)
     chart_data = []
-    for i in range(len(dates)):
-        # Convert date_str to Short Day name if needed, or just use date_str
-        dt = datetime.strptime(dates[i], '%Y-%m-%d')
+    for i in range(days - 1, -1, -1):
+        d = (now - timedelta(days=i))
+        date_key = d.strftime('%Y-%m-%d')
         chart_data.append({
-            "day": dt.strftime('%a'),
-            "emails": vals[i]
+            "day": d.strftime('%a'),
+            "emails": data_map.get(date_key, 0)
         })
                         
     return chart_data
@@ -597,7 +585,34 @@ def push_to_email_queue(email_id: int, subject: str, body: str, attachments: lis
 
 def get_campaigns(db: Session, search: str | None = None, status: str | None = None):
     from .models import Campaign
-    query = db.query(Campaign)
+    from sqlalchemy import select, and_
+
+    # Subquery for email metrics per campaign
+    email_metrics = db.query(
+        Email.campaign_id,
+        func.count(Email.id).label("attempted"),
+        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("sent"),
+        func.count(case((Email.status == EmailStatus.DELIVERED, Email.id))).label("delivered"),
+        func.count(case((Email.status == EmailStatus.BOUNCED, Email.id))).label("failed")
+    ).group_by(Email.campaign_id).subquery()
+
+    # Subquery for unique opens per campaign
+    open_metrics = db.query(
+        Email.campaign_id,
+        func.count(distinct(EmailEvent.email_id)).label("opens")
+    ).join(EmailEvent, Email.id == EmailEvent.email_id)\
+     .filter(EmailEvent.event_type == EventType.OPENED)\
+     .group_by(Email.campaign_id).subquery()
+
+    # Main query joining Campaign with metrics
+    query = db.query(
+        Campaign,
+        email_metrics.c.sent,
+        email_metrics.c.delivered,
+        email_metrics.c.failed,
+        open_metrics.c.opens
+    ).outerjoin(email_metrics, Campaign.id == email_metrics.c.campaign_id)\
+     .outerjoin(open_metrics, Campaign.id == open_metrics.c.campaign_id)
     
     if search:
         query = query.filter(Campaign.name.ilike(f"%{search}%"))
@@ -608,27 +623,11 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
     campaigns = query.order_by(Campaign.created_at.desc()).all()
     
     results = []
-    for c in campaigns:
-        # Dynamic counts for accuracy in serverless/async environments
-        sent = db.query(func.count(Email.id)).filter(
-            Email.campaign_id == c.id, 
-            Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
-        ).scalar() or 0
-        
-        delivered = db.query(func.count(Email.id)).filter(
-            Email.campaign_id == c.id, 
-            Email.status == EmailStatus.DELIVERED
-        ).scalar() or 0
-        
-        failed = db.query(func.count(Email.id)).filter(
-            Email.campaign_id == c.id, 
-            Email.status == EmailStatus.BOUNCED
-        ).scalar() or 0
-        
-        opens = db.query(func.count(distinct(EmailEvent.email_id))).join(Email).filter(
-            Email.campaign_id == c.id,
-            EmailEvent.event_type == EventType.OPENED
-        ).scalar() or 0
+    for c, sent, delivered, failed, opens in campaigns:
+        sent = sent or 0
+        delivered = delivered or 0
+        failed = failed or 0
+        opens = opens or 0
         
         unread = (sent - opens) if sent > opens else 0
         
@@ -645,6 +644,25 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
             "scheduled": c.scheduled_for or "Not scheduled",
         })
     return results
+
+def trigger_campaign_emails(db: Session, campaign_id: int, background_tasks):
+    from .models import Email, EmailStatus, Campaign
+    from .tasks import send_email_fn
+    
+    # Fetch all PENDING emails for this campaign
+    pending_emails = db.query(Email).filter(
+        Email.campaign_id == campaign_id,
+        Email.status == EmailStatus.PENDING
+    ).all()
+    
+    if not pending_emails:
+        return 0
+        
+    # Queue them in background_tasks
+    for e in pending_emails:
+        background_tasks.add_task(send_email_fn, e.id, e.subject, e.body)
+        
+    return len(pending_emails)
 
 def update_campaign(db: Session, campaign_id: int, data):
     from .models import Campaign
@@ -1273,7 +1291,7 @@ def check_reputation_guard(db: Session):
         from .models import Campaign, CampaignStatus
         db.query(Campaign).filter(Campaign.status == CampaignStatus.RUNNING).update({"status": "PAUSED"})
         db.commit()
-        from . import debug
+    if bounce_rate > 5.0: # Hard threshold
         debug.debug_log("REPUTATION_GUARD: All campaigns PAUSED due to high bounce rate.")
         return True
     return False

@@ -65,23 +65,19 @@ def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: S
     db.commit()
     
     # Trigger tasks
-    # ALWAYS use BackgroundTasks for immediate sending to avoid worker dependency and ensure robustness.
-    # Use Celery ONLY for scheduled tasks (eta) if Redis is configured.
+    # Standard Grade: Use background_tasks for immediate sending.
+    # SaaS Grade: Use Celery ONLY for scheduled tasks (eta) if Redis is configured.
     can_use_celery = bool(settings.REDIS_URL and "redis" in settings.REDIS_URL) and not os.getenv("VERCEL")
     
     for e in records:
         if eta and can_use_celery:
-            # Scheduled tasks require Celery
             send_email_task.apply_async(args=[e.id, req.subject, req.body, req.attachments], eta=eta)
-        elif can_use_celery:
-            # SaaS Grade: Immediate sends use the optimized raw Redis queue with our custom worker
-            # Priority logic: Campaigns use 'marketing' queue by default
-            services.push_to_email_queue(e.id, req.subject, req.body, req.attachments, queue="marketing")
         else:
             # Immediate sends use background_tasks (native to FastAPI/Uvicorn)
+            # This avoids dependency on external workers for simple setups and handles small-to-medium volume perfectly.
             background_tasks.add_task(send_email_fn, e.id, req.subject, req.body, req.attachments)
             
-    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value, "mode": "custom_redis" if (not eta and can_use_celery) else ("celery" if (eta and can_use_celery) else "background_tasks")}
+    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value, "mode": "celery" if (eta and can_use_celery) else "background_tasks"}
 
 @router.get("/campaigns")
 def get_campaigns(search: str | None = None, status: str | None = None, db: Session = Depends(get_db)):
@@ -100,7 +96,7 @@ def delete_campaign(id: int, db: Session = Depends(get_db)):
     return services.delete_campaign(db, id)
 
 @router.post("/campaigns/{id}/toggle")
-def toggle_campaign(id: int, db: Session = Depends(get_db)):
+def toggle_campaign(id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     from .models import Campaign, CampaignStatus
     camp = db.query(Campaign).get(id)
     if not camp:
@@ -110,6 +106,8 @@ def toggle_campaign(id: int, db: Session = Depends(get_db)):
         camp.status = CampaignStatus.QUEUED
     elif camp.status in [CampaignStatus.QUEUED, CampaignStatus.DRAFT]:
         camp.status = CampaignStatus.RUNNING
+        # SaaS Grade: When resuming/starting, ensure any PENDING emails are triggered
+        services.trigger_campaign_emails(db, camp.id, background_tasks)
     
     db.commit()
     db.refresh(camp)
@@ -179,7 +177,8 @@ def test_smtp(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"SMTP Error: {str(e)}")
 
 @router.get("/analytics")
-def get_campaign_analytics(campaign: str = "all", days: int = 30, db: Session = Depends(get_db)):
+def get_campaign_analytics(response: Response, campaign: str = "all", days: int = 30, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return services.get_analytics(db, campaign_name=campaign, days=days)
 
 @router.get("/campaigns/names")
@@ -189,7 +188,8 @@ def list_campaign_names(db: Session = Depends(get_db)):
     return [r[0] for r in results]
 
 @router.get("/analytics/realtime")
-def get_realtime_analytics(campaign: str = "all", limit: int = 10, db: Session = Depends(get_db)):
+def get_realtime_analytics(response: Response, campaign: str = "all", limit: int = 10, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return services.recent_events(db, days=30, limit=limit, campaign_name=campaign)
 
 @router.get("/analytics/system-health")
@@ -197,7 +197,8 @@ def get_system_health(db: Session = Depends(get_db)):
     return services.get_system_health(db)
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
-def dashboard_stats(days: int = 30):
+def dashboard_stats(response: Response, days: int = 30):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         # Step 5: Real database aggregations
         data = services.get_dashboard_stats(days)
@@ -206,12 +207,14 @@ def dashboard_stats(days: int = 30):
         return {"error": str(e)}
 
 @router.get("/dashboard/email-stats")
-def get_email_stats(days: int = 7, db: Session = Depends(get_db)):
+def get_email_stats(response: Response, days: int = 7, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     # Step 6: Daily chart data
     return services.emails_over_time(db, days)
 
 @router.get("/dashboard/recent-events")
-def get_recent_events(days: int = 30, campaign: str = "all", db: Session = Depends(get_db)):
+def get_recent_events(response: Response, days: int = 30, campaign: str = "all", db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return services.recent_events(db, days, campaign_name=campaign)
 
 @router.get("/t/o/{email_id}")
