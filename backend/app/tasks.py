@@ -50,9 +50,9 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         
         def repl(match):
             url = match.group(1)
-            if "/t/c/" in url or "/unsubscribe" in url: 
+            if "/t/c/" in url or "/unsubscribe" in url or "/track/" in url: 
                 return f'href="{url}"'
-            if base_url in url and "/t/c/" in url:
+            if base_url in url and ("/t/c/" in url or "/track/" in url):
                 return f'href="{url}"'
             tracked_url = f"{base_url}/api/t/c/{email_id}?url={quote(url)}"
             return f'href="{tracked_url}"'

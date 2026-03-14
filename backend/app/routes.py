@@ -235,6 +235,15 @@ def tracking_click(email_id: int, url: str, request: Request, db: Session = Depe
     services.log_event(db, email_id, EventType.CLICKED, ip=request.client.host, ua=request.headers.get("user-agent"), url=url)
     return RedirectResponse(url=unquote(url))
 
+# Legacy Aliases (Compatibility for older emails)
+@router.get("/track/open/{email_id}")
+def legacy_tracking_pixel(email_id: int, request: Request, db: Session = Depends(get_db)):
+    return tracking_pixel(email_id, request, db)
+
+@router.get("/track/click/{email_id}")
+def legacy_tracking_click(email_id: int, url: str, request: Request, db: Session = Depends(get_db)):
+    return tracking_click(email_id, url, request, db)
+
 @router.get("/analytics/links")
 def get_link_performance(campaign: str = "all", db: Session = Depends(get_db)):
     return services.get_link_performance(db, campaign)
