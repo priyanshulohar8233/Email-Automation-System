@@ -104,7 +104,9 @@ def toggle_campaign(id: int, background_tasks: BackgroundTasks, db: Session = De
     
     if camp.status == CampaignStatus.RUNNING:
         camp.status = CampaignStatus.QUEUED
-    elif camp.status in [CampaignStatus.QUEUED, CampaignStatus.DRAFT]:
+    elif camp.status in [CampaignStatus.QUEUED, CampaignStatus.DRAFT, CampaignStatus.COMPLETED]:
+        # If it was completed, setting it to Running will allow trigger_campaign_emails 
+        # to find any new/resubmitted PENDING emails.
         camp.status = CampaignStatus.RUNNING
         # SaaS Grade: When resuming/starting, ensure any PENDING emails are triggered
         services.trigger_campaign_emails(db, camp.id, background_tasks)
@@ -118,11 +120,13 @@ def get_settings(db: Session = Depends(get_db)):
     from .models import Settings
     s = db.query(Settings).first()
     if not s:
+        # Pro Grade: Auto-detect Vercel environment or fallback to localhost
+        public_url = f"https://{os.getenv('VERCEL_URL')}" if os.getenv('VERCEL_URL') else "http://localhost:8000"
         s = Settings(
             smtp_host="smtp.gmail.com", 
             smtp_port=587, 
             monthly_limit=1000000,
-            base_url=(f"https://{os.getenv('VERCEL_URL')}" if os.getenv("VERCEL_URL") else "http://localhost:8000")
+            base_url=public_url
         )
         db.add(s)
         db.commit()

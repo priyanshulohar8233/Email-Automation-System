@@ -1,7 +1,7 @@
 from typing import List
 import smtplib
 from datetime import datetime
-from sqlalchemy import func, distinct, case
+from sqlalchemy import func, distinct, case, select, and_
 from sqlalchemy.orm import Session
 from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, Settings, Suppression, SuppressionReason, BounceType
 
@@ -19,13 +19,17 @@ from . import debug
 def check_and_complete_campaign(db: Session, campaign_id: int):
     from .models import Email, EmailStatus, Campaign, CampaignStatus
     
-    
     # Reload campaign
     camp = db.query(Campaign).get(campaign_id)
-    if not camp: return
+    if not camp or camp.status == CampaignStatus.COMPLETED:
+        return
     
     # Check if any emails are still PENDING
-    pending_count = db.query(Email).filter(Email.campaign_id == campaign_id, Email.status == EmailStatus.PENDING).count()
+    pending_count = db.query(Email).filter(
+        Email.campaign_id == campaign_id, 
+        Email.status == EmailStatus.PENDING
+    ).count()
+    
     if pending_count == 0:
         camp.status = CampaignStatus.COMPLETED
         db.commit()
@@ -585,14 +589,13 @@ def push_to_email_queue(email_id: int, subject: str, body: str, attachments: lis
 
 def get_campaigns(db: Session, search: str | None = None, status: str | None = None):
     from .models import Campaign
-    from sqlalchemy import select, and_
 
     # Subquery for email metrics per campaign
     email_metrics = db.query(
         Email.campaign_id,
         func.count(Email.id).label("attempted"),
         func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("sent"),
-        func.count(case((Email.status == EmailStatus.DELIVERED, Email.id))).label("delivered"),
+        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("delivered"),
         func.count(case((Email.status == EmailStatus.BOUNCED, Email.id))).label("failed")
     ).group_by(Email.campaign_id).subquery()
 
@@ -706,11 +709,11 @@ def delete_campaign(db: Session, campaign_id: int):
         if not campaign:
             raise ValueError("Campaign not found")
         
-        # 1. Delete all tracking events associated with this campaign's emails 
-        # (This avoids foreign key constraint violations)
+        # 1. Delete all tracking events associated with this campaign's emails
+        # Use a join for better performance on large sets
         db.query(EmailEvent).filter(
             EmailEvent.email_id.in_(
-                db.query(Email.id).filter(Email.campaign_id == campaign_id)
+                select(Email.id).where(Email.campaign_id == campaign_id)
             )
         ).delete(synchronize_session=False)
         

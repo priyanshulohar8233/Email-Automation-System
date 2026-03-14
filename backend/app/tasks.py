@@ -7,6 +7,7 @@ from .config import settings
 from .debug import debug_log
 from .database import SessionLocal
 from .models import Email, EmailStatus, EmailEvent, Campaign, CampaignStatus, EventType
+from . import services
 
 from celery import Celery
 
@@ -42,17 +43,17 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             f"You received this because you are part of our mailing list.<br/>"
             f"<a href='{unsubscribe_url}' style='color: #4f46e5; text-decoration: underline;'>Unsubscribe</a>"
             f"</p>"
-            f"<img src='{settings.BASE_URL}/api/track/open/{email_id}' width='1' height='1' alt='' style='display:none !important; visibility:hidden; opacity:0;'/>"
+            f"<img src='{settings.BASE_URL}/api/t/o/{email_id}' width='1' height='1' alt='' style='display:none !important; visibility:hidden; opacity:0;'/>"
             f"</div>"
         )
         
         def repl(match):
             url = match.group(1)
-            if "/track/" in url or "/unsubscribe" in url: 
+            if "/t/c/" in url or "/unsubscribe" in url: 
                 return f'href="{url}"'
-            if settings.BASE_URL in url and "/track/" in url:
+            if settings.BASE_URL in url and "/t/c/" in url:
                 return f'href="{url}"'
-            tracked_url = f"{settings.BASE_URL}/api/track/click/{email_id}?url={quote(url)}"
+            tracked_url = f"{settings.BASE_URL}/api/t/c/{email_id}?url={quote(url)}"
             return f'href="{tracked_url}"'
             
         tracking_body = re.sub(r'href=["\']([^"\']+)["\']', repl, tracking_body)
@@ -80,7 +81,7 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         now = datetime.utcnow()
         
         # 5. Update Status
-        email_record.status = EmailStatus.SENT
+        email_record.status = EmailStatus.DELIVERED
         email_record.sent_at = now
         email_record.subject = subject
         
@@ -88,18 +89,8 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         db.add(EmailEvent(email_id=email_id, event_type=EventType.SENT, timestamp=now))
         db.add(EmailEvent(email_id=email_id, event_type=EventType.DELIVERED, timestamp=now))
 
-        # Check for campaign completion
-        camp = db.query(Campaign).get(campaign_id)
-        if camp:
-            camp.delivered_count = (camp.delivered_count or 0) + 1
-            camp.sent_count = (camp.sent_count or 0) + 1
-            camp.unread_count = (camp.unread_count or 0) + 1
-            
-            # Check if this was the last pending email
-            pending_count = db.query(Email).filter(Email.campaign_id == campaign_id, Email.status == EmailStatus.PENDING).count()
-            if pending_count == 0:
-                camp.status = CampaignStatus.COMPLETED
-                debug_log(f"CAMPAIGN_FINISHED: Campaign {campaign_id} marked as COMPLETED")
+        # Standard Grade: Use the centralized service for completion check
+        services.check_and_complete_campaign(db, campaign_id)
                 
         db.commit()
         
@@ -118,6 +109,9 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             if camp:
                 camp.failed_count = (camp.failed_count or 0) + 1
             db.commit()
+            
+            # Ensure campaign completes even if this was a failure (as long as it's the last one)
+            services.check_and_complete_campaign(db, email_record.campaign_id)
     finally:
         db.close()
 
