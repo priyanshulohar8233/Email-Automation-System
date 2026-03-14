@@ -1,21 +1,41 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import traceback
 from .database import engine, Base
 from .routes import router
 
-# create tables
-Base.metadata.create_all(bind=engine)
+# Selective DB init (lazy)
+def init_db():
+    try:
+        print(f"DATABASE_INIT: Initializing {engine.url.drivername}...")
+        Base.metadata.create_all(bind=engine)
+        print("DATABASE_INIT: Success.")
+    except Exception as e:
+        print(f"DATABASE_INIT_ERROR: {str(e)}")
 
 app = FastAPI(title="Email Tracking API")
 
+@app.on_event("startup")
+async def startup_event():
+    # Only run in non-serverless or as a lazy background task
+    # On Vercel, everything is transient, so we call it once.
+    init_db()
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001", "https://mailflow-frontend.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(
+    TrustedHostMiddleware, 
+    allowed_hosts=["localhost", "127.0.0.1", "*.vercel.app", "mailflow.com"]
 )
 
 @app.exception_handler(Exception)

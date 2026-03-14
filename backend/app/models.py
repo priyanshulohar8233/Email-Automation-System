@@ -6,11 +6,11 @@ from .database import Base
 
 
 class CampaignStatus(str, enum.Enum):
-    DRAFT = "draft"
-    SCHEDULED = "scheduled"
-    QUEUED = "queued"
-    RUNNING = "running"
-    COMPLETED = "completed"
+    DRAFT = "DRAFT"
+    SCHEDULED = "SCHEDULED"
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
 
 class Campaign(Base):
     __tablename__ = "campaigns"
@@ -36,6 +36,17 @@ class EmailStatus(str, enum.Enum):
     SPAM = "SPAM"
     DROPPED = "DROPPED"
 
+class BounceType(str, enum.Enum):
+    HARD = "HARD"
+    SOFT = "SOFT"
+    UNKNOWN = "UNKNOWN"
+
+class SuppressionReason(str, enum.Enum):
+    BOUNCE = "BOUNCE"
+    SPAM = "SPAM"
+    UNSUBSCRIBE = "UNSUBSCRIBE"
+    MANUAL = "MANUAL"
+
 
 class Email(Base):
     __tablename__ = "emails"
@@ -44,8 +55,14 @@ class Email(Base):
     recipient_email = Column(String, index=True, nullable=False)
     status = Column(Enum(EmailStatus), default=EmailStatus.PENDING)
     subject = Column(String, nullable=True)
+    body = Column(String, nullable=True)
     failure_reason = Column(String, nullable=True)
+    bounce_reason = Column(String, nullable=True)
+    bounce_type = Column(Enum(BounceType), nullable=True)
+    delivery_status = Column(String, nullable=True) # e.g., "delivered", "processed", "deferred"
     sent_at = Column(DateTime, default=func.now())
+    opened_at = Column(DateTime, nullable=True)
+    clicked_at = Column(DateTime, nullable=True)
 
     events = relationship("EmailEvent", back_populates="email", order_by="EmailEvent.timestamp.asc()")
 
@@ -65,8 +82,8 @@ class EventType(str, enum.Enum):
 class EmailEvent(Base):
     __tablename__ = "email_events"
     id = Column(Integer, primary_key=True, index=True)
-    email_id = Column(Integer, ForeignKey("emails.id"), nullable=False)
-    event_type = Column(Enum(EventType), nullable=False)
+    email_id = Column(Integer, ForeignKey("emails.id"), nullable=False, index=True)
+    event_type = Column(Enum(EventType), nullable=False, index=True)
     
     # Metadata for enriched tracking
     ip_address = Column(String, nullable=True)
@@ -80,7 +97,7 @@ class EmailEvent(Base):
     # For Click tracking
     url = Column(String, nullable=True) 
     
-    timestamp = Column(DateTime, default=func.now())
+    timestamp = Column(DateTime, default=func.now(), index=True)
 
     email = relationship("Email", back_populates="events")
 
@@ -88,6 +105,22 @@ class Tag(Base):
     __tablename__ = "tags"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
+
+class Segment(Base):
+    __tablename__ = "segments"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    criteria = Column(String, default="{}") # JSON criteria for filtering contacts
+    created_at = Column(DateTime, default=func.now())
+
+class Suppression(Base):
+    __tablename__ = "suppressions"
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String, unique=True, index=True, nullable=False)
+    reason = Column(Enum(SuppressionReason), nullable=False)
+    metadata_raw = Column(String, nullable=True) # JSON details (e.g., SMTP code)
+    created_at = Column(DateTime, default=func.now())
 
 class Contact(Base):
     __tablename__ = "contacts"
@@ -97,9 +130,16 @@ class Contact(Base):
     company = Column(String, nullable=True)
     industry = Column(String, nullable=True)
     score = Column(Integer, default=0)
-    status = Column(String, default="active") # active, unsubscribed, bounced
-    last_open = Column(String, nullable=True)
+    status = Column(String, default="active", index=True) # active, unsubscribed, bounced
     tags_raw = Column(String, default="") # Store as comma separated string for simplicity
+    
+    # Marketing metrics
+    total_opens = Column(Integer, default=0)
+    total_clicks = Column(Integer, default=0)
+    engagement_score = Column(Integer, default=0)
+    
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 class Settings(Base):
     __tablename__ = "settings"
@@ -108,6 +148,10 @@ class Settings(Base):
     smtp_port = Column(Integer, default=587)
     smtp_username = Column(String, default="admin@mailflow.com")
     smtp_password = Column(String, default="")
+    sendgrid_api_key = Column(String, nullable=True)
+    email_provider = Column(String, default="SMTP") # SMTP or SENDGRID
+    from_email = Column(String, default="noreply@mailflow.com")
+    base_url = Column(String, default="http://localhost:8000")
     webhook_url = Column(String, nullable=True)
     monthly_limit = Column(Integer, default=500000)
 
@@ -118,3 +162,31 @@ class Template(Base):
     content = Column(String, default="[]") # JSON string of blocks
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+class AutomationTrigger(str, enum.Enum):
+    WELCOME = "WELCOME" # Subscriber joins list
+    OPENED = "OPENED" # Opens specific email
+    CLICKED = "CLICKED" # Clicks specific link
+    TAG_ADDED = "TAG_ADDED" # Tag added to contact
+
+class Automation(Base):
+    __tablename__ = "automations"
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, default="Untitled Automation")
+    status = Column(String, default="draft") # draft, active, paused
+    trigger_type = Column(Enum(AutomationTrigger), default=AutomationTrigger.WELCOME)
+    trigger_config = Column(String, default="{}") # JSON config for trigger
+    created_at = Column(DateTime, default=func.now())
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+    steps = relationship("AutomationStep", back_populates="automation", cascade="all, delete-orphan", order_by="AutomationStep.position.asc()")
+
+class AutomationStep(Base):
+    __tablename__ = "automation_steps"
+    id = Column(Integer, primary_key=True, index=True)
+    automation_id = Column(Integer, ForeignKey("automations.id"), nullable=False, index=True)
+    type = Column(String, nullable=False) # email, delay, condition
+    config = Column(String, default="{}") # JSON config for step
+    position = Column(Integer, default=0)
+
+    automation = relationship("Automation", back_populates="steps")
