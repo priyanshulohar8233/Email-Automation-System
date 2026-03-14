@@ -7,7 +7,12 @@ from urllib.parse import unquote
 
 from .database import get_db
 from . import services
-from .schemas import CampaignRequest, SettingsUpdate, CampaignCreate, TemplateCreate, TemplateUpdate, AIGenerateRequest, TestEmailRequest, DashboardStats
+from .schemas import (
+    CampaignRequest, SettingsUpdate, CampaignCreate, TemplateCreate, TemplateUpdate, 
+    AIGenerateRequest, TestEmailRequest, DashboardStats, AutomationCreate, 
+    AutomationResponse, ContactResponse, ContactCreate, BulkContactsRequest, 
+    SegmentCreate, SegmentResponse, ContactProfileResponse, AIChatRequest
+)
 from .models import Email, EmailStatus, EventType
 from .config import settings
 from .tasks import send_email_task, send_email_fn
