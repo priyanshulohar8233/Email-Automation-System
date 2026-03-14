@@ -33,8 +33,9 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         debug_log(f"DEBUG: Processing email {email_id} to {to_addr}")
 
         # 2. Compliance & Tracking
+        base_url = settings.BASE_URL.rstrip('/')
         formatted_body = body.replace('\n', '<br/>')
-        unsubscribe_url = f"{settings.BASE_URL}/api/contacts/unsubscribe?email={to_addr}"
+        unsubscribe_url = f"{base_url}/api/contacts/unsubscribe?email={to_addr}"
         tracking_body = (
             f"<div style='font-family: sans-serif; color: #333; line-height: 1.6;'>"
             f"{formatted_body}"
@@ -43,7 +44,7 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             f"You received this because you are part of our mailing list.<br/>"
             f"<a href='{unsubscribe_url}' style='color: #4f46e5; text-decoration: underline;'>Unsubscribe</a>"
             f"</p>"
-            f"<img src='{settings.BASE_URL}/api/t/o/{email_id}' width='1' height='1' alt='' style='display:none !important; visibility:hidden; opacity:0;'/>"
+            f"<img src='{base_url}/api/t/o/{email_id}' width='1' height='1' alt='' style='display:none !important; visibility:hidden; opacity:0;'/>"
             f"</div>"
         )
         
@@ -51,9 +52,9 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             url = match.group(1)
             if "/t/c/" in url or "/unsubscribe" in url: 
                 return f'href="{url}"'
-            if settings.BASE_URL in url and "/t/c/" in url:
+            if base_url in url and "/t/c/" in url:
                 return f'href="{url}"'
-            tracked_url = f"{settings.BASE_URL}/api/t/c/{email_id}?url={quote(url)}"
+            tracked_url = f"{base_url}/api/t/c/{email_id}?url={quote(url)}"
             return f'href="{tracked_url}"'
             
         tracking_body = re.sub(r'href=["\']([^"\']+)["\']', repl, tracking_body)
