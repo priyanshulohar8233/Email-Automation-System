@@ -16,6 +16,9 @@ interface RecentEvent {
   id: number;
   email_id: number;
   recipient: string;
+  recipient_name: string;
+  company: string;
+  country: string;
   event_type: string;
   timestamp: string;
   location: string;
@@ -70,25 +73,34 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[80px]">Count</TableHead>
+                <TableHead>Recipient Name</TableHead>
+                <TableHead>Company</TableHead>
                 <TableHead>Email ID</TableHead>
-                <TableHead>Recipient</TableHead>
-                <TableHead>Location</TableHead>
-                <TableHead>Action</TableHead>
-                <TableHead>Time</TableHead>
+                <TableHead>Country</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {events.map((ev) => (
+              {events.map((ev, index) => (
                 <TableRow key={ev.id}>
-                  <TableCell className="font-medium">#{ev.email_id}</TableCell>
-                  <TableCell>{ev.recipient}</TableCell>
-                  <TableCell className="text-xs text-slate-500">{ev.location}</TableCell>
+                  <TableCell className="text-slate-500 font-mono">#{index + 1}</TableCell>
+                  <TableCell>
+                    <div className="font-medium">{ev.recipient_name}</div>
+                    <div className="text-xs text-slate-400">{ev.recipient}</div>
+                  </TableCell>
+                  <TableCell className="text-slate-600">{ev.company}</TableCell>
+                  <TableCell className="font-mono text-purple-600">ID-{ev.email_id}</TableCell>
+                  <TableCell className="text-xs text-slate-500">{ev.country}</TableCell>
                   <TableCell>
                     <Badge variant={getBadgeVariant(ev.event_type)}>
                       {ev.event_type.charAt(0).toUpperCase() + ev.event_type.slice(1)}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-slate-500">{formatTime(ev.timestamp)}</TableCell>
+                  <TableCell className="text-right text-slate-500 whitespace-nowrap">
+                    {formatTime(ev.timestamp)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

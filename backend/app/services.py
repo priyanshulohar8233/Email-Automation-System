@@ -491,9 +491,15 @@ def emails_over_time(db: Session, days: int = 7):
 
 def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: str = "all"):
     from datetime import datetime, timedelta
+    from .models import Contact
     limit_date = datetime.utcnow() - timedelta(days=days)
     
-    query = db.query(EmailEvent).join(Email)
+    # Outer join with Contact to get name and company
+    query = db.query(
+        EmailEvent, 
+        Contact.name.label("contact_name"), 
+        Contact.company.label("contact_company")
+    ).join(Email, EmailEvent.email_id == Email.id).outerjoin(Contact, Email.recipient_email == Contact.email)
     
     if campaign_name != "all":
         query = query.join(Campaign).filter(Campaign.name == campaign_name)
@@ -501,22 +507,28 @@ def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: s
     events = query.filter(EmailEvent.timestamp >= limit_date).order_by(EmailEvent.timestamp.desc()).limit(limit).all()
     
     result = []
-    for ev in events:
+    for ev_data in events:
+        ev = ev_data[0]
+        contact_name = ev_data[1]
+        contact_company = ev_data[2]
+        
         ev_type = ev.event_type.value if hasattr(ev.event_type, 'value') else str(ev.event_type)
         if "EventType." in ev_type: ev_type = ev_type.split(".")[-1].lower()
         
-        loc = f"{ev.city}, {ev.country}" if ev.city and ev.country else "Unknown"
+        loc = f"{ev.city}, {ev.country}" if ev.city and ev.country else (ev.country or "Unknown")
         
         result.append({
             "id": ev.id,
             "email_id": ev.email_id,
             "recipient": ev.email.recipient_email,
-            "email": ev.email.recipient_email,
+            "recipient_name": contact_name or "Unknown",
+            "company": contact_company or "Unknown",
             "event_type": ev_type,
             "type": ev_type,
             "subject": ev.email.subject or "No Subject",
             "timestamp": ev.timestamp.isoformat() if hasattr(ev.timestamp, 'isoformat') else str(ev.timestamp),
             "location": loc,
+            "country": ev.country or "Unknown",
             "metadata": {
                 "browser": ev.browser or "Unknown",
                 "os": ev.os or "Unknown",
