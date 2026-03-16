@@ -41,8 +41,7 @@ function getBadgeStyles(event_type: string): string {
     return base + "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20";
   }
   if (type === "sent") {
-    // Forceful hex color match using !important to ensure visibility
-    return base + "bg-slate-100 !text-[#64748b] border-slate-200 dark:bg-slate-500/10 dark:text-slate-100 dark:border-slate-500/30";
+    return base + "bg-slate-100 border-slate-200 dark:bg-slate-500/10 dark:border-slate-500/30";
   }
   
   return base + "bg-muted text-muted-foreground border-border";
@@ -153,7 +152,7 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                   <TableCell className="text-center px-4 py-4">
                     <div 
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-tight border ${getBadgeStyles(ev.event_type)}`}
-                      style={ev.event_type.toLowerCase() === 'sent' && !isDarkMode ? { color: '#64748b' } : {}}
+                      style={ev.event_type.toLowerCase() === 'sent' ? { color: isDarkMode ? '#ffffff' : '#64748b' } : {}}
                     >
                       {ev.event_type}
                     </div>
