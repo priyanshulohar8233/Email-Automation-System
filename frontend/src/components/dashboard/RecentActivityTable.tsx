@@ -36,7 +36,7 @@ function getBadgeStyles(event_type: string): string {
     case "bounced":
       return base + "bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border-rose-500/20";
     case "sent":
-      return base + "bg-[#f1f5f9] text-[#334155] border-[#cbd5e1] dark:bg-slate-500/10 dark:text-slate-100 dark:hover:bg-slate-500/20 dark:border-slate-500/30";
+      return base + "bg-[#f1f5f9] text-slate-900 border-[#cbd5e1] dark:bg-slate-500/10 dark:text-slate-100 dark:hover:bg-slate-500/20 dark:border-slate-500/30";
     default:
       return base + "bg-slate-500/10 text-slate-500 dark:text-slate-300";
   }
