@@ -28,14 +28,15 @@ function getBadgeStyles(event_type: string): string {
   const base = "transition-all duration-200 hover:scale-105 cursor-default ";
   switch (event_type.toLowerCase()) {
     case "delivered":
+      return base + "bg-[#A5C89E] text-[#1f3d1f] border-[#AEB877] dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 dark:border-emerald-500/20";
     case "opened":
-      return base + "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20";
+      return base + "bg-[#D8E983] text-[#2f4f2f] border-[#A5C89E] dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 dark:border-emerald-500/20";
     case "clicked":
       return base + "bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 border-blue-500/20";
     case "bounced":
       return base + "bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border-rose-500/20";
     case "sent":
-      return base + "bg-slate-500/10 text-slate-600 dark:text-slate-100 hover:bg-slate-500/20 border-slate-500/30";
+      return base + "bg-[#f1f5f9] text-[#334155] border-[#cbd5e1] dark:bg-slate-500/10 dark:text-slate-100 dark:hover:bg-slate-500/20 dark:border-slate-500/30";
     default:
       return base + "bg-slate-500/10 text-slate-500 dark:text-slate-300";
   }
