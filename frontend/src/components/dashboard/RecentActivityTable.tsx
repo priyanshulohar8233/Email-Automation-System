@@ -67,6 +67,20 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
   const [events, setEvents] = useState<RecentEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+
+  useEffect(() => {
+    // Detect dark mode to apply direct style fixes
+    const checkTheme = () => {
+      setIsDarkMode(document.documentElement.classList.contains("dark"));
+    };
+    checkTheme();
+    
+    // Watch for theme changes
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     dashboardAPI.getRecentEvents(days)
@@ -137,7 +151,10 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                     {ev.country || "Unknown"}
                   </TableCell>
                   <TableCell className="text-center px-4 py-4">
-                    <div className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-tight border ${getBadgeStyles(ev.event_type)}`}>
+                    <div 
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-tight border ${getBadgeStyles(ev.event_type)}`}
+                      style={ev.event_type.toLowerCase() === 'sent' && !isDarkMode ? { color: '#64748b' } : {}}
+                    >
                       {ev.event_type}
                     </div>
                   </TableCell>
