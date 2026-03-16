@@ -41,8 +41,8 @@ function getBadgeStyles(event_type: string): string {
     return base + "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20";
   }
   if (type === "sent") {
-    // text-slate-500 maps exactly to #64748b in light mode
-    return base + "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-500/10 dark:text-slate-100 dark:border-slate-500/30";
+    // Forceful hex color match using !important to ensure visibility
+    return base + "bg-slate-100 !text-[#64748b] border-slate-200 dark:bg-slate-500/10 dark:text-slate-100 dark:border-slate-500/30";
   }
   
   return base + "bg-muted text-muted-foreground border-border";
