@@ -41,8 +41,8 @@ function getBadgeStyles(event_type: string): string {
     return base + "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20";
   }
   if (type === "sent") {
-    // Using slate-700 for SENT in light mode to match Company column as requested
-    return base + "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-100 dark:border-slate-500/30";
+    // Using specific hex #64748b for SENT in light mode as requested
+    return base + "bg-slate-100 text-[#64748b] border-slate-200 dark:bg-slate-500/10 dark:text-slate-100 dark:border-slate-500/30";
   }
   
   return base + "bg-muted text-muted-foreground border-border";
