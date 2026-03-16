@@ -26,20 +26,26 @@ interface RecentEvent {
 
 function getBadgeStyles(event_type: string): string {
   const base = "transition-all duration-200 hover:scale-105 cursor-default ";
-  switch (event_type.toLowerCase()) {
-    case "delivered":
-      return base + "bg-[#A5C89E] text-[#1f3d1f] border-[#AEB877] dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 dark:border-emerald-500/20";
-    case "opened":
-      return base + "bg-[#D8E983] text-[#2f4f2f] border-[#A5C89E] dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20 dark:border-emerald-500/20";
-    case "clicked":
-      return base + "bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 border-blue-500/20";
-    case "bounced":
-      return base + "bg-rose-500/10 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 border-rose-500/20";
-    case "sent":
-      return base + "bg-[#f1f5f9] text-slate-900 border-[#cbd5e1] dark:bg-slate-500/10 dark:text-slate-100 dark:hover:bg-slate-500/20 dark:border-slate-500/30";
-    default:
-      return base + "bg-slate-500/10 text-slate-500 dark:text-slate-300";
+  const type = event_type.toLowerCase();
+  
+  if (type === "delivered") {
+    return base + "bg-[#A5C89E] text-[#1f3d1f] border-[#AEB877] dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
   }
+  if (type === "opened") {
+    return base + "bg-[#D8E983] text-[#2f4f2f] border-[#A5C89E] dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
+  }
+  if (type === "clicked") {
+    return base + "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20";
+  }
+  if (type === "bounced") {
+    return base + "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20";
+  }
+  if (type === "sent") {
+    // Using slate-700 for SENT in light mode to match Company column as requested
+    return base + "bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-500/10 dark:text-slate-100 dark:border-slate-500/30";
+  }
+  
+  return base + "bg-muted text-muted-foreground border-border";
 }
 
 function formatTime(ts: string): string {
