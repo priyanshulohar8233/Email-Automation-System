@@ -800,6 +800,24 @@ def create_contacts(db: Session, contacts_data: list):
     db.commit()
     return {"added": len(new_contacts)}
 
+def update_contact_company(db: Session, email: str, company: str):
+    from .models import Contact
+    contact = db.query(Contact).filter(Contact.email == email).first()
+    if contact:
+        contact.company = company
+    else:
+        # Create new contact if doesn't exist
+        contact = Contact(
+            email=email,
+            company=company,
+            name=email.split("@")[0], # Fallback name
+            status="active"
+        )
+        db.add(contact)
+    db.commit()
+    db.refresh(contact)
+    return contact
+
 def get_segments(db: Session):
     from .models import Segment
     return db.query(Segment).all()

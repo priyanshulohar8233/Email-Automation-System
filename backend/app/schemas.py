@@ -179,3 +179,7 @@ class TestEmailRequest(BaseModel):
 class AIChatRequest(BaseModel):
     message: str
     history: Optional[List[dict]] = None
+
+class ContactCompanyUpdate(BaseModel):
+    email: EmailStr
+    company: str

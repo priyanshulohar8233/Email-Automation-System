@@ -263,7 +263,7 @@ export default function Settings() {
                 <h4 className="font-bold text-sm text-foreground">SPF Record</h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">Identifies the mail servers allowed to send email on behalf of your domain.</p>
                 <div className="p-2 bg-card rounded-lg border border-border font-mono text-[9px] text-indigo-600 dark:text-indigo-400 break-all select-all">
-                  v=spf1 include:{settings.smtpHost || 'mailflow.com'} ~all
+                  v=spf1 include:{settings.smtpHost || 'veltrion.com'} ~all
                 </div>
               </div>
 

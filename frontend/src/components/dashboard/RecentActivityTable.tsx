@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCcw, Activity } from "lucide-react";
+import { RefreshCcw, Activity, Pencil, Check, X } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 
 interface RecentEvent {
@@ -41,7 +41,7 @@ function getBadgeStyles(event_type: string): string {
     return base + "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20";
   }
   if (type === "sent") {
-    return base + "bg-slate-100 border-slate-200 dark:bg-slate-500/10 dark:border-slate-500/30";
+    return base + "bg-slate-100 border-slate-200 dark:bg-slate-800 dark:border-slate-700";
   }
   
   return base + "bg-muted text-muted-foreground border-border";
@@ -67,6 +67,9 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     // Detect dark mode to apply direct style fixes
@@ -81,11 +84,48 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
     return () => observer.disconnect();
   }, []);
 
+  const fetchEvents = async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await dashboardAPI.getRecentEvents(days, signal);
+      setEvents(data);
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setError("Failed to load recent activity.");
+        console.error("Failed to load recent activity:", err);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    dashboardAPI.getRecentEvents(days)
-      .then((data) => { setEvents(data); setLoading(false); })
-      .catch(() => { setError("Failed to load recent activity."); setLoading(false); });
+    const controller = new AbortController();
+    fetchEvents(controller.signal);
+    return () => controller.abort();
   }, [days]);
+
+  const handleUpdateCompany = async (eventId: number, email: string) => {
+    const trimmed = editValue.trim();
+    if (!trimmed) return;
+    
+    try {
+      setIsSaving(true);
+      await dashboardAPI.updateCompany(email, trimmed);
+      
+      // Update local state for immediate feedback
+      setEvents(prev => prev.map(ev => 
+        ev.recipient === email ? { ...ev, company: trimmed } : ev
+      ));
+      setEditingId(null);
+    } catch (err) {
+      console.error("Failed to update company:", err);
+      // Optional: Show error toast/notification
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <Card className="border-border bg-card shadow-sm transition-colors duration-300 overflow-hidden">
@@ -129,7 +169,7 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
             </TableHeader>
             <TableBody>
               {events.map((ev, index) => (
-                <TableRow key={ev.id} className="group border-border transition-colors hover:bg-muted/50">
+                <TableRow key={ev.id} className="group hover:bg-muted/50 transition-colors duration-200 border-b border-border/50">
                   <TableCell className="text-muted-foreground/60 font-medium px-6 py-4">
                     {index + 1}
                   </TableCell>
@@ -143,8 +183,59 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground font-medium text-sm px-4 py-4">
-                    {ev.company}
+                  <TableCell className="px-4 py-4">
+                    <div className="flex items-center min-h-[32px]">
+                      {editingId === ev.id ? (
+                        <div className="flex items-center gap-2 w-full animate-in fade-in slide-in-from-left-2 duration-200">
+                          <input
+                            type="text"
+                            value={editValue}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleUpdateCompany(ev.id, ev.recipient);
+                              if (e.key === 'Escape') setEditingId(null);
+                            }}
+                            className="flex-1 px-2 py-1 text-sm bg-background border border-indigo-500 rounded-md outline-none ring-1 ring-indigo-500 focus:border-indigo-600 focus:ring-indigo-600 transition-all"
+                            autoFocus
+                            disabled={isSaving}
+                          />
+                          <button 
+                            onClick={() => handleUpdateCompany(ev.id, ev.recipient)}
+                            disabled={isSaving}
+                            className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30 rounded-md transition-colors"
+                            title="Save"
+                          >
+                            <Check className={`h-4 w-4 ${isSaving ? 'animate-pulse' : ''}`} />
+                          </button>
+                          <button 
+                            onClick={() => setEditingId(null)}
+                            disabled={isSaving}
+                            className="p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
+                            title="Cancel"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 transition-all duration-300">
+                          <span className="font-semibold text-foreground truncate max-w-[120px]">
+                            {ev.company}
+                          </span>
+                          {ev.company === "Personal Email" && (
+                            <button
+                              onClick={() => {
+                                setEditingId(ev.id);
+                                setEditValue(ev.company);
+                              }}
+                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-md transition-all focus:opacity-100 outline-none"
+                              title="Update Company"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-xs px-4 py-4">
                     {ev.country || "Unknown"}

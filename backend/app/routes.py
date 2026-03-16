@@ -11,7 +11,8 @@ from .schemas import (
     CampaignRequest, SettingsUpdate, CampaignCreate, TemplateCreate, TemplateUpdate, 
     AIGenerateRequest, TestEmailRequest, DashboardStats, AutomationCreate, 
     AutomationResponse, ContactResponse, ContactCreate, BulkContactsRequest, 
-    SegmentCreate, SegmentResponse, ContactProfileResponse, AIChatRequest
+    SegmentCreate, SegmentResponse, ContactProfileResponse, AIChatRequest,
+    ContactCompanyUpdate
 )
 from .models import Email, EmailStatus, EventType
 from .config import settings
@@ -449,3 +450,10 @@ def delete_automation(id: int, db: Session = Depends(get_db)):
     if services.delete_automation(db, id):
         return {"status": "success"}
     raise HTTPException(status_code=404, detail="Automation not found")
+
+@router.put("/contacts/company")
+def update_contact_company(req: ContactCompanyUpdate, db: Session = Depends(get_db)):
+    try:
+        return services.update_contact_company(db, req.email, req.company)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

@@ -89,5 +89,19 @@ export const dashboardAPI = {
             throw new Error(`Error fetching recent events: ${response.status} ${response.statusText}`);
         }
         return await response.json();
+    },
+    updateCompany: async (email: string, company: string): Promise<any> => {
+        const response = await fetch('/api/contacts/company', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, company }),
+        });
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Error updating company: ${response.status} ${errorText}`);
+        }
+        return await response.json();
     }
 };
