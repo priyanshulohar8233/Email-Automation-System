@@ -44,7 +44,7 @@ export function Sidebar() {
           </div>
           <span className="text-2xl font-black tracking-tighter text-foreground">VELTRION</span>
         </Link>
-        <p className="text-[9px] font-medium text-muted-foreground/80 uppercase tracking-tight pl-2 border-l border-indigo-600/30 ml-[72px] whitespace-nowrap">
+        <p className="text-[9px] font-medium text-muted-foreground/80 uppercase tracking-tight pl-2 border-l border-indigo-600/30 whitespace-nowrap">
           Smart Email Automation & Tracking Platform
         </p>
       </div>
