@@ -24,25 +24,36 @@ interface RecentEvent {
   location: string;
 }
 
-function getBadgeVariant(event_type: string): "success" | "destructive" | "secondary" | "default" {
+function getBadgeStyles(event_type: string): string {
+  const base = "transition-all duration-200 hover:scale-105 cursor-default ";
   switch (event_type.toLowerCase()) {
-    case "opened": return "success";
-    case "clicked": return "success";
-    case "bounced": return "destructive";
-    default: return "secondary";
+    case "delivered":
+    case "opened":
+      return base + "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20";
+    case "clicked":
+      return base + "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 border-blue-500/20";
+    case "bounced":
+      return base + "bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border-rose-500/20";
+    case "sent":
+      return base + "bg-slate-500/10 text-slate-600 hover:bg-slate-500/20 border-slate-500/20";
+    default:
+      return base + "bg-slate-500/10 text-slate-500";
   }
 }
 
 function formatTime(ts: string): string {
   const date = new Date(ts);
   const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin} min${diffMin > 1 ? "s" : ""} ago`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `${diffH} hour${diffH > 1 ? "s" : ""} ago`;
-  return date.toLocaleDateString();
+  const isToday = date.toDateString() === now.toDateString();
+  
+  const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  
+  if (isToday) {
+    return timeStr;
+  } else {
+    const dateStr = date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    return `${dateStr} (${timeStr})`;
+  }
 }
 
 export function RecentActivityTable({ days = 30 }: { days?: number }) {
@@ -73,32 +84,54 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[80px]">Count</TableHead>
-                <TableHead>Recipient Name</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Email ID</TableHead>
-                <TableHead>Country</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Time</TableHead>
+                <TableHead className="w-[60px] text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  #
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Recipient Name
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Company
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                  Country
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 text-center">
+                  Status
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 text-right">
+                  Time
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {events.map((ev, index) => (
-                <TableRow key={ev.id}>
-                  <TableCell className="text-slate-500 font-mono">#{index + 1}</TableCell>
-                  <TableCell>
-                    <div className="font-medium">{ev.recipient_name}</div>
-                    <div className="text-xs text-slate-400">{ev.recipient}</div>
+                <TableRow key={ev.id} className="group transition-colors hover:bg-slate-50/50">
+                  <TableCell className="text-slate-400 font-medium py-4">
+                    {index + 1}
                   </TableCell>
-                  <TableCell className="text-slate-600">{ev.company}</TableCell>
-                  <TableCell className="font-mono text-purple-600">ID-{ev.email_id}</TableCell>
-                  <TableCell className="text-xs text-slate-500">{ev.country}</TableCell>
-                  <TableCell>
-                    <Badge variant={getBadgeVariant(ev.event_type)}>
+                  <TableCell className="py-4">
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-slate-900 leading-tight">
+                        {ev.recipient_name}
+                      </span>
+                      <span className="text-xs text-slate-400 mt-0.5">
+                        {ev.recipient}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-slate-600 py-4">
+                    {ev.company}
+                  </TableCell>
+                  <TableCell className="text-slate-500 text-sm py-4">
+                    {ev.country || "Unknown"}
+                  </TableCell>
+                  <TableCell className="text-center py-4">
+                    <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getBadgeStyles(ev.event_type)}`}>
                       {ev.event_type.charAt(0).toUpperCase() + ev.event_type.slice(1)}
-                    </Badge>
+                    </div>
                   </TableCell>
-                  <TableCell className="text-right text-slate-500 whitespace-nowrap">
+                  <TableCell className="text-right text-slate-500 text-sm py-4 tabular-nums">
                     {formatTime(ev.timestamp)}
                   </TableCell>
                 </TableRow>

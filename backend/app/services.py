@@ -506,12 +506,27 @@ def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: s
         
     events = query.filter(EmailEvent.timestamp >= limit_date).order_by(EmailEvent.timestamp.desc()).limit(limit).all()
     
+    PERSONAL_PROVIDERS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "aol.com"}
+    
     result = []
     for ev_data in events:
         ev = ev_data[0]
         contact_name = ev_data[1]
         contact_company = ev_data[2]
         
+        # Smart Company Extraction Logic
+        email_str = ev.email.recipient_email
+        if not contact_company:
+            domain = email_str.split("@")[-1].lower() if "@" in email_str else ""
+            if domain in PERSONAL_PROVIDERS:
+                contact_company = "Personal Email"
+            elif domain:
+                # Extract main domain parts and capitalize (google.com -> Google)
+                company_name = domain.split(".")[0]
+                contact_company = company_name.capitalize()
+            else:
+                contact_company = "Unknown"
+
         ev_type = ev.event_type.value if hasattr(ev.event_type, 'value') else str(ev.event_type)
         if "EventType." in ev_type: ev_type = ev_type.split(".")[-1].lower()
         
@@ -520,9 +535,9 @@ def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: s
         result.append({
             "id": ev.id,
             "email_id": ev.email_id,
-            "recipient": ev.email.recipient_email,
-            "recipient_name": contact_name or "Unknown",
-            "company": contact_company or "Unknown",
+            "recipient": email_str,
+            "recipient_name": contact_name or email_str.split("@")[0],
+            "company": contact_company,
             "event_type": ev_type,
             "type": ev_type,
             "subject": ev.email.subject or "No Subject",
