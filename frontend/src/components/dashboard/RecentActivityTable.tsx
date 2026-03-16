@@ -29,15 +29,15 @@ function getBadgeStyles(event_type: string): string {
   switch (event_type.toLowerCase()) {
     case "delivered":
     case "opened":
-      return base + "bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-emerald-500/20";
+      return base + "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border-emerald-500/20";
     case "clicked":
-      return base + "bg-blue-500/10 text-blue-600 hover:bg-blue-500/20 border-blue-500/20";
+      return base + "bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border-blue-500/20";
     case "bounced":
-      return base + "bg-rose-500/10 text-rose-600 hover:bg-rose-500/20 border-rose-500/20";
+      return base + "bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border-rose-500/20";
     case "sent":
-      return base + "bg-slate-500/10 text-slate-600 hover:bg-slate-500/20 border-slate-500/20";
+      return base + "bg-slate-500/10 text-slate-100 hover:bg-slate-500/20 border-slate-500/30";
     default:
-      return base + "bg-slate-500/10 text-slate-500";
+      return base + "bg-slate-500/10 text-slate-300";
   }
 }
 
@@ -68,9 +68,9 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
   }, [days]);
 
   return (
-    <Card>
+    <Card className="border-slate-800 bg-slate-900/50 backdrop-blur-xl">
       <CardHeader>
-        <CardTitle>Recent Activity</CardTitle>
+        <CardTitle className="text-slate-100">Recent Activity</CardTitle>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -83,36 +83,36 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
         ) : (
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead className="w-[60px] text-xs font-semibold uppercase tracking-wider text-slate-500">
+              <TableRow className="border-slate-800 hover:bg-transparent">
+                <TableHead className="w-[60px] text-xs font-semibold uppercase tracking-wider text-slate-400">
                   #
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                   Recipient Name
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                   Company
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                   Country
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 text-center">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-300 text-center">
                   Status
                 </TableHead>
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-500 text-right">
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-slate-300 text-right">
                   Time
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {events.map((ev, index) => (
-                <TableRow key={ev.id} className="group transition-colors hover:bg-slate-50/50">
-                  <TableCell className="text-slate-400 font-medium py-4">
+                <TableRow key={ev.id} className="group border-slate-800 transition-colors hover:bg-slate-800/30">
+                  <TableCell className="text-slate-500 font-medium py-4">
                     {index + 1}
                   </TableCell>
                   <TableCell className="py-4">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-slate-900 leading-tight">
+                      <span className="font-semibold text-slate-100 leading-tight">
                         {ev.recipient_name}
                       </span>
                       <span className="text-xs text-slate-400 mt-0.5">
@@ -120,10 +120,10 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                       </span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-slate-600 py-4">
+                  <TableCell className="text-slate-300 py-4">
                     {ev.company}
                   </TableCell>
-                  <TableCell className="text-slate-500 text-sm py-4">
+                  <TableCell className="text-slate-400 text-sm py-4">
                     {ev.country || "Unknown"}
                   </TableCell>
                   <TableCell className="text-center py-4">
@@ -131,7 +131,7 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                       {ev.event_type.charAt(0).toUpperCase() + ev.event_type.slice(1)}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right text-slate-500 text-sm py-4 tabular-nums">
+                  <TableCell className="text-right text-slate-300 text-sm py-4 tabular-nums">
                     {formatTime(ev.timestamp)}
                   </TableCell>
                 </TableRow>
