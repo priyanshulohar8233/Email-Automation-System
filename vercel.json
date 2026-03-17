@@ -13,22 +13,18 @@
             }
         }
     ],
-    "routes": [
+    "rewrites": [
         {
-            "src": "/api/(.*)",
-            "dest": "backend/app/main.py"
+            "source": "/api/(.*)",
+            "destination": "backend/app/main.py"
         },
         {
-            "src": "/assets/(.*)",
-            "dest": "/assets/$1"
+            "source": "/(.*)",
+            "destination": "/$1"
         },
         {
-            "src": "/veltrion-(.*)",
-            "dest": "/veltrion-$1"
-        },
-        {
-            "src": "/((?!api/).*)",
-            "dest": "/index.html"
+            "source": "/(.*)",
+            "destination": "/index.html"
         }
     ]
 }
