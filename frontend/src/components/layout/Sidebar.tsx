@@ -33,20 +33,11 @@ export function Sidebar() {
 
   return (
     <div className="flex h-screen w-[260px] flex-col border-r border-border bg-card fixed left-0 top-0 z-40 transition-colors duration-300">
-      <div className="flex h-32 flex-col justify-center px-6 border-b border-border">
-        <Link to="/" className="flex items-center gap-4 group/logo mb-1">
-          <div className="relative flex items-center justify-center h-14 w-14 overflow-hidden rounded-xl bg-indigo-600/10 transition-transform group-hover/logo:scale-110 shadow-sm border border-indigo-600/20">
-            <img 
-              src="/veltrion-logo.png" 
-              alt="VELTRION Logo" 
-              className="h-full w-full object-cover" 
-            />
-          </div>
-          <span className="text-2xl font-black tracking-tighter text-foreground">VELTRION</span>
-        </Link>
-        <p className="text-[9px] font-medium text-muted-foreground/80 uppercase tracking-tight pl-2 border-l border-indigo-600/30 ml-[72px] whitespace-nowrap">
-          Smart Email Automation & Tracking Platform
-        </p>
+      <div className="flex h-24 items-center px-6">
+        <div className="flex items-center gap-3">
+          <img src="/logo.png" alt="VELTRION Logo" className="h-14 w-14 object-contain" />
+          <span className="text-2xl font-bold tracking-tight text-indigo-600">VELTRION</span>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto py-6 px-4">

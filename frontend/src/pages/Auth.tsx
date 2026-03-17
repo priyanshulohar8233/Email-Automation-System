@@ -19,21 +19,10 @@ export default function Auth() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 transition-colors duration-300">
       <Card className="w-full max-w-md border-border bg-card">
-        <CardHeader className="space-y-4 items-center text-center pt-8 pb-4">
-          <div className="flex flex-col items-center gap-4">
-            <div className="h-32 w-32 overflow-hidden rounded-2xl bg-indigo-600/5 p-1.5 shadow-xl border border-indigo-600/10 animate-in zoom-in-50 duration-500">
-              <img 
-                src="/veltrion-logo.png" 
-                alt="VELTRION Logo" 
-                className="h-full w-full object-contain"
-              />
-            </div>
-            <div className="space-y-1">
-              <span className="text-4xl font-black tracking-tighter text-foreground block">VELTRION</span>
-              <p className="text-xs font-semibold text-muted-foreground/80 uppercase tracking-widest">
-                Intelligent Email Automation System
-              </p>
-            </div>
+        <CardHeader className="space-y-1 items-center text-center">
+          <div className="flex flex-col items-center gap-2 mb-4">
+            <img src="/logo.png" alt="VELTRION Logo" className="h-20 w-20 object-contain mb-2" />
+            <span className="text-3xl font-bold tracking-tight text-indigo-600">VELTRION</span>
           </div>
           <CardTitle className="text-2xl">{isLogin ? "Welcome back" : "Create an account"}</CardTitle>
           <CardDescription className="text-muted-foreground">
