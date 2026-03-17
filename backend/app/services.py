@@ -409,10 +409,11 @@ def compute_stats(db: Session, days: int = 30):
     delivered = email_metrics.delivered or 0
     bounces = email_metrics.bounces or 0
 
-    # 4-5. Unique Opens & Clicks (Can also be combined)
+    # 4-5. Unique Opens & Clicks
+    from sqlalchemy import distinct
     event_metrics = db.query(
-        func.count(distinct(case((EmailEvent.event_type == EventType.OPENED, EmailEvent.email_id)))).label("opens"),
-        func.count(distinct(case((EmailEvent.event_type == EventType.CLICKED, EmailEvent.email_id)))).label("clicks")
+        func.count(distinct(case(((EmailEvent.event_type == EventType.OPENED), EmailEvent.email_id), else_=None))).label("opens"),
+        func.count(distinct(case(((EmailEvent.event_type == EventType.CLICKED), EmailEvent.email_id), else_=None))).label("clicks")
     ).filter(EmailEvent.timestamp >= limit_date).first()
 
     opens = event_metrics.opens or 0
