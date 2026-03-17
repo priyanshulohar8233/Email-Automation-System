@@ -4,7 +4,7 @@ from pydantic import AnyUrl
 
 class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
-    DATABASE_URL: str = "sqlite:///./test.db"
+    DATABASE_URL_NEW: str = "sqlite:///./test.db"
     REDIS_URL: str = "redis://localhost:6379/0"
     SMTP_HOST: str = "localhost"
     SMTP_PORT: int = 587
