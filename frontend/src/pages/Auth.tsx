@@ -20,9 +20,9 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 transition-colors duration-300">
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="space-y-1 items-center text-center">
-          <div className="flex flex-col items-center gap-2 mb-4">
-            <img src="/logo.png" alt="VELTRION Logo" className="h-20 w-20 object-contain mb-2" />
-            <span className="text-3xl font-bold tracking-tight text-indigo-600">VELTRION</span>
+          <div className="flex items-center gap-2 text-indigo-600 mb-2">
+            <Zap className="h-8 w-8 fill-current" />
+            <span className="text-2xl font-bold tracking-tight text-foreground">MailFlow</span>
           </div>
           <CardTitle className="text-2xl">{isLogin ? "Welcome back" : "Create an account"}</CardTitle>
           <CardDescription className="text-muted-foreground">

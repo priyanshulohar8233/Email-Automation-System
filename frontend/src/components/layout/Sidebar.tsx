@@ -33,10 +33,10 @@ export function Sidebar() {
 
   return (
     <div className="flex h-screen w-[260px] flex-col border-r border-border bg-card fixed left-0 top-0 z-40 transition-colors duration-300">
-      <div className="flex h-24 items-center px-6">
-        <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="VELTRION Logo" className="h-14 w-14 object-contain" />
-          <span className="text-2xl font-bold tracking-tight text-indigo-600">VELTRION</span>
+      <div className="flex h-20 items-center px-6 border-b border-border">
+        <div className="flex items-center gap-2 text-indigo-600">
+          <Zap className="h-6 w-6 fill-current" />
+          <span className="text-xl font-bold tracking-tight">MailFlow</span>
         </div>
       </div>
 
