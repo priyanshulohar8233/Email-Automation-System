@@ -2,15 +2,12 @@
   "name": "email-automation-system",
   "version": "1.0.0",
   "scripts": {
-    "prisma:generate": "npx prisma generate",
-    "prisma:push": "npx prisma db push",
-    "build": "npx prisma generate && npm run build --prefix frontend"
+    "build": "npm run build --prefix frontend"
   },
   "dependencies": {
     "redis": "^5.11.0",
-    "@prisma/client": "^5.11.0"
+    "pg": "^8.11.3"
   },
   "devDependencies": {
-    "prisma": "^5.11.0"
   }
 }

@@ -15,6 +15,11 @@
     ],
     "routes": [
         {
+            "src": "/api/dashboard/(.*)",
+            "dest": "api/dashboard/$1.js",
+            "check": true
+        },
+        {
             "src": "/api/(.*)",
             "dest": "backend/app/main.py"
         },
