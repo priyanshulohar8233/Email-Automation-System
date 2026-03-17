@@ -48,11 +48,19 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    print("GLOBAL EXCEPTION CAUGHT:")
-    traceback.print_exc()
+    error_traceback = traceback.format_exc()
+    print("!!! GLOBAL EXCEPTION CAUGHT !!!")
+    print(f"Path: {request.url.path}")
+    print(f"Error: {str(exc)}")
+    print(error_traceback)
     return JSONResponse(
         status_code=500,
-        content={"detail": str(exc), "traceback": traceback.format_exc()},
+        content={
+            "detail": str(exc),
+            "path": request.url.path,
+            "type": type(exc).__name__,
+            "traceback": error_traceback
+        },
     )
 
 @app.get("/")
