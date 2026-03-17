@@ -6,7 +6,7 @@ from .config import settings
 from sqlalchemy.pool import StaticPool
 
 # Handle Vercel's legacy "postgres://" prefix if necessary
-db_url = settings.DATABASE_URL
+db_url = settings.DATABASE_URL_NEW
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 

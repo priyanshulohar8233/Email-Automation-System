@@ -2,8 +2,8 @@ import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    # Core DB connection (DATABASE_URL is the primary source of truth)
-    DATABASE_URL: str = os.getenv("DATABASE_URL") or "sqlite:///./sql_app.db"
+    # Core DB connection (DATABASE_URL_NEW is the primary source of truth)
+    DATABASE_URL_NEW: str = os.getenv("DATABASE_URL_NEW") or "sqlite:///./sql_app.db"
     
     # Redis for background tasks
     REDIS_URL: str = os.getenv("REDIS_URL") or ""
