@@ -438,6 +438,8 @@ def compute_stats(db: Session, days: int = 30):
         "totalEmailsGrowth": 0.0,
         "openRateGrowth": 0.0,
         "clickRateGrowth": 0.0,
+        "bounceRateGrowth": 0.0,
+        "unreadGrowth": 0.0,
         "activeCampaignsGrowth": 0.0,
         
         "raw": {

@@ -26,7 +26,12 @@ async def startup_event():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "https://mailflow-frontend.vercel.app"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "http://localhost:3001", 
+        "https://veltrion-frontend.vercel.app",
+        "https://veltrion.vercel.app"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -35,7 +40,7 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     TrustedHostMiddleware, 
-    allowed_hosts=["localhost", "127.0.0.1", "*.vercel.app", "mailflow.com"]
+    allowed_hosts=["localhost", "127.0.0.1", "*.vercel.app", "veltrion.com", "*.veltrion.com"]
 )
 
 @app.exception_handler(Exception)
