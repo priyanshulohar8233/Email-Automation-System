@@ -1,7 +1,7 @@
 from typing import List
 import smtplib
 from datetime import datetime, timedelta
-from sqlalchemy import func, distinct, case, select, and_
+from sqlalchemy import func, distinct, case, select, and_, Date
 from sqlalchemy.orm import Session
 from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, Settings, Suppression, SuppressionReason, BounceType
 
@@ -399,9 +399,9 @@ def compute_stats(db: Session, days: int = 30):
     # 1-3 & 6. Combined Email Metrics (Single Roundtrip)
     email_metrics = db.query(
         func.count(Email.id).label("attempted"),
-        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED]), Email.id))).label("total_sent"),
-        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("delivered"),
-        func.count(case((Email.status == EmailStatus.BOUNCED, Email.id))).label("bounces")
+        func.count(case([(Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED]), Email.id)])).label("total_sent"),
+        func.count(case([(Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id)])).label("delivered"),
+        func.count(case([(Email.status == EmailStatus.BOUNCED, Email.id)])).label("bounces")
     ).filter(Email.sent_at >= limit_date).first()
 
     attempted = email_metrics.attempted or 0
@@ -411,8 +411,8 @@ def compute_stats(db: Session, days: int = 30):
 
     # 4-5. Unique Opens & Clicks (Can also be combined)
     event_metrics = db.query(
-        func.count(distinct(case((EmailEvent.event_type == EventType.OPENED, EmailEvent.email_id)))).label("opens"),
-        func.count(distinct(case((EmailEvent.event_type == EventType.CLICKED, EmailEvent.email_id)))).label("clicks")
+        func.count(distinct(case([(EmailEvent.event_type == EventType.OPENED, EmailEvent.email_id)]))).label("opens"),
+        func.count(distinct(case([(EmailEvent.event_type == EventType.CLICKED, EmailEvent.email_id)]))).label("clicks")
     ).filter(EmailEvent.timestamp >= limit_date).first()
 
     opens = event_metrics.opens or 0
@@ -463,14 +463,14 @@ def emails_over_time(db: Session, days: int = 7):
     limit_date = (now - timedelta(days=days-1)).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # 1. Fetch aggregated counts in one query
-    # Note: func.date works in both SQLite and Postgres
+    # Note: func.cast to Date is more standard for Postgres
     results = db.query(
-        func.date(Email.sent_at).label("day_date"),
+        func.cast(Email.sent_at, Date).label("day_date"),
         func.count(Email.id).label("count")
     ).filter(
         Email.sent_at >= limit_date,
         Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
-    ).group_by(func.date(Email.sent_at)).all()
+    ).group_by(func.cast(Email.sent_at, Date)).all()
     
     # 2. Map results to a dict for easy lookup
     data_map = {str(r.day_date): r.count for r in results}
@@ -621,9 +621,9 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
     email_metrics = db.query(
         Email.campaign_id,
         func.count(Email.id).label("attempted"),
-        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("sent"),
-        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("delivered"),
-        func.count(case((Email.status == EmailStatus.BOUNCED, Email.id))).label("failed")
+        func.count(case([(Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id)])).label("sent"),
+        func.count(case([(Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id)])).label("delivered"),
+        func.count(case([(Email.status == EmailStatus.BOUNCED, Email.id)])).label("failed")
     ).group_by(Email.campaign_id).subquery()
 
     # Subquery for unique opens per campaign
