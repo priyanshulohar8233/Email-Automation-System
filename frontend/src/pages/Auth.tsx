@@ -21,7 +21,7 @@ export default function Auth() {
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="space-y-4 items-center text-center pt-8 pb-4">
           <div className="flex flex-col items-center gap-4">
-            <div className="h-48 w-48 animate-in zoom-in-50 duration-500">
+            <div className="h-32 w-32 overflow-hidden rounded-2xl bg-indigo-600/5 p-1.5 shadow-xl border border-indigo-600/10 animate-in zoom-in-50 duration-500">
               <img 
                 src="/veltrion-logo.png" 
                 alt="VELTRION Logo" 

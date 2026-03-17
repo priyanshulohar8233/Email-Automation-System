@@ -26,7 +26,6 @@ def health_check():
     from datetime import datetime
     return {"status": "ok", "timestamp": str(datetime.now())}
 
-
 @router.post("/send-campaign")
 def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     from datetime import datetime
@@ -210,33 +209,18 @@ def dashboard_stats(response: Response, days: int = 30):
         data = services.get_dashboard_stats(days)
         return data
     except Exception as e:
-        import traceback
-        print(f"DASHBOARD_STATS_ERROR: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Internal Server Error in dashboard stats: {str(e)}")
+        return {"error": str(e)}
 
 @router.get("/dashboard/email-stats")
 def get_email_stats(response: Response, days: int = 7, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    try:
-        # Step 6: Daily chart data
-        return services.emails_over_time(db, days)
-    except Exception as e:
-        import traceback
-        print(f"EMAIL_STATS_ERROR: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error fetching email stats: {str(e)}")
+    # Step 6: Daily chart data
+    return services.emails_over_time(db, days)
 
 @router.get("/dashboard/recent-events")
 def get_recent_events(response: Response, days: int = 30, campaign: str = "all", db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    try:
-        return services.recent_events(db, days, campaign_name=campaign)
-    except Exception as e:
-        import traceback
-        print(f"RECENT_EVENTS_ERROR: {str(e)}")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error fetching recent events: {str(e)}")
+    return services.recent_events(db, days, campaign_name=campaign)
 
 @router.get("/t/o/{email_id}")
 def tracking_pixel(email_id: int, request: Request, db: Session = Depends(get_db)):

@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Vercel Postgres provides POSTGRES_URL by default
-    DATABASE_URL: str = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or f"sqlite:///{os.path.join(os.path.dirname(os.path.dirname(__file__)), 'fixed_app.db')}"
+    DATABASE_URL: str = os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or "sqlite:///./sql_app.db"
     
     # Vercel Redis (KV) provides KV_URL
     REDIS_URL: str = os.getenv("REDIS_URL") or os.getenv("KV_URL") or "redis://redis:6379/0"
@@ -20,5 +20,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")
         extra = "allow"
+
 
 settings = Settings()
