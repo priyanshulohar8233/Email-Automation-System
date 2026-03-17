@@ -7,8 +7,16 @@ from sqlalchemy.pool import StaticPool
 
 # Strict connection for Neon PostgreSQL
 db_url = settings.DATABASE_URL_NEW
+
+# Diagnostic print as requested by user
+print(f"DEBUG: DATABASE_URL_NEW is: {db_url[:15]}..." if db_url else "DEBUG: DATABASE_URL_NEW is None")
+
 if not db_url:
-    raise ValueError("DATABASE_URL_NEW is empty. Database connection impossible.")
+    raise ValueError(
+        "DATABASE_URL_NEW is empty. Database connection impossible. "
+        "Log in to your Vercel Dashboard -> Project Settings -> Environment Variables "
+        "and add 'DATABASE_URL_NEW' with your Neon connection string."
+    )
 
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
