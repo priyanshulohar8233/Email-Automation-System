@@ -1,7 +1,7 @@
 import os
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
-from fastapi.responses import RedirectResponse, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, Response
+from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 from urllib.parse import unquote
 
@@ -205,22 +205,48 @@ def get_system_health(db: Session = Depends(get_db)):
 def dashboard_stats(response: Response, days: int = 30):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
-        # Step 5: Real database aggregations
+        debug.debug_log(f"Fetching dashboard stats for last {days} days")
         data = services.get_dashboard_stats(days)
         return data
     except Exception as e:
-        return {"error": str(e)}
+        debug.debug_log(f"ERROR in dashboard_stats: {str(e)}")
+        import traceback
+        debug.debug_log(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Failed to fetch dashboard metrics", "error": str(e)}
+        )
 
 @router.get("/dashboard/email-stats")
 def get_email_stats(response: Response, days: int = 7, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    # Step 6: Daily chart data
-    return services.emails_over_time(db, days)
+    try:
+        debug.debug_log(f"Fetching email stats for last {days} days")
+        data = services.emails_over_time(db, days)
+        return data
+    except Exception as e:
+        debug.debug_log(f"ERROR in get_email_stats: {str(e)}")
+        import traceback
+        debug.debug_log(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Failed to fetch email stats", "error": str(e)}
+        )
 
 @router.get("/dashboard/recent-events")
 def get_recent_events(response: Response, days: int = 30, campaign: str = "all", db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    return services.recent_events(db, days, campaign_name=campaign)
+    try:
+        debug.debug_log(f"Fetching recent events: campaign={campaign}, days={days}")
+        return services.recent_events(db, days, campaign_name=campaign)
+    except Exception as e:
+        debug.debug_log(f"ERROR in get_recent_events: {str(e)}")
+        import traceback
+        debug.debug_log(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Failed to fetch recent activity", "error": str(e)}
+        )
 
 @router.get("/t/o/{email_id}")
 def tracking_pixel(email_id: int, request: Request, db: Session = Depends(get_db)):
