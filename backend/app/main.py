@@ -30,7 +30,8 @@ app.add_middleware(
         "http://localhost:3000", 
         "http://localhost:3001", 
         "https://veltrion-frontend.vercel.app",
-        "https://veltrion.vercel.app"
+        "https://veltrion.vercel.app",
+        "https://veltrion-git-main-priyanshulohar8233s-projects.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],

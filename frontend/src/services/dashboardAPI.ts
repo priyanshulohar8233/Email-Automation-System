@@ -40,10 +40,12 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: numbe
     return Promise.race([fetchPromise, timeoutPromise]);
 };
 
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '';
+
 export const dashboardAPI = {
     getStats: async (days?: number, signal?: AbortSignal): Promise<DashboardStats> => {
         try {
-            const url = days ? `/api/dashboard/stats?days=${days}` : '/api/dashboard/stats';
+            const url = days ? `${API_BASE_URL}/api/dashboard/stats?days=${days}` : `${API_BASE_URL}/api/dashboard/stats`;
             const response = await fetchWithTimeout(url, { 
                 signal,
                 cache: 'no-store'
@@ -65,7 +67,7 @@ export const dashboardAPI = {
         }
     },
     getEmailStats: async (days?: number, signal?: AbortSignal): Promise<any> => {
-        const url = days ? `/api/dashboard/email-stats?days=${days}` : '/api/dashboard/email-stats';
+        const url = days ? `${API_BASE_URL}/api/dashboard/email-stats?days=${days}` : `${API_BASE_URL}/api/dashboard/email-stats`;
         const response = await fetchWithTimeout(url, { 
             signal,
             cache: 'no-store'
@@ -78,7 +80,7 @@ export const dashboardAPI = {
         return await response.json();
     },
     getRecentEvents: async (days?: number, signal?: AbortSignal): Promise<any[]> => {
-        const url = days ? `/api/dashboard/recent-events?days=${days}` : '/api/dashboard/recent-events';
+        const url = days ? `${API_BASE_URL}/api/dashboard/recent-events?days=${days}` : `${API_BASE_URL}/api/dashboard/recent-events`;
         const response = await fetchWithTimeout(url, { 
             signal,
             cache: 'no-store'
@@ -91,7 +93,7 @@ export const dashboardAPI = {
         return await response.json();
     },
     updateCompany: async (email: string, company: string): Promise<any> => {
-        const response = await fetch('/api/contacts/company', {
+        const response = await fetch(`${API_BASE_URL}/api/contacts/company`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
