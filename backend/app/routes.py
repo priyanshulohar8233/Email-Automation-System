@@ -26,6 +26,7 @@ def health_check():
     from datetime import datetime
     return {"status": "ok", "timestamp": str(datetime.now())}
 
+
 @router.post("/send-campaign")
 def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     from datetime import datetime
