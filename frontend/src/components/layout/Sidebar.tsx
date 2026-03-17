@@ -34,7 +34,7 @@ export function Sidebar() {
   return (
     <div className="flex h-screen w-[260px] flex-col border-r border-border bg-card fixed left-0 top-0 z-40 transition-colors duration-300">
       <div className="flex h-28 flex-col justify-center px-6 border-b border-border">
-        <Link to="/" className="flex items-center gap-4 group/logo">
+        <Link to="/" className="flex items-center gap-2 group/logo">
           <div className="relative flex items-center justify-center h-20 w-20 transition-transform group-hover/logo:scale-110">
             <img 
               src="/veltrion-logo.png" 
