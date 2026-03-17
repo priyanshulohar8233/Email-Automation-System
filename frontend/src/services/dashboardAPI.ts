@@ -40,24 +40,12 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: numbe
     return Promise.race([fetchPromise, timeoutPromise]);
 };
 
-// For production on Vercel, this should be set to your backend URL.
-// In development, it defaults to empty string to use the Vite proxy.
-const getApiBaseUrl = () => {
-    try {
-        // @ts-ignore
-        return import.meta.env.VITE_API_URL || '';
-    } catch (e) {
-        return '';
-    }
-};
-const API_BASE_URL = getApiBaseUrl();
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '';
 
 export const dashboardAPI = {
     getStats: async (days?: number, signal?: AbortSignal): Promise<DashboardStats> => {
         try {
             const url = days ? `${API_BASE_URL}/api/dashboard/stats?days=${days}` : `${API_BASE_URL}/api/dashboard/stats`;
-            console.log(`[dashboardAPI] Requesting stats from: ${url}`);
-            
             const response = await fetchWithTimeout(url, { 
                 signal,
                 cache: 'no-store'
@@ -65,68 +53,44 @@ export const dashboardAPI = {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`[dashboardAPI] Stats Error [${response.status}]: ${response.statusText}`, errorText);
+                console.error(`Dashboard API Stats Error [${response.status}]: ${response.statusText}`, errorText);
                 throw new Error(`Error fetching dashboard stats: ${response.status} ${response.statusText}`);
             }
             return await response.json();
         } catch (error) {
             if (error instanceof Error && error.name === 'AbortError') {
-                console.log('[dashboardAPI] Fetch aborted');
+                console.log('Fetch aborted');
                 throw error;
             }
-            console.error("[dashboardAPI] Stats Exception:", error);
+            console.error("Dashboard API Error:", error);
             throw error;
         }
     },
     getEmailStats: async (days?: number, signal?: AbortSignal): Promise<any> => {
-        try {
-            const url = days ? `${API_BASE_URL}/api/dashboard/email-stats?days=${days}` : `${API_BASE_URL}/api/dashboard/email-stats`;
-            console.log(`[dashboardAPI] Requesting email stats from: ${url}`);
-            
-            const response = await fetchWithTimeout(url, { 
-                signal,
-                cache: 'no-store'
-            }, 10000);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error(`[dashboardAPI] Email Stats Error [${response.status}]: ${response.statusText}`, errorText);
-                throw new Error(`Error fetching email stats: ${response.status} ${response.statusText}`);
-            }
-            return await response.json();
-        } catch (error) {
-            if (error instanceof Error && error.name === 'AbortError') {
-                console.log('[dashboardAPI] Email stats fetch aborted');
-                throw error;
-            }
-            console.error("[dashboardAPI] Email Stats Exception:", error);
-            throw error;
+        const url = days ? `${API_BASE_URL}/api/dashboard/email-stats?days=${days}` : `${API_BASE_URL}/api/dashboard/email-stats`;
+        const response = await fetchWithTimeout(url, { 
+            signal,
+            cache: 'no-store'
+        }, 10000);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Dashboard API Email Stats Error [${response.status}]: ${response.statusText}`, errorText);
+            throw new Error(`Error fetching email stats: ${response.status} ${response.statusText}`);
         }
+        return await response.json();
     },
     getRecentEvents: async (days?: number, signal?: AbortSignal): Promise<any[]> => {
-        try {
-            const url = days ? `${API_BASE_URL}/api/dashboard/recent-events?days=${days}` : `${API_BASE_URL}/api/dashboard/recent-events`;
-            console.log(`[dashboardAPI] Requesting recent events from: ${url}`);
-            
-            const response = await fetchWithTimeout(url, { 
-                signal,
-                cache: 'no-store'
-            }, 10000);
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error(`[dashboardAPI] Recent Events Error [${response.status}]: ${response.statusText}`, errorText);
-                throw new Error(`Error fetching recent events: ${response.status} ${response.statusText}`);
-            }
-            return await response.json();
-        } catch (error) {
-            if (error instanceof Error && error.name === 'AbortError') {
-                console.log('[dashboardAPI] Recent events fetch aborted');
-                throw error;
-            }
-            console.error("[dashboardAPI] Recent Events Exception:", error);
-            throw error;
+        const url = days ? `${API_BASE_URL}/api/dashboard/recent-events?days=${days}` : `${API_BASE_URL}/api/dashboard/recent-events`;
+        const response = await fetchWithTimeout(url, { 
+            signal,
+            cache: 'no-store'
+        }, 10000);
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Dashboard API Recent Events Error [${response.status}]: ${response.statusText}`, errorText);
+            throw new Error(`Error fetching recent events: ${response.status} ${response.statusText}`);
         }
+        return await response.json();
     },
     updateCompany: async (email: string, company: string): Promise<any> => {
         const response = await fetch(`${API_BASE_URL}/api/contacts/company`, {

@@ -20,7 +20,7 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 transition-colors duration-300">
       <Card className="w-full max-w-md border-border bg-card">
         <CardHeader className="space-y-4 items-center text-center pt-8 pb-4">
-          <div className="flex flex-col items-center gap-2">
+          <div className="flex flex-col items-center gap-4">
             <div className="h-48 w-48 animate-in zoom-in-50 duration-500">
               <img 
                 src="/veltrion-logo.png" 

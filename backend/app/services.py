@@ -1,7 +1,7 @@
 from typing import List
 import smtplib
 from datetime import datetime, timedelta
-from sqlalchemy import func, distinct, case, select, and_, Date
+from sqlalchemy import func, distinct, case, select, and_
 from sqlalchemy.orm import Session
 from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, Settings, Suppression, SuppressionReason, BounceType
 
@@ -465,14 +465,14 @@ def emails_over_time(db: Session, days: int = 7):
     limit_date = (now - timedelta(days=days-1)).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # 1. Fetch aggregated counts in one query
-    # Note: func.cast(..., Date) works in both SQLite and Postgres
+    # Note: func.date works in both SQLite and Postgres
     results = db.query(
-        func.cast(Email.sent_at, Date).label("day_date"),
+        func.date(Email.sent_at).label("day_date"),
         func.count(Email.id).label("count")
     ).filter(
         Email.sent_at >= limit_date,
         Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
-    ).group_by(func.cast(Email.sent_at, Date)).all()
+    ).group_by(func.date(Email.sent_at)).all()
     
     # 2. Map results to a dict for easy lookup
     data_map = {str(r.day_date): r.count for r in results}

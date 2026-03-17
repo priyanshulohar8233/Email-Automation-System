@@ -29,8 +29,6 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000", 
         "http://localhost:3001", 
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:3001",
         "https://veltrion-frontend.vercel.app",
         "https://veltrion.vercel.app",
         "https://veltrion-git-main-priyanshulohar8233s-projects.vercel.app"
@@ -48,19 +46,11 @@ app.add_middleware(
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    error_traceback = traceback.format_exc()
-    print("!!! GLOBAL EXCEPTION CAUGHT !!!")
-    print(f"Path: {request.url.path}")
-    print(f"Error: {str(exc)}")
-    print(error_traceback)
+    print("GLOBAL EXCEPTION CAUGHT:")
+    traceback.print_exc()
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": str(exc),
-            "path": request.url.path,
-            "type": type(exc).__name__,
-            "traceback": error_traceback
-        },
+        content={"detail": str(exc), "traceback": traceback.format_exc()},
     )
 
 @app.get("/")
