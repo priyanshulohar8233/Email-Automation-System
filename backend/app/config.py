@@ -3,7 +3,13 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # Core DB connection (DATABASE_URL_NEW is the primary source of truth)
-    DATABASE_URL_NEW: str = os.getenv("DATABASE_URL_NEW") or "sqlite:///./sql_app.db"
+    DATABASE_URL_NEW: str = os.getenv("DATABASE_URL_NEW", "")
+    
+    # Debug logging to verify env at runtime
+    if not DATABASE_URL_NEW:
+        print("CRITICAL: DATABASE_URL_NEW is NOT set in environment!")
+    else:
+        print(f"DATABASE_URL_NEW found: {DATABASE_URL_NEW[:15]}...")
     
     # Redis for background tasks
     REDIS_URL: str = os.getenv("REDIS_URL") or ""
