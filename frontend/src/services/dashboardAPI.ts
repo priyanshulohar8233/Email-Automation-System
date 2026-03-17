@@ -46,6 +46,7 @@ export const dashboardAPI = {
     getStats: async (days?: number, signal?: AbortSignal): Promise<DashboardStats> => {
         try {
             const url = days ? `${API_BASE_URL}/api/dashboard/stats?days=${days}` : `${API_BASE_URL}/api/dashboard/stats`;
+            console.log(`[DashboardAPI] Fetching stats from: ${url}`);
             const response = await fetchWithTimeout(url, { 
                 signal,
                 cache: 'no-store'
@@ -53,16 +54,21 @@ export const dashboardAPI = {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`Dashboard API Stats Error [${response.status}]: ${response.statusText}`, errorText);
+                console.error(`[DashboardAPI] Stats Error [${response.status}] ${response.statusText}:`, {
+                    url,
+                    errorText
+                });
                 throw new Error(`Error fetching dashboard stats: ${response.status} ${response.statusText}`);
             }
-            return await response.json();
+            const data = await response.json();
+            console.log(`[DashboardAPI] Stats Success:`, data);
+            return data;
         } catch (error) {
             if (error instanceof Error && error.name === 'AbortError') {
-                console.log('Fetch aborted');
+                console.log('[DashboardAPI] Fetch aborted');
                 throw error;
             }
-            console.error("Dashboard API Error:", error);
+            console.error("[DashboardAPI] Global Catch Error:", error);
             throw error;
         }
     },

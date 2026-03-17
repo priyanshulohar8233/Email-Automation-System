@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+pydantic[email]
+pydantic-settings
+sqlalchemy
+psycopg2-binary
+celery[redis]
+requests
+eventlet
+openai
