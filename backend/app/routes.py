@@ -211,9 +211,9 @@ def dashboard_stats(response: Response, days: int = 30):
         return data
     except Exception as e:
         import traceback
-        error_msg = f"DASHBOARD_STATS_ERROR: {str(e)}\n{traceback.format_exc()}"
-        print(error_msg)
-        raise HTTPException(status_code=500, detail={"error": str(e), "path": "dashboard/stats"})
+        print(f"DASHBOARD_STATS_ERROR: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Internal Server Error in dashboard stats: {str(e)}")
 
 @router.get("/dashboard/email-stats")
 def get_email_stats(response: Response, days: int = 7, db: Session = Depends(get_db)):

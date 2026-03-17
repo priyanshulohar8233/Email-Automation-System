@@ -40,13 +40,24 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: numbe
     return Promise.race([fetchPromise, timeoutPromise]);
 };
 
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '';
+// For production on Vercel, this should be set to your backend URL.
+// In development, it defaults to empty string to use the Vite proxy.
+const getApiBaseUrl = () => {
+    try {
+        // @ts-ignore
+        return import.meta.env.VITE_API_URL || '';
+    } catch (e) {
+        return '';
+    }
+};
+const API_BASE_URL = getApiBaseUrl();
 
 export const dashboardAPI = {
     getStats: async (days?: number, signal?: AbortSignal): Promise<DashboardStats> => {
         try {
             const url = days ? `${API_BASE_URL}/api/dashboard/stats?days=${days}` : `${API_BASE_URL}/api/dashboard/stats`;
-            console.log(`[DashboardAPI] Fetching stats from: ${url}`);
+            console.log(`[dashboardAPI] Requesting stats from: ${url}`);
+            
             const response = await fetchWithTimeout(url, { 
                 signal,
                 cache: 'no-store'
@@ -54,21 +65,16 @@ export const dashboardAPI = {
 
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error(`[DashboardAPI] Stats Error [${response.status}] ${response.statusText}:`, {
-                    url,
-                    errorText
-                });
+                console.error(`[dashboardAPI] Stats Error [${response.status}]: ${response.statusText}`, errorText);
                 throw new Error(`Error fetching dashboard stats: ${response.status} ${response.statusText}`);
             }
-            const data = await response.json();
-            console.log(`[DashboardAPI] Stats Success:`, data);
-            return data;
+            return await response.json();
         } catch (error) {
             if (error instanceof Error && error.name === 'AbortError') {
-                console.log('[DashboardAPI] Fetch aborted');
+                console.log('[dashboardAPI] Fetch aborted');
                 throw error;
             }
-            console.error("[DashboardAPI] Global Catch Error:", error);
+            console.error("[dashboardAPI] Stats Exception:", error);
             throw error;
         }
     },
