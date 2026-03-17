@@ -2,11 +2,8 @@ const { Pool } = require('pg');
 
 module.exports = async function handler(req, res) {
   try {
-    console.log("STEP 1: API HIT - /api/dashboard/email-stats");
-    console.log("ENV CHECK: DATABASE_URL_NEW is", process.env.DATABASE_URL_NEW ? "DEFINED" : "UNDEFINED");
-    
     if (!process.env.DATABASE_URL_NEW) {
-        throw new Error("DATABASE_URL_NEW is not defined in environment variables");
+      throw new Error("DATABASE_URL_NEW is not defined");
     }
 
     const pool = new Pool({
@@ -14,48 +11,48 @@ module.exports = async function handler(req, res) {
       ssl: { rejectUnauthorized: false }
     });
 
-    console.log("STEP 2: DB CONNECT ATTEMPT");
+    const { days = 7 } = req.query;
+    const numDays = parseInt(days);
 
-    // Test simple connectivity
-    const testResult = await pool.query('SELECT NOW()');
-    console.log("STEP 3: DB CONNECT SUCCESS (Simple Query)");
-
-    const { days = 30 } = req.query;
-    console.log(`STEP 4: EXECUTING MAIN QUERY (Days: ${days})`);
-
+    // Initial query to get counts
     const timeSeriesQuery = `
       SELECT 
         TO_CHAR(sent_at, 'YYYY-MM-DD') as day_date,
         TO_CHAR(sent_at, 'Dy') as day_name,
         COUNT(*) as count
       FROM emails
-      WHERE sent_at >= NOW() - INTERVAL '${days} days'
+      WHERE sent_at >= NOW() - INTERVAL '${numDays} days'
         AND status IN ('SENT', 'DELIVERED', 'BOUNCED')
       GROUP BY day_date, day_name
       ORDER BY day_date ASC
     `;
     
-    const timeSeriesResult = await pool.query(timeSeriesQuery);
-    console.log("STEP 5: MAIN QUERY SUCCESS");
-
-    const chartData = timeSeriesResult.rows.map(row => ({
-      day: row.day_name,
-      emails: parseInt(row.count)
-    }));
-
-    // Cleanup pool in serverless context (though pg pool manages itself, explicit end is sometimes needed for fast cold starts)
+    const result = await pool.query(timeSeriesQuery);
     await pool.end();
+
+    const dataMap = {};
+    result.rows.forEach(row => {
+      dataMap[row.day_date] = parseInt(row.count);
+    });
+
+    // Fill in missing days
+    const chartData = [];
+    for (let i = numDays - 1; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      
+      chartData.push({
+        day: dayName,
+        emails: dataMap[dateStr] || 0
+      });
+    }
 
     res.status(200).json(chartData);
 
   } catch (error) {
-    console.error("🔥 EXACT ERROR:", error);
-
-    res.status(500).json({
-      error: error.message,
-      stack: error.stack,
-      full: error,
-      env_defined: !!process.env.DATABASE_URL_NEW
-    });
+    console.error("🔥 ERROR in email-stats:", error);
+    res.status(500).json({ error: error.message });
   }
 }

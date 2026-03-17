@@ -221,18 +221,16 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                           <span className="font-semibold text-foreground truncate max-w-[120px]">
                             {ev.company}
                           </span>
-                          {ev.company === "Personal Email" && (
-                            <button
-                              onClick={() => {
-                                setEditingId(ev.id);
-                                setEditValue(ev.company);
-                              }}
-                              className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-md transition-all focus:opacity-100 outline-none"
-                              title="Update Company"
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                            </button>
-                          )}
+                          <button
+                            onClick={() => {
+                              setEditingId(ev.id);
+                              setEditValue(ev.company);
+                            }}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-md transition-all focus:opacity-100 outline-none"
+                            title="Update Company"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
                         </div>
                       )}
                     </div>

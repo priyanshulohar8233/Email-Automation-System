@@ -2,11 +2,8 @@ const { Pool } = require('pg');
 
 module.exports = async function handler(req, res) {
   try {
-    console.log("STEP 1: API HIT - /api/dashboard/recent-events");
-    
     if (!process.env.DATABASE_URL_NEW) {
-        console.error("ENV CHECK: DATABASE_URL_NEW is UNDEFINED");
-        throw new Error("DATABASE_URL_NEW is not defined");
+      throw new Error("DATABASE_URL_NEW is not defined");
     }
 
     const pool = new Pool({
@@ -14,16 +11,15 @@ module.exports = async function handler(req, res) {
       ssl: { rejectUnauthorized: false }
     });
 
-    console.log("STEP 2: DB CONNECT ATTEMPT");
-    await pool.query('SELECT NOW()');
-    console.log("STEP 3: DB CONNECT SUCCESS");
-
     const { days = 30, limit = 15, campaign = "all" } = req.query;
-    console.log(`STEP 4: EXECUTING RECENT EVENTS QUERY (Campaign: ${campaign})`);
 
     let sql = `
       SELECT 
-        ee.*,
+        ee.id,
+        ee.email_id,
+        ee.event_type,
+        ee.timestamp,
+        ee.country,
         e.recipient_email,
         c.name as contact_name,
         c.company as contact_company
@@ -42,13 +38,21 @@ module.exports = async function handler(req, res) {
     sql += ` ORDER BY ee.timestamp DESC LIMIT ${parseInt(limit)}`;
     
     const result = await pool.query(sql, params);
-    console.log("STEP 5: QUERY SUCCESS");
+    await pool.end();
     
     const PERSONAL_PROVIDERS = new Set(["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "aol.com"]);
     
     const events = result.rows.map(row => {
       let company = row.contact_company;
       const email = row.recipient_email;
+      let name = row.contact_name;
+      
+      if (!name && email) {
+        // Fallback: extract name from email prefix (john.doe@example.com -> John Doe)
+        const prefix = email.split('@')[0];
+        name = prefix.split(/[._-]/).map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+      }
+
       if (!company && email) {
         const domain = email.split('@')[1]?.toLowerCase();
         if (domain) {
@@ -60,22 +64,22 @@ module.exports = async function handler(req, res) {
           }
         }
       }
+      
       return {
         id: row.id,
         email_id: row.email_id,
+        recipient: email,
+        recipient_name: name || "Unknown",
+        company: company || "Personal Email",
+        country: row.country || "Unknown",
         event_type: row.event_type,
-        timestamp: row.timestamp,
-        contact_name: row.contact_name || "Unknown",
-        contact_company: company || "Personal Email",
-        recipient_email: email
+        timestamp: row.timestamp
       };
     });
 
-    await pool.end();
     res.status(200).json(events);
-
   } catch (error) {
-    console.error("🔥 EXACT ERROR in /api/dashboard/recent-events:", error);
-    res.status(500).json({ error: error.message, full: error });
+    console.error("🔥 ERROR in recent-events:", error);
+    res.status(500).json({ error: error.message });
   }
 }
