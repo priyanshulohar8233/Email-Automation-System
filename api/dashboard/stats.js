@@ -1,9 +1,26 @@
-const db = require('../lib/db');
+const { Pool } = require('pg');
 
-export default async function handler(req, res) {
-  const { days = 30 } = req.query;
-  
+module.exports = async function handler(req, res) {
   try {
+    console.log("STEP 1: API HIT - /api/dashboard/stats");
+    
+    if (!process.env.DATABASE_URL_NEW) {
+        console.error("ENV CHECK: DATABASE_URL_NEW is UNDEFINED");
+        throw new Error("DATABASE_URL_NEW is not defined");
+    }
+
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL_NEW,
+      ssl: { rejectUnauthorized: false }
+    });
+
+    console.log("STEP 2: DB CONNECT ATTEMPT");
+    await pool.query('SELECT NOW()');
+    console.log("STEP 3: DB CONNECT SUCCESS");
+
+    const { days = 30 } = req.query;
+    console.log(`STEP 4: EXECUTING DASHBOARD STATS QUERY (Days: ${days})`);
+
     const query = `
       SELECT 
         COUNT(*) as "totalEmails",
@@ -15,9 +32,10 @@ export default async function handler(req, res) {
       WHERE sent_at >= NOW() - INTERVAL '${days} days'
     `;
     
-    const result = await db.query(query);
-    const row = result.rows[0];
+    const result = await pool.query(query);
+    console.log("STEP 5: QUERY SUCCESS");
     
+    const row = result.rows[0];
     const total = parseInt(row.totalEmails) || 0;
     const delivered = parseInt(row.delivered) || 0;
     const opened = parseInt(row.opened) || 0;
@@ -32,25 +50,19 @@ export default async function handler(req, res) {
       clickRate: calcRate(clicked, delivered),
       bounceRate: calcRate(bounced, total),
       unread: calcRate(delivered - opened, delivered),
-      activeCampaigns: 0, // Placeholder until campaigns table is checked
+      activeCampaigns: 0,
       totalEmailsGrowth: 0.0,
       openRateGrowth: 0.0,
       clickRateGrowth: 0.0,
       activeCampaignsGrowth: 0.0,
-      raw: {
-        bounced: bounced,
-        opened: opened,
-        delivered: delivered,
-        unread: Math.max(0, delivered - opened)
-      }
+      raw: { bounced, opened, delivered, unread: Math.max(0, delivered - opened) }
     };
 
-    return res.status(200).json(stats);
+    await pool.end();
+    res.status(200).json(stats);
+
   } catch (error) {
-    console.error("DB ERROR:", error);
-    return res.status(500).json({ 
-      detail: "Failed to fetch dashboard metrics", 
-      error: error.message 
-    });
+    console.error("🔥 EXACT ERROR in /api/dashboard/stats:", error);
+    res.status(500).json({ error: error.message, full: error });
   }
 }

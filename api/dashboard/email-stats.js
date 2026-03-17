@@ -1,6 +1,6 @@
 const { Pool } = require('pg');
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   try {
     console.log("STEP 1: API HIT - /api/dashboard/email-stats");
     console.log("ENV CHECK: DATABASE_URL_NEW is", process.env.DATABASE_URL_NEW ? "DEFINED" : "UNDEFINED");
