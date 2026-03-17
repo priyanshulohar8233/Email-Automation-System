@@ -533,16 +533,23 @@ def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: s
         
         loc = f"{ev.city}, {ev.country}" if ev.city and ev.country else (ev.country or "Unknown")
         
+        # Robust Name Fallback
+        if not contact_name and email_str:
+            prefix = email_str.split("@")[0]
+            # john.doe -> John Doe
+            contact_name = " ".join([w.capitalize() for w in prefix.replace(".", " ").replace("_", " ").replace("-", " ").split()])
+
         result.append({
             "id": ev.id,
             "email_id": ev.email_id,
             "recipient": email_str,
-            "recipient_name": contact_name or email_str.split("@")[0],
+            "email": email_str, # Alias for frontend compatibility
+            "recipient_name": contact_name or "Unknown",
             "company": contact_company,
             "event_type": ev_type,
             "type": ev_type,
             "subject": ev.email.subject or "No Subject",
-            "timestamp": ev.timestamp.isoformat() if hasattr(ev.timestamp, 'isoformat') else str(ev.timestamp),
+            "timestamp": ev.timestamp.isoformat() if hasattr(ev.timestamp, "isoformat") else str(ev.timestamp),
             "location": loc,
             "country": ev.country or "Unknown",
             "metadata": {

@@ -8,6 +8,7 @@ interface RealtimeEvent {
     id: number;
     type: string;
     email: string;
+    recipient_name?: string;
     subject: string;
     timestamp: string;
     metadata: {
@@ -89,12 +90,19 @@ export function RealtimeFeed({ campaignName = "all" }: { campaignName?: string }
                                 </div>
                                 <div className="flex-1 min-w-0 space-y-1">
                                     <div className="flex items-center justify-between gap-2">
-                                        <p className="text-sm font-bold text-foreground truncate">{event.email}</p>
+                                        <div className="flex flex-col min-w-0">
+                                            <p className="text-sm font-bold text-foreground truncate">
+                                                {event.recipient_name || event.email}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground truncate font-medium">
+                                                {event.email}
+                                            </p>
+                                        </div>
                                         <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap bg-muted px-2 py-0.5 rounded-full uppercase tracking-tighter">
                                             {format(new Date(event.timestamp), "h:mm a")}
                                         </span>
                                     </div>
-                                    <p className="text-xs text-muted-foreground truncate italic">
+                                    <p className="text-[11px] text-muted-foreground/80 truncate italic">
                                         {event.subject || "No subject"}
                                     </p>
 
