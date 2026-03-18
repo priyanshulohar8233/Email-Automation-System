@@ -34,9 +34,6 @@ export default function Analytics() {
   const [showCampaignMenu, setShowCampaignMenu] = useState(false);
   const campaignMenuRef = useRef<HTMLDivElement>(null);
   const [availableCampaigns, setAvailableCampaigns] = useState<string[]>([]);
-  const [days, setDays] = useState<number>(30);
-  const [showDateMenu, setShowDateMenu] = useState(false);
-  const dateMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function fetchCampaignNames() {
@@ -58,9 +55,6 @@ export default function Analytics() {
       if (campaignMenuRef.current && !campaignMenuRef.current.contains(event.target as Node)) {
         setShowCampaignMenu(false);
       }
-      if (dateMenuRef.current && !dateMenuRef.current.contains(event.target as Node)) {
-        setShowDateMenu(false);
-      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -69,7 +63,7 @@ export default function Analytics() {
   useEffect(() => {
     async function fetchAnalytics() {
       try {
-        let url = `/api/analytics?campaign=${encodeURIComponent(campaign)}&days=${days}`;
+        let url = `/api/analytics?campaign=${encodeURIComponent(campaign)}&days=3650`;
         const response = await fetch(url);
         if (response.ok) {
           const data = await response.json();
@@ -82,7 +76,7 @@ export default function Analytics() {
       }
     }
     fetchAnalytics();
-  }, [campaign, days]);
+  }, [campaign]);
 
   return (
     <div className="space-y-8">
@@ -124,47 +118,6 @@ export default function Analytics() {
                   >
                     {opt.label}
                     {campaign === opt.val && <Check className="h-4 w-4" />}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Time Selector */}
-          <div className="relative w-fit min-w-[120px]" ref={dateMenuRef}>
-            <div
-              style={{ borderRadius: "14px" }}
-              onClick={() => setShowDateMenu(!showDateMenu)}
-              className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
-            >
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="text-foreground transition-colors duration-300">
-                {days === 7 ? "Week" : days === 30 ? "Month" : days === 90 ? "Quarter" : "Year"}
-              </span>
-              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
-            </div>
-
-            {showDateMenu && (
-              <div
-                style={{ borderRadius: "14px" }}
-                className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
-              >
-                {[
-                  { val: 7, label: "Week" },
-                  { val: 30, label: "Month" },
-                  { val: 90, label: "Quarter" },
-                  { val: 365, label: "Year" }
-                ].map((opt) => (
-                  <div
-                    key={opt.val}
-                    onClick={() => {
-                      setDays(opt.val);
-                      setShowDateMenu(false);
-                    }}
-                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${days === opt.val ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
-                  >
-                    {opt.label}
-                    {days === opt.val && <Activity className="h-3.5 w-3.5" />}
                   </div>
                 ))}
               </div>
