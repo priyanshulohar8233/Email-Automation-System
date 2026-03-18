@@ -250,52 +250,59 @@ export default function Campaigns() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredCampaigns.map((campaign: any) => (
-                <TableRow key={campaign.id}>
-                  <TableCell className="font-medium">{campaign.name}</TableCell>
-                  <TableCell>
-                    <Badge variant={statusStyles[campaign.status.toLowerCase() as keyof typeof statusStyles] as any}>
-                      {campaign.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{campaign.sent}</TableCell>
-                  <TableCell className="text-emerald-600 font-bold">{campaign.delivered}</TableCell>
-                  <TableCell className="text-red-500 font-bold">{campaign.failed}</TableCell>
-                  <TableCell>{campaign.opens}</TableCell>
-                  <TableCell>{campaign.scheduled}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
-                        onClick={() => handleToggleCampaign(campaign.id)}
-                      >
-                        <Play className={`h-4 w-4 ${campaign.status.toLowerCase() === 'running' ? 'fill-indigo-600' : ''}`} />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleEditCampaign(campaign)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                        onClick={() => {
-                          setCampaignToDelete(campaign.id);
-                          setShowDeleteConfirm(true);
-                        }}
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {filteredCampaigns.map((campaign: any) => {
+                const isCompleted = campaign.status.toLowerCase() === 'complete' || campaign.status.toLowerCase() === 'completed';
+                return (
+                  <TableRow key={campaign.id}>
+                    <TableCell className="font-medium">{campaign.name}</TableCell>
+                    <TableCell>
+                      <Badge variant={statusStyles[campaign.status.toLowerCase() as keyof typeof statusStyles] as any}>
+                        {campaign.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{campaign.sent}</TableCell>
+                    <TableCell className="text-emerald-600 font-bold">{campaign.delivered}</TableCell>
+                    <TableCell className="text-red-500 font-bold">{campaign.failed}</TableCell>
+                    <TableCell>{campaign.opens}</TableCell>
+                    <TableCell>{campaign.scheduled}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={isCompleted}
+                          className={`h-8 w-8 ${isCompleted ? 'opacity-40 cursor-not-allowed' : 'text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50'}`}
+                          onClick={() => handleToggleCampaign(campaign.id)}
+                          title={isCompleted ? "Completed campaigns cannot be resumed" : "Pause/Resume Campaign"}
+                        >
+                          <Play className={`h-4 w-4 ${campaign.status.toLowerCase() === 'running' ? 'fill-indigo-600' : ''}`} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={isCompleted}
+                          className={`h-8 w-8 ${isCompleted ? 'opacity-40 cursor-not-allowed' : ''}`}
+                          onClick={() => handleEditCampaign(campaign)}
+                          title={isCompleted ? "Completed campaigns cannot be edited" : "Edit Campaign"}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                          onClick={() => {
+                            setCampaignToDelete(campaign.id);
+                            setShowDeleteConfirm(true);
+                          }}
+                        >
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>

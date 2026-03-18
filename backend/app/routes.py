@@ -65,20 +65,26 @@ def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: S
     
     db.commit()
     
-    # Trigger tasks
     # Standard Grade: Use background_tasks for immediate sending.
-    # SaaS Grade: Use Celery ONLY for scheduled tasks (eta) if Redis is configured.
-    can_use_celery = bool(settings.REDIS_URL and "redis" in settings.REDIS_URL) and not os.getenv("VERCEL")
-    
-    for e in records:
-        if eta and can_use_celery:
-            send_email_task.apply_async(args=[e.id, req.subject, req.body, req.attachments], eta=eta)
-        else:
+    if eta and eta > datetime.utcnow():
+        # DO NOT trigger background_tasks for scheduled campaigns here.
+        # They will be picked up by the background scheduler/cron.
+        pass
+    else:
+        for e in records:
             # Immediate sends use background_tasks (native to FastAPI/Uvicorn)
-            # This avoids dependency on external workers for simple setups and handles small-to-medium volume perfectly.
             background_tasks.add_task(send_email_fn, e.id, req.subject, req.body, req.attachments)
             
     return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value, "mode": "celery" if (eta and can_use_celery) else "background_tasks"}
+
+@router.post("/campaigns/check-due")
+def trigger_due_campaigns(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    """
+    Manual or Cron-based trigger to process QUEUED campaigns that are now due.
+    Useful for serverless (Vercel Cron) or as a backup for the background loop.
+    """
+    count = services.check_due_campaigns(db, background_tasks)
+    return {"status": "ok", "triggered": count}
 
 @router.get("/campaigns")
 def get_campaigns(search: str | None = None, status: str | None = None, db: Session = Depends(get_db)):

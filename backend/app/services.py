@@ -683,6 +683,55 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
         })
     return results
 
+def check_due_campaigns(db: Session, background_tasks=None):
+    """
+    Finds QUEUED/SCHEDULED campaigns whose time has come and triggers them.
+    Can be used in a background loop or via a Cron endpoint.
+    """
+    from .models import Campaign, CampaignStatus
+    from datetime import datetime
+    
+    now = datetime.utcnow()
+    # Find due campaigns
+    due_campaigns = db.query(Campaign).filter(
+        Campaign.status.in_([CampaignStatus.QUEUED, CampaignStatus.SCHEDULED]),
+        Campaign.scheduled_for != None
+    ).all()
+    
+    triggered_count = 0
+    for camp in due_campaigns:
+        try:
+            # Parse scheduled time
+            try:
+                sched_time = datetime.fromisoformat(camp.scheduled_for.replace("Z", "+00:00"))
+            except:
+                continue
+                
+            if sched_time <= now:
+                debug.debug_log(f"SCHEDULER: Triggering campaign {camp.id} (Scheduled for {camp.scheduled_for})")
+                camp.status = CampaignStatus.RUNNING
+                db.commit()
+                
+                # Trigger emails
+                if background_tasks:
+                    trigger_campaign_emails(db, camp.id, background_tasks)
+                else:
+                    # If we don't have FastAPI background_tasks (e.g. from a loop), 
+                    # we use a manual trigger or wait for next heartbeat.
+                    # For now, we'll assume we pass it or use a fallback.
+                    from .tasks import send_email_fn
+                    from .models import Email, EmailStatus
+                    pending = db.query(Email).filter(Email.campaign_id == camp.id, Email.status == EmailStatus.PENDING).all()
+                    for e in pending:
+                        send_email_fn(e.id, e.subject, e.body)
+                
+                triggered_count += 1
+        except Exception as e:
+            debug.debug_log(f"SCHEDULER_ERROR for campaign {camp.id}: {str(e)}")
+            db.rollback()
+            
+    return triggered_count
+
 def trigger_campaign_emails(db: Session, campaign_id: int, background_tasks):
     from .models import Email, EmailStatus, Campaign
     from .tasks import send_email_fn
@@ -703,11 +752,15 @@ def trigger_campaign_emails(db: Session, campaign_id: int, background_tasks):
     return len(pending_emails)
 
 def update_campaign(db: Session, campaign_id: int, data):
-    from .models import Campaign
+    from .models import Campaign, CampaignStatus
     try:
         campaign = db.query(Campaign).filter(Campaign.id == campaign_id).first()
         if not campaign:
             raise ValueError("Campaign not found")
+        
+        # PRO GRADE: Lock completed campaigns
+        if campaign.status == CampaignStatus.COMPLETED:
+            raise ValueError("Completed campaigns cannot be modified.")
         
         if hasattr(data, 'name') and data.name:
             campaign.name = data.name

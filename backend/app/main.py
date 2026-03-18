@@ -21,8 +21,28 @@ app = FastAPI(title="Email Tracking API")
 @app.on_event("startup")
 async def startup_event():
     # Only run in non-serverless or as a lazy background task
-    # On Vercel, everything is transient, so we call it once.
     init_db()
+    
+    # PRO GRADE: Start background scheduler for campaigns
+    import asyncio
+    from .database import SessionLocal
+    from . import services
+    
+    async def campaign_scheduler_loop():
+        # Wait a bit for DB to be ready
+        await asyncio.sleep(5)
+        while True:
+            try:
+                db = SessionLocal()
+                # We don't have background_tasks here, so we'll use immediate sending fallback
+                # which is fine for the worker.
+                services.check_due_campaigns(db)
+                db.close()
+            except Exception as e:
+                print(f"SCHEDULER_LOOP_ERROR: {str(e)}")
+            await asyncio.sleep(60) # Check every minute
+            
+    asyncio.create_task(campaign_scheduler_loop())
 
 app.add_middleware(
     CORSMiddleware,
