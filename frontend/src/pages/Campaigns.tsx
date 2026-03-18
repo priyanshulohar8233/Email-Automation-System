@@ -35,6 +35,7 @@ const statusStyles: Record<string, "secondary" | "warning" | "default" | "succes
   running: "default",
   completed: "success",
   complete: "success",
+  "complete with errors": "warning",
 };
 
 export default function Campaigns() {
@@ -90,6 +91,20 @@ export default function Campaigns() {
   useEffect(() => {
     fetchCampaigns();
   }, [searchTerm, statusFilter]);
+
+  // PRO GRADE: Real-time Polling for active campaigns
+  useEffect(() => {
+    const hasActive = campaignsData.some(c => 
+      ['running', 'queued', 'scheduled'].includes(c.status.toLowerCase())
+    );
+
+    if (hasActive) {
+      const interval = setInterval(() => {
+        fetchCampaigns();
+      }, 10000); // Poll every 10s
+      return () => clearInterval(interval);
+    }
+  }, [campaignsData]);
 
   async function handleEditCampaign(campaign: Campaign) {
     setSelectedCampaign(campaign);

@@ -27,6 +27,7 @@ class Campaign(Base):
     bounce_count = Column(Integer, default=0)
     scheduled_for = Column(String, nullable=True) # or DateTime
     created_at = Column(DateTime, default=func.now())
+    completed_at = Column(DateTime, nullable=True)
 
 class EmailStatus(str, enum.Enum):
     PENDING = "PENDING"

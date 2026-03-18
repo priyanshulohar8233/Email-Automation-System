@@ -18,22 +18,36 @@ from . import debug
 
 def check_and_complete_campaign(db: Session, campaign_id: int):
     from .models import Email, EmailStatus, Campaign, CampaignStatus
+    from datetime import datetime
     
-    # Reload campaign
-    camp = db.query(Campaign).get(campaign_id)
+    # PRO GRADE: Precise completion check
+    camp = db.query(Campaign).filter(Campaign.id == campaign_id).first()
     if not camp or camp.status == CampaignStatus.COMPLETED:
         return
     
-    # Check if any emails are still PENDING
+    # Calculate total expected emails
+    total_emails = db.query(Email).filter(Email.campaign_id == campaign_id).count()
+    if total_emails == 0:
+        return
+        
+    # Calculate processed emails (delivered + failed/bounced)
+    processed_emails = db.query(Email).filter(
+        Email.campaign_id == campaign_id,
+        Email.status.in_([EmailStatus.DELIVERED, EmailStatus.BOUNCED, EmailStatus.SPAM, EmailStatus.DROPPED])
+    ).count()
+    
+    # Also check if any are still PENDING
     pending_count = db.query(Email).filter(
         Email.campaign_id == campaign_id, 
         Email.status == EmailStatus.PENDING
     ).count()
     
-    if pending_count == 0:
+    # Trigger completion if everything is processed AND nothing is pending
+    if processed_emails >= total_emails and pending_count == 0:
         camp.status = CampaignStatus.COMPLETED
+        camp.completed_at = datetime.utcnow()
         db.commit()
-        debug.debug_log(f"CAMPAIGN_COMPLETE: Campaign {campaign_id} finished.")
+        debug.debug_log(f"CAMPAIGN_COMPLETE: Campaign {campaign_id} (Done at {camp.completed_at})")
 
 def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_port: int, smtp_user: str, smtp_pass: str, reply_to: str = None, attachments: list = None):
     # Create the root message and set headers
@@ -672,7 +686,7 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
         results.append({
             "id": str(c.id),
             "name": c.name,
-            "status": "Complete" if c.status == CampaignStatus.COMPLETED else c.status.value.title(),
+            "status": ("Complete" + (" with Errors" if failed > 0 else "")) if c.status == CampaignStatus.COMPLETED else c.status.value.title(),
             "sent": sent,
             "delivered": delivered,
             "failed": failed,
