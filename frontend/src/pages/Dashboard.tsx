@@ -76,23 +76,23 @@ export default function Dashboard() {
         title="Dashboard"
         subtitle="Overview of your email campaigns performance."
       >
-        <div className="relative w-44" ref={dateMenuRef}>
+        <div className="relative w-fit min-w-[120px]" ref={dateMenuRef}>
           <div
             style={{ borderRadius: "14px" }}
             onClick={() => setShowDateMenu(!showDateMenu)}
-            className={`flex items-center gap-2 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-full ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border'}`}
+            className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
           >
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-foreground flex-1 truncate transition-colors duration-300">
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-foreground transition-colors duration-300">
               {days === 7 ? "Week" : days === 30 ? "Month" : days === 90 ? "Quarter" : "Year"}
             </span>
-            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
+            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
           </div>
 
           {showDateMenu && (
             <div
               style={{ borderRadius: "14px" }}
-              className="absolute left-0 right-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200"
+              className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
             >
               {[
                 { val: 7, label: "Week" },
