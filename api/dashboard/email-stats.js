@@ -35,15 +35,14 @@ module.exports = async function handler(req, res) {
       dataMap[row.day_date] = parseInt(row.count);
     });
 
-    // Fill in missing days - Fixed to Monday to Sunday for 7-day view
+    // Aggregation Logic
     const chartData = [];
+    const now = new Date();
     
     if (numDays === 7) {
-        // Find the most recent Monday
-        const now = new Date();
-        const dayOfWeek = now.getDay(); // 0 (Sun) to 6 (Sat)
-        const diffToMonday = (dayOfWeek + 6) % 7; // Mon: 0, Tue: 1, ..., Sun: 6
-        
+        // WEEK: Daily (Mon-Sun)
+        const dayOfWeek = now.getDay();
+        const diffToMonday = (dayOfWeek + 6) % 7;
         const monday = new Date(now);
         monday.setDate(now.getDate() - diffToMonday);
         
@@ -52,24 +51,66 @@ module.exports = async function handler(req, res) {
             d.setDate(monday.getDate() + i);
             const dateStr = d.toISOString().split('T')[0];
             const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-            
-            chartData.push({
-                day: dayName,
-                emails: dataMap[dateStr] || 0
-            });
+            chartData.push({ day: dayName, emails: dataMap[dateStr] || 0 });
         }
+    } else if (numDays === 30) {
+        // MONTH: 5-day intervals (6 bars)
+        for (let i = 0; i < 30; i += 5) {
+            let intervalCount = 0;
+            let startDay = i + 1;
+            let endDay = i + 5;
+            
+            for (let j = 0; j < 5; j++) {
+                const d = new Date(now);
+                d.setDate(now.getDate() - (29 - (i + j)));
+                const dateStr = d.toISOString().split('T')[0];
+                intervalCount += dataMap[dateStr] || 0;
+            }
+            chartData.push({ day: `${startDay}-${endDay}`, emails: intervalCount });
+        }
+    } else if (numDays === 90) {
+        // QUARTER: 15-day intervals (6 bars)
+        for (let i = 0; i < 90; i += 15) {
+            let intervalCount = 0;
+            let startDay = i + 1;
+            let endDay = i + 15;
+            
+            for (let j = 0; j < 15; j++) {
+                const d = new Date(now);
+                d.setDate(now.getDate() - (89 - (i + j)));
+                const dateStr = d.toISOString().split('T')[0];
+                intervalCount += dataMap[dateStr] || 0;
+            }
+            chartData.push({ day: `Day ${startDay}-${endDay}`, emails: intervalCount });
+        }
+    } else if (numDays === 365) {
+        // YEAR: Monthly intervals (12 bars)
+        const months = [];
+        for (let i = 11; i >= 0; i--) {
+            const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            const monthName = d.toLocaleDateString('en-US', { month: 'short' });
+            const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            months.push({ name: monthName, key: monthKey, count: 0 });
+        }
+
+        // Aggregate dataMap by month
+        Object.keys(dataMap).forEach(dateStr => {
+            const mKey = dateStr.substring(0, 7);
+            const monthObj = months.find(m => m.key === mKey);
+            if (monthObj) monthObj.count += dataMap[dateStr];
+        });
+
+        months.forEach(m => {
+            chartData.push({ day: m.name, emails: m.count });
+        });
     } else {
-        // Standard chronological sliding window for other periods
+        // Fallback for other ranges
         for (let i = numDays - 1; i >= 0; i--) {
             const d = new Date();
             d.setDate(d.getDate() - i);
             const dateStr = d.toISOString().split('T')[0];
             const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-            
-            chartData.push({
-                day: dayName,
-                emails: dataMap[dateStr] || 0
-            });
+            chartData.push({ day: dayName, emails: dataMap[dateStr] || 0 });
         }
     }
 

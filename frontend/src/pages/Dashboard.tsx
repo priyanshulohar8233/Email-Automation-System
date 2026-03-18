@@ -84,7 +84,7 @@ export default function Dashboard() {
           >
             <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
             <span className="text-foreground flex-1 truncate transition-colors duration-300">
-              {days === 7 ? "Last 7 Days" : days === 30 ? "Last 30 Days" : days === 90 ? "Last 90 Days" : "Last 12 Months"}
+              {days === 7 ? "Week" : days === 30 ? "Month" : days === 90 ? "Quarter" : "Year"}
             </span>
             <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
           </div>
@@ -95,10 +95,10 @@ export default function Dashboard() {
               className="absolute left-0 right-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200"
             >
               {[
-                { val: 7, label: "Last 7 Days" },
-                { val: 30, label: "Last 30 Days" },
-                { val: 90, label: "Last 90 Days" },
-                { val: 365, label: "Last 12 Months" }
+                { val: 7, label: "Week" },
+                { val: 30, label: "Month" },
+                { val: 90, label: "Quarter" },
+                { val: 365, label: "Year" }
               ].map((opt) => (
                 <div
                   key={opt.val}
