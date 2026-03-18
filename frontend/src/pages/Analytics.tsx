@@ -12,7 +12,7 @@ import {
   Bar,
   Legend
 } from "recharts";
-import { ChevronRight, Check, Layers, FastForward, MousePointer2, AlertCircle, Eye, Globe, Calendar, Activity, EyeOff } from "lucide-react";
+import { ChevronRight, Check, Layers, FastForward, MousePointer2, AlertCircle, Eye, Globe, Activity, EyeOff } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { RealtimeFeed } from "@/components/dashboard/RealtimeFeed";
