@@ -14,7 +14,15 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDateMenu, setShowDateMenu] = useState(false);
-  const [days, setDays] = useState(30);
+  const [days, setDays] = useState<number>(() => {
+    const saved = localStorage.getItem("dashboard_days");
+    return saved ? parseInt(saved) : 30;
+  });
+
+  useEffect(() => {
+    localStorage.setItem("dashboard_days", days.toString());
+  }, [days]);
+
   const dateMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 

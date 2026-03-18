@@ -35,18 +35,42 @@ module.exports = async function handler(req, res) {
       dataMap[row.day_date] = parseInt(row.count);
     });
 
-    // Fill in missing days
+    // Fill in missing days - Fixed to Monday to Sunday for 7-day view
     const chartData = [];
-    for (let i = numDays - 1; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-      
-      chartData.push({
-        day: dayName,
-        emails: dataMap[dateStr] || 0
-      });
+    
+    if (numDays === 7) {
+        // Find the most recent Monday
+        const now = new Date();
+        const dayOfWeek = now.getDay(); // 0 (Sun) to 6 (Sat)
+        const diffToMonday = (dayOfWeek + 6) % 7; // Mon: 0, Tue: 1, ..., Sun: 6
+        
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - diffToMonday);
+        
+        for (let i = 0; i < 7; i++) {
+            const d = new Date(monday);
+            d.setDate(monday.getDate() + i);
+            const dateStr = d.toISOString().split('T')[0];
+            const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+            
+            chartData.push({
+                day: dayName,
+                emails: dataMap[dateStr] || 0
+            });
+        }
+    } else {
+        // Standard chronological sliding window for other periods
+        for (let i = numDays - 1; i >= 0; i--) {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            const dateStr = d.toISOString().split('T')[0];
+            const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+            
+            chartData.push({
+                day: dayName,
+                emails: dataMap[dateStr] || 0
+            });
+        }
     }
 
     res.status(200).json(chartData);
