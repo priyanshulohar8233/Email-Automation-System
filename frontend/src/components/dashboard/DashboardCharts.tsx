@@ -28,13 +28,21 @@ const COLOR_MAP: Record<string, string> = {
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700 p-3 rounded-xl shadow-2xl">
-        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{label}</p>
-        <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-indigo-500" />
-          <p className="text-sm font-semibold text-white">
-            {payload[0].value} <span className="text-slate-400 font-normal">emails</span>
-          </p>
+      <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 p-4 rounded-2xl shadow-2xl ring-1 ring-white/10">
+        <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-2 flex items-center gap-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+          {label}
+        </p>
+        <div className="space-y-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black text-white tabular-nums tracking-tighter">
+              {payload[0].value}
+            </span>
+            <span className="text-xs font-medium text-slate-400">emails sent</span>
+          </div>
+          <div className="h-0.5 w-full bg-slate-800 rounded-full overflow-hidden">
+             <div className="h-full bg-indigo-500 w-full opacity-50" />
+          </div>
         </div>
       </div>
     );
@@ -60,7 +68,7 @@ export function DashboardCharts({ days = 30 }: { days?: number }) {
       .then(([emailStats, stats]) => {
         // Process email stats for line chart
         if (Array.isArray(emailStats)) {
-          setLineData(emailStats.map((r: any) => ({ day: r.day, emails: r.emails })));
+          setLineData(emailStats);
         }
 
         if (stats.raw) {
@@ -88,7 +96,6 @@ export function DashboardCharts({ days = 30 }: { days?: number }) {
         console.error("Error loading charts:", err);
         setError("Failed to load chart data. Please check your connection and try again.");
         setLoading(false);
-        // Set placeholder data to show some UI
         setLineData([]);
         setPieData([
           { name: "Delivered", value: 0 },
@@ -104,60 +111,73 @@ export function DashboardCharts({ days = 30 }: { days?: number }) {
 
   return (
     <div className="grid grid-cols-12 gap-6">
-      <Card className="col-span-12 lg:col-span-8">
-        <CardHeader>
-          <CardTitle>Emails Sent Over Time</CardTitle>
+      <Card className="col-span-12 lg:col-span-8 border-indigo-500/10 shadow-xl shadow-indigo-500/5">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg font-bold flex items-center gap-2">
+             <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
+             Emails Sent Over Time
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="h-[300px] w-full">
+          <div className="h-[300px] w-full pt-4">
             {loading ? (
               <div className="flex h-full items-center justify-center gap-2 text-slate-400">
-                <RefreshCcw className="h-5 w-5 animate-spin" />
-                <span className="text-sm">Loading chart...</span>
+                <RefreshCcw className="h-5 w-5 animate-spin text-indigo-500" />
+                <span className="text-sm font-semibold">Generating report...</span>
               </div>
             ) : error ? (
-              <div className="flex h-full items-center justify-center text-sm text-destructive">
+              <div className="flex h-full items-center justify-center text-sm text-destructive font-medium">
                 {error}
               </div>
             ) : lineData.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-slate-400">
-                No email data available yet.
+              <div className="flex h-full items-center justify-center text-sm text-slate-400 italic">
+                No activity records found for this period.
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={lineData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.5} />
+                <BarChart data={lineData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#6366F1" stopOpacity={1} />
+                      <stop offset="100%" stopColor="#4F46E5" stopOpacity={0.8} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="hsl(var(--border))" opacity={0.3} />
                   <XAxis
                     dataKey="day"
-                    stroke="#94A3B8"
+                    stroke="hsl(var(--muted-foreground))"
                     fontSize={11}
+                    fontWeight={600}
                     tickLine={false}
                     axisLine={false}
-                    dy={10}
+                    dy={12}
+                    interval={days === 365 ? 1 : 0}
                   />
                   <YAxis
-                    stroke="#94A3B8"
+                    stroke="hsl(var(--muted-foreground))"
                     fontSize={11}
+                    fontWeight={600}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v) => `${v}`}
-                    dx={-10}
+                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v}
                   />
                   <Tooltip
-                    cursor={{ fill: 'rgba(255, 255, 255, 0.05)', radius: [6, 6, 0, 0] }}
+                    cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4, radius: [8, 8, 0, 0] }}
                     content={<CustomTooltip />}
+                    animationDuration={200}
                   />
                   <Bar
                     dataKey="emails"
-                    fill="#6366F1"
-                    radius={[6, 6, 0, 0]}
-                    barSize={32}
+                    fill="url(#barGradient)"
+                    radius={[8, 8, 2, 2]}
+                    barSize={days === 365 ? 20 : days === 90 ? 30 : 40}
                     animationDuration={1500}
-                    animationEasing="ease-in-out"
+                    animationEasing="ease-out"
                     activeBar={{
                       fill: '#818CF8',
-                      stroke: '#C7D2FE',
-                      strokeWidth: 1,
+                      stroke: '#6366F1',
+                      strokeWidth: 2,
+                      radius: [10, 10, 2, 2]
                     }}
                   />
                 </BarChart>

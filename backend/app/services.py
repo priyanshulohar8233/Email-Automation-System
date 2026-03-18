@@ -431,31 +431,119 @@ def get_dashboard_stats(days: int = 30, campaign_name: str = "all"):
 
 
 def emails_over_time(db: Session, days: int = 7):
-    from datetime import datetime, timedelta
-    now = datetime.utcnow()
-    limit_date = (now - timedelta(days=days-1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    from datetime import datetime, timedelta, date
+    import calendar
+    from sqlalchemy import cast, Date
     
-    # 1. Fetch aggregated counts in one query
-    # Note: func.date works in both SQLite and Postgres
+    now = datetime.utcnow()
+    
+    # Define buckets and range based on 'days' parameter
+    buckets = []
+    start_date = None
+    end_date = None
+    
+    if days == 7:
+        # Week View: Mon -> Sun of current week
+        weekday = now.weekday() # 0 = Mon, 6 = Sun
+        start_date = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = start_date + timedelta(days=7)
+        
+        for i in range(7):
+            d = start_date + timedelta(days=i)
+            buckets.append({
+                "label": d.strftime('%a'), # Mon, Tue...
+                "start": d,
+                "end": d + timedelta(days=1)
+            })
+            
+    elif days == 30:
+        # Month View: 5-day intervals of current month
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_day = calendar.monthrange(now.year, now.month)[1]
+        end_date = (start_date + timedelta(days=last_day-1)).replace(hour=23, minute=59, second=59) + timedelta(seconds=1)
+        
+        intervals = [(1, 5), (6, 10), (11, 15), (16, 20), (21, 25), (26, last_day)]
+        for s, e in intervals:
+            b_start = start_date.replace(day=s)
+            # b_end is the start of the day AFTER 'e'
+            if e == last_day:
+                if now.month == 12:
+                    b_end = start_date.replace(year=now.year + 1, month=1, day=1)
+                else:
+                    b_end = start_date.replace(month=now.month + 1, day=1)
+            else:
+                b_end = start_date.replace(day=e+1)
+            
+            buckets.append({
+                "label": f"{s}-{e}",
+                "start": b_start,
+                "end": b_end
+            })
+            
+    elif days == 90:
+        # Quarter View: 15-day intervals for the last 90 days
+        end_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date = end_date - timedelta(days=90)
+        
+        for i in range(0, 90, 15):
+            b_start = start_date + timedelta(days=i)
+            b_end = b_start + timedelta(days=15)
+            buckets.append({
+                "label": f"D{i+1}-{i+15}",
+                "start": b_start,
+                "end": b_end
+            })
+            
+    elif days == 365:
+        # Year View: Monthly intervals of current year
+        start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = start_date.replace(year=start_date.year + 1)
+        
+        for m in range(1, 13):
+            b_start = start_date.replace(month=m)
+            if m == 12:
+                b_end = b_start.replace(year=b_start.year + 1, month=1)
+            else:
+                b_end = b_start.replace(month=m + 1)
+            buckets.append({
+                "label": calendar.month_name[m][:3], # Jan, Feb...
+                "start": b_start,
+                "end": b_end
+            })
+    else:
+        # Fallback to daily for any other value (Last 'days' days)
+        end_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date = end_date - timedelta(days=days)
+        for i in range(days):
+            d = start_date + timedelta(days=i)
+            buckets.append({
+                "label": d.strftime('%b %d'),
+                "start": d,
+                "end": d + timedelta(days=1)
+            })
+
+    # Fetch aggregated counts by date
     results = db.query(
-        cast(Email.sent_at, Date).label("day_date"),
-        func.count(Email.id).label("count")
+        cast(Email.sent_at, Date).label("d"),
+        func.count(Email.id).label("c")
     ).filter(
-        Email.sent_at >= limit_date,
+        Email.sent_at >= start_date,
+        Email.sent_at < end_date,
         Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
     ).group_by(cast(Email.sent_at, Date)).all()
     
-    # 2. Map results to a dict for easy lookup
-    data_map = {str(r.day_date): r.count for r in results}
-    
-    # 3. Fill in all days in the range (ensuring 0 for missing days)
+    # Map results into buckets
     chart_data = []
-    for i in range(days - 1, -1, -1):
-        d = (now - timedelta(days=i))
-        date_key = d.strftime('%Y-%m-%d')
+    for b in buckets:
+        count = 0
+        b_start_date = b["start"].date()
+        b_end_date = b["end"].date()
+        for r_date, c in results:
+            if b_start_date <= r_date < b_end_date:
+                count += c
         chart_data.append({
-            "day": d.strftime('%a'),
-            "emails": data_map.get(date_key, 0)
+            "day": b["label"], # Keeping 'day' key for frontend compatibility
+            "emails": count
         })
                         
     return chart_data
