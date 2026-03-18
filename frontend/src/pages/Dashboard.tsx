@@ -18,28 +18,10 @@ export default function Dashboard() {
     const saved = localStorage.getItem("dashboard_days");
     return saved ? parseInt(saved) : 30;
   });
-  const [campaign, setCampaign] = useState("all");
-  const [showCampaignMenu, setShowCampaignMenu] = useState(false);
-  const [availableCampaigns, setAvailableCampaigns] = useState<string[]>([]);
 
   useEffect(() => {
     localStorage.setItem("dashboard_days", days.toString());
   }, [days]);
-
-  useEffect(() => {
-    async function fetchCampaignNames() {
-      try {
-        const res = await fetch("/api/campaigns/names");
-        if (res.ok) {
-          const names = await res.json();
-          setAvailableCampaigns(names);
-        }
-      } catch (e) {
-        console.error("Failed to fetch campaign names", e);
-      }
-    }
-    fetchCampaignNames();
-  }, []);
 
   const dateMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -62,7 +44,7 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
       }
-      const data = await dashboardAPI.getStats(days, campaign, signal);
+      const data = await dashboardAPI.getStats(days, "all", signal);
       setStats(data);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -84,7 +66,7 @@ export default function Dashboard() {
       controller.abort();
       clearInterval(interval);
     };
-  }, [days, campaign]);
+  }, [days]);
 
   return (
     <div className="space-y-8">
@@ -93,86 +75,44 @@ export default function Dashboard() {
         title="Dashboard"
         subtitle="Overview of your email campaigns performance."
       >
-        <div className="flex items-center gap-3">
-          {/* Campaign Selector */}
-          <div className="relative w-72" ref={dateMenuRef}>
-            <div
-              style={{ borderRadius: "14px" }}
-              onClick={() => setShowCampaignMenu(!showCampaignMenu)}
-              className={`flex items-center gap-2 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-full ${showCampaignMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
-            >
-              <Layers className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-foreground flex-1 truncate transition-colors duration-300">
-                {campaign === "all" ? "All Campaigns" : campaign}
-              </span>
-              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${showCampaignMenu ? 'rotate-90' : 'rotate-0'}`} />
-            </div>
-
-            {showCampaignMenu && (
-              <div
-                style={{ borderRadius: "14px" }}
-                className="absolute left-0 right-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200"
-              >
-                {[
-                  { val: "all", label: "All Campaigns" },
-                  ...availableCampaigns.map(name => ({ val: name, label: name }))
-                ].map((opt) => (
-                  <div
-                    key={opt.val}
-                    onClick={() => {
-                      setCampaign(opt.val);
-                      setShowCampaignMenu(false);
-                    }}
-                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${campaign === opt.val ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
-                  >
-                    {opt.label}
-                    {campaign === opt.val && <Check className="h-4 w-4" />}
-                  </div>
-                ))}
-              </div>
-            )}
+        <div className="relative w-fit min-w-[120px]" ref={dateMenuRef}>
+          <div
+            style={{ borderRadius: "14px" }}
+            onClick={() => setShowDateMenu(!showDateMenu)}
+            className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
+          >
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            <span className="text-foreground transition-colors duration-300">
+              {days === 7 ? "Week" : days === 30 ? "Month" : days === 90 ? "Quarter" : "Year"}
+            </span>
+            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
           </div>
 
-          {/* Time Selector */}
-          <div className="relative w-fit min-w-[120px]">
+          {showDateMenu && (
             <div
               style={{ borderRadius: "14px" }}
-              onClick={() => setShowDateMenu(!showDateMenu)}
-              className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
+              className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
             >
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="text-foreground transition-colors duration-300">
-                {days === 7 ? "Week" : days === 30 ? "Month" : days === 90 ? "Quarter" : "Year"}
-              </span>
-              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
+              {[
+                { val: 7, label: "Week" },
+                { val: 30, label: "Month" },
+                { val: 90, label: "Quarter" },
+                { val: 365, label: "Year" }
+              ].map((opt) => (
+                <div
+                  key={opt.val}
+                  onClick={() => {
+                    setDays(opt.val);
+                    setShowDateMenu(false);
+                  }}
+                  className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${days === opt.val ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
+                >
+                  {opt.label}
+                  {days === opt.val && <Activity className="h-3.5 w-3.5" />}
+                </div>
+              ))}
             </div>
-
-            {showDateMenu && (
-              <div
-                style={{ borderRadius: "14px" }}
-                className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
-              >
-                {[
-                  { val: 7, label: "Week" },
-                  { val: 30, label: "Month" },
-                  { val: 90, label: "Quarter" },
-                  { val: 365, label: "Year" }
-                ].map((opt) => (
-                  <div
-                    key={opt.val}
-                    onClick={() => {
-                      setDays(opt.val);
-                      setShowDateMenu(false);
-                    }}
-                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${days === opt.val ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
-                  >
-                    {opt.label}
-                    {days === opt.val && <Activity className="h-3.5 w-3.5" />}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </PageHeader>
 
