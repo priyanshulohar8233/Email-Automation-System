@@ -41,9 +41,11 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: numbe
 };
 
 export const dashboardAPI = {
-    getStats: async (days?: number, signal?: AbortSignal): Promise<DashboardStats> => {
+    getStats: async (days?: number, campaign: string = "all", signal?: AbortSignal): Promise<DashboardStats> => {
         try {
-            const url = days ? `/api/dashboard/stats?days=${days}` : '/api/dashboard/stats';
+            let url = `/api/dashboard/stats?campaign=${encodeURIComponent(campaign)}`;
+            if (days) url += `&days=${days}`;
+            
             const response = await fetchWithTimeout(url, { 
                 signal,
                 cache: 'no-store'

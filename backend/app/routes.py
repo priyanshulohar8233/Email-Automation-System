@@ -208,11 +208,11 @@ def get_system_health(db: Session = Depends(get_db)):
     return services.get_system_health(db)
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
-def dashboard_stats(response: Response, days: int = 30):
+def dashboard_stats(response: Response, days: int = 30, campaign: str = "all"):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
-        debug.debug_log(f"Fetching dashboard stats for last {days} days")
-        data = services.get_dashboard_stats(days)
+        debug.debug_log(f"Fetching dashboard stats for last {days} days (campaign: {campaign})")
+        data = services.get_dashboard_stats(days, campaign_name=campaign)
         return data
     except Exception as e:
         debug.debug_log(f"ERROR in dashboard_stats: {str(e)}")

@@ -21,6 +21,7 @@ model Campaign {
   bounce_count    Int              @default(0)
   scheduled_for   String?
   created_at      DateTime         @default(now())
+  completed_at    DateTime?
   emails          Email[]
 
   @@map("campaigns")
