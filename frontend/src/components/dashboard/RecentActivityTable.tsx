@@ -14,14 +14,16 @@ import { dashboardAPI } from "@/services/dashboardAPI";
 
 interface RecentEvent {
   id: number;
-  email_id: number;
   recipient: string;
   recipient_name: string;
   company: string;
-  country: string;
-  event_type: string;
-  timestamp: string;
+  subject: string;
+  sender: string;
   location: string;
+  country: string;
+  latest_type: string;
+  latest_timestamp: string;
+  events: { type: string; timestamp: string }[];
 }
 
 function getBadgeStyles(event_type: string): string {
@@ -62,7 +64,7 @@ function formatTime(ts: string): string {
   }
 }
 
-export function RecentActivityTable({ days = 30 }: { days?: number }) {
+export function RecentActivityTable({ days = 30, company = "all" }: { days?: number, company?: string }) {
   const [events, setEvents] = useState<RecentEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -70,6 +72,7 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editValue, setEditValue] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [openStatusId, setOpenStatusId] = useState<number | null>(null);
 
   useEffect(() => {
     // Detect dark mode to apply direct style fixes
@@ -88,7 +91,7 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await dashboardAPI.getRecentEvents(days, signal);
+      const data = await dashboardAPI.getRecentEvents(days, company, signal);
       setEvents(data);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
@@ -104,7 +107,7 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
     const controller = new AbortController();
     fetchEvents(controller.signal);
     return () => controller.abort();
-  }, [days]);
+  }, [days, company]);
 
   const handleUpdateCompany = async (eventId: number, email: string) => {
     const trimmed = editValue.trim();
@@ -121,7 +124,6 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
       setEditingId(null);
     } catch (err) {
       console.error("Failed to update company:", err);
-      // Optional: Show error toast/notification
     } finally {
       setIsSaving(false);
     }
@@ -151,13 +153,13 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                   #
                 </TableHead>
                 <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">
-                  Recipient Name
+                  Recipient
+                </TableHead>
+                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">
+                  Sender
                 </TableHead>
                 <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">
                   Company
-                </TableHead>
-                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">
-                  Country
                 </TableHead>
                 <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0 text-center">
                   Status
@@ -169,7 +171,7 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
             </TableHeader>
             <TableBody>
               {events.map((ev, index) => (
-                <TableRow key={ev.id} className="group hover:bg-muted/50 transition-colors duration-200 border-b border-border/50">
+                <TableRow key={`${ev.id}-${index}`} className="group hover:bg-muted/50 transition-colors duration-200 border-b border-border/50">
                   <TableCell className="text-muted-foreground/60 font-medium px-6 py-4">
                     {index + 1}
                   </TableCell>
@@ -182,6 +184,11 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                         {ev.recipient}
                       </span>
                     </div>
+                  </TableCell>
+                  <TableCell className="px-4 py-4">
+                     <span className="text-xs text-muted-foreground font-medium italic">
+                        {ev.sender}
+                      </span>
                   </TableCell>
                   <TableCell className="px-4 py-4">
                     <div className="flex items-center min-h-[32px]">
@@ -207,14 +214,6 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                           >
                             <Check className={`h-4 w-4 ${isSaving ? 'animate-pulse' : ''}`} />
                           </button>
-                          <button 
-                            onClick={() => setEditingId(null)}
-                            disabled={isSaving}
-                            className="p-1 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors"
-                            title="Cancel"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 transition-all duration-300">
@@ -235,19 +234,29 @@ export function RecentActivityTable({ days = 30 }: { days?: number }) {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground text-xs px-4 py-4">
-                    {ev.country || "Unknown"}
-                  </TableCell>
-                  <TableCell className="text-center px-4 py-4">
+                  <TableCell className="text-center px-4 py-4 relative">
                     <div 
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-tight border ${getBadgeStyles(ev.event_type)}`}
-                      style={ev.event_type.toLowerCase() === 'sent' ? { color: isDarkMode ? '#ffffff' : '#64748b' } : {}}
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-tight border cursor-pointer hover:shadow-md transition-all ${getBadgeStyles(ev.latest_type)}`}
+                      onClick={() => setOpenStatusId(openStatusId === ev.id ? null : ev.id)}
                     >
-                      {ev.event_type}
+                      {ev.latest_type}
                     </div>
+                    {openStatusId === ev.id && (
+                      <div className="absolute top-12 left-1/2 -translate-x-1/2 w-48 bg-card border border-border shadow-xl rounded-xl z-50 p-3 animate-in fade-in zoom-in-95 duration-200">
+                         <h4 className="text-[10px] font-bold uppercase text-muted-foreground mb-2 border-b border-border pb-1">Event Timeline</h4>
+                         <div className="space-y-2">
+                            {ev.events.map((e, i) => (
+                              <div key={i} className="flex justify-between items-center gap-2">
+                                <Badge variant="outline" className={`text-[9px] px-1 h-4 ${getBadgeStyles(e.type)}`}>{e.type}</Badge>
+                                <span className="text-[10px] text-muted-foreground tabular-nums">{formatTime(e.timestamp)}</span>
+                              </div>
+                            ))}
+                         </div>
+                      </div>
+                    )}
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground text-xs px-6 py-4 tabular-nums font-medium">
-                    {formatTime(ev.timestamp)}
+                    {formatTime(ev.latest_timestamp)}
                   </TableCell>
                 </TableRow>
               ))}

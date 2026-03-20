@@ -18,6 +18,14 @@ export default function Dashboard() {
     const saved = localStorage.getItem("dashboard_days");
     return saved ? parseInt(saved) : 30;
   });
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
+  const [showCompanyMenu, setShowCompanyMenu] = useState(false);
+
+  const COMPANIES = [
+    "https://amakingcompany.com/",
+    "https://mpconsulting.com/",
+    "https://mpconsulting.com/mplumina"
+  ];
 
   useEffect(() => {
     localStorage.setItem("dashboard_days", days.toString());
@@ -44,7 +52,8 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
       }
-      const data = await dashboardAPI.getStats(days, "all", signal);
+      const companyParam = selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all";
+      const data = await dashboardAPI.getStats(days, "all", companyParam, signal);
       setStats(data);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -66,7 +75,7 @@ export default function Dashboard() {
       controller.abort();
       clearInterval(interval);
     };
-  }, [days]);
+  }, [days, selectedCompanies]);
 
   return (
     <div className="space-y-8">
@@ -75,44 +84,94 @@ export default function Dashboard() {
         title="Dashboard"
         subtitle="Overview of your email campaigns performance."
       >
-        <div className="relative w-fit min-w-[120px]" ref={dateMenuRef}>
-          <div
-            style={{ borderRadius: "14px" }}
-            onClick={() => setShowDateMenu(!showDateMenu)}
-            className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
-          >
-            <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-            <span className="text-foreground transition-colors duration-300">
-              {days === 7 ? "Week" : days === 30 ? "Month" : days === 90 ? "Quarter" : "Year"}
-            </span>
-            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
-          </div>
-
-          {showDateMenu && (
+        <div className="flex items-center gap-3">
+          {/* Date Filter */}
+          <div className="relative w-fit min-w-[120px]" ref={dateMenuRef}>
             <div
               style={{ borderRadius: "14px" }}
-              className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
+              onClick={() => setShowDateMenu(!showDateMenu)}
+              className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
             >
-              {[
-                { val: 7, label: "Week" },
-                { val: 30, label: "Month" },
-                { val: 90, label: "Quarter" },
-                { val: 365, label: "Year" }
-              ].map((opt) => (
-                <div
-                  key={opt.val}
-                  onClick={() => {
-                    setDays(opt.val);
-                    setShowDateMenu(false);
-                  }}
-                  className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${days === opt.val ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
-                >
-                  {opt.label}
-                  {days === opt.val && <Activity className="h-3.5 w-3.5" />}
-                </div>
-              ))}
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-foreground transition-colors duration-300">
+                {days === 7 ? "Week" : days === 30 ? "Month" : days === 90 ? "Quarter" : "Year"}
+              </span>
+              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
             </div>
-          )}
+
+            {showDateMenu && (
+              <div
+                style={{ borderRadius: "14px" }}
+                className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
+              >
+                {[
+                  { val: 7, label: "Week" },
+                  { val: 30, label: "Month" },
+                  { val: 90, label: "Quarter" },
+                  { val: 365, label: "Year" }
+                ].map((opt) => (
+                  <div
+                    key={opt.val}
+                    onClick={() => {
+                      setDays(opt.val);
+                      setShowDateMenu(false);
+                    }}
+                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${days === opt.val ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
+                  >
+                    {opt.label}
+                    {days === opt.val && <Activity className="h-3.5 w-3.5" />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Company Filter (Multi-select) */}
+          <div className="relative w-fit min-w-[150px]">
+            <div
+              style={{ borderRadius: "14px" }}
+              onClick={() => setShowCompanyMenu(!showCompanyMenu)}
+              className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showCompanyMenu ? 'border-emerald-500 ring-1 ring-emerald-500 shadow-sm' : 'border-border shadow-sm'}`}
+            >
+              <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-foreground transition-colors duration-300">
+                {selectedCompanies.length === 0 ? "All Companies" : selectedCompanies.length === 1 ? selectedCompanies[0].replace('https://', '') : `${selectedCompanies.length} Selected`}
+              </span>
+              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showCompanyMenu ? 'rotate-90' : 'rotate-0'}`} />
+            </div>
+
+            {showCompanyMenu && (
+              <div
+                style={{ borderRadius: "14px" }}
+                className="absolute right-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-[220px]"
+              >
+                {COMPANIES.map((company) => (
+                  <div
+                    key={company}
+                    onClick={() => {
+                      setSelectedCompanies(prev => 
+                        prev.includes(company) 
+                          ? prev.filter(c => c !== company) 
+                          : [...prev, company]
+                      );
+                    }}
+                    className={`px-4 py-2 text-xs font-semibold cursor-pointer transition-colors hover:bg-muted flex items-center justify-between gap-4 ${selectedCompanies.includes(company) ? 'text-emerald-500 bg-emerald-500/5' : 'text-muted-foreground'}`}
+                  >
+                    <span className="truncate">{company.replace('https://', '')}</span>
+                    {selectedCompanies.includes(company) && <Check className="h-3 w-3 text-emerald-500" />}
+                  </div>
+                ))}
+                {selectedCompanies.length > 0 && (
+                  <div 
+                    onClick={() => setSelectedCompanies([])}
+                    className="mt-1 border-t border-border px-4 py-2 text-[10px] text-center font-bold text-destructive hover:bg-destructive/10 cursor-pointer uppercase tracking-wider"
+                  >
+                    Clear Filter
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </PageHeader>
 
@@ -171,11 +230,11 @@ export default function Dashboard() {
       ) : null}
 
       {/* Charts Section */}
-      <DashboardCharts days={days} />
+      <DashboardCharts days={days} company={selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all"} />
 
       {/* Recent Activity */}
       <div className="grid gap-4">
-        <RecentActivityTable days={days} />
+        <RecentActivityTable days={days} company={selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all"} />
       </div>
     </div>
   );

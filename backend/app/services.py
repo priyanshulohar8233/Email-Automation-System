@@ -285,7 +285,7 @@ def process_webhook_event(db: Session, payload: dict):
         return log_event(db, int(email_id), event_type, url=url)
     return False
 
-def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all"):
+def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all"):
     """
     SaaS Grade Single Source of Truth for all metrics.
     Ensures calculations are identical across Dashboard and Analytics.
@@ -313,7 +313,21 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all")
         campaign_filter = db.query(Campaign.id).filter(Campaign.name == campaign_name).scalar_subquery()
         query_emails = query_emails.filter(Email.campaign_id == campaign_filter)
         query_events = query_events.join(Email).filter(Email.campaign_id == campaign_filter)
+
+    # 1.5. Company Filter (Join with Contact)
+    if company_name and company_name != "all":
+        from .models import Contact
+        companies = [company_name] if isinstance(company_name, str) else company_name
         
+        # We need to subquery/join to filter Email by recipient's company
+        query_emails = query_emails.join(Contact, Email.recipient_email == Contact.email).filter(Contact.company.in_(companies))
+        
+        # Fix: If query_events already joined Email, don't join again
+        if campaign_name != "all":
+             query_events = query_events.join(Contact, Email.recipient_email == Contact.email).filter(Contact.company.in_(companies))
+        else:
+             query_events = query_events.join(Email).join(Contact, Email.recipient_email == Contact.email).filter(Contact.company.in_(companies))
+             
     email_res = query_emails.first()
     event_res = query_events.first()
     
@@ -389,9 +403,9 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
     }
 
 
-def compute_stats(db: Session, days: int = 30, campaign_name: str = "all"):
+def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all"):
     # Unified Source of Truth
-    m = get_unified_metrics(db, days=days, campaign_name=campaign_name)
+    m = get_unified_metrics(db, days=days, campaign_name=campaign_name, company_name=company_name)
     
     # Active Campaigns
     active_camps = db.query(func.count(Campaign.id)).filter(
@@ -421,16 +435,16 @@ def compute_stats(db: Session, days: int = 30, campaign_name: str = "all"):
         }
     }
 
-def get_dashboard_stats(days: int = 30, campaign_name: str = "all"):
+def get_dashboard_stats(days: int = 30, campaign_name: str = "all", company_name: str | list = "all"):
     from .database import SessionLocal
     db = SessionLocal()
     try:
-        return compute_stats(db, days, campaign_name)
+        return compute_stats(db, days, campaign_name, company_name)
     finally:
         db.close()
 
 
-def emails_over_time(db: Session, days: int = 7):
+def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all"):
     from datetime import datetime, timedelta, date
     import calendar
     from sqlalchemy import cast, Date
@@ -522,15 +536,22 @@ def emails_over_time(db: Session, days: int = 7):
                 "end": d + timedelta(days=1)
             })
 
+    from .models import Contact
     # Fetch aggregated counts by date
-    results = db.query(
+    query = db.query(
         cast(Email.sent_at, Date).label("d"),
         func.count(Email.id).label("c")
     ).filter(
         Email.sent_at >= start_date,
         Email.sent_at < end_date,
         Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
-    ).group_by(cast(Email.sent_at, Date)).all()
+    )
+
+    if company_name and company_name != "all":
+        companies = [company_name] if isinstance(company_name, str) else company_name
+        query = query.join(Contact, Email.recipient_email == Contact.email).filter(Contact.company.in_(companies))
+
+    results = query.group_by(cast(Email.sent_at, Date)).all()
     
     # Map results into buckets
     chart_data = []
@@ -550,7 +571,7 @@ def emails_over_time(db: Session, days: int = 7):
 
 
 
-def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: str = "all"):
+def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: str = "all", company_name: str | list = "all"):
     from datetime import datetime, timedelta
     from .models import Contact
     limit_date = datetime.utcnow() - timedelta(days=days)
@@ -564,8 +585,12 @@ def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: s
     
     if campaign_name != "all":
         query = query.join(Campaign).filter(Campaign.name == campaign_name)
+    
+    if company_name and company_name != "all":
+        companies = [company_name] if isinstance(company_name, str) else company_name
+        query = query.filter(Contact.company.in_(companies))
         
-    events = query.filter(EmailEvent.timestamp >= limit_date).order_by(EmailEvent.timestamp.desc()).limit(limit).all()
+    events = query.filter(EmailEvent.timestamp >= limit_date).order_by(EmailEvent.timestamp.desc()).all() # Fetch more for grouping
     
     PERSONAL_PROVIDERS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "aol.com"}
     
@@ -609,6 +634,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: s
             "event_type": ev_type,
             "type": ev_type,
             "subject": ev.email.subject or "No Subject",
+            "sender": "marketing@mailflow.app", # Fixed sender for now or campaign owner
             "timestamp": ev.timestamp.isoformat() if hasattr(ev.timestamp, "isoformat") else str(ev.timestamp),
             "location": loc,
             "country": ev.country or "Unknown",
@@ -620,7 +646,53 @@ def recent_events(db: Session, days: int = 30, limit: int = 15, campaign_name: s
                 "url": ev.url
             }
         })
-    return result
+    
+    # Grouping Logic: Merge entries for the same email + campaign
+    grouped = {}
+    for r in result:
+        key = f"{r['recipient']}-{r['subject']}" # Using subject as proxy for campaign if not available
+        if key not in grouped:
+            grouped[key] = {
+                "id": r["id"],
+                "recipient": r["recipient"],
+                "recipient_name": r["recipient_name"],
+                "company": r["company"],
+                "subject": r["subject"],
+                "sender": r["sender"],
+                "location": r["location"],
+                "country": r["country"],
+                "latest_type": r["type"],
+                "latest_timestamp": r["timestamp"],
+                "events": []
+            }
+        grouped[key]["events"].append({
+            "type": r["type"],
+            "timestamp": r["timestamp"]
+        })
+        # Update latest status
+        if r["timestamp"] > grouped[key]["latest_timestamp"]:
+             grouped[key]["latest_timestamp"] = r["timestamp"]
+             grouped[key]["latest_type"] = r["type"]
+
+    # Flatten and sort by latest activity
+    final_grouped = list(grouped.values())
+    final_grouped.sort(key=lambda x: x["latest_timestamp"], reverse=True)
+    
+    return final_grouped[:limit]
+
+def get_emails_per_company(db: Session, days: int = 30):
+    from .models import Contact, Email
+    from datetime import datetime, timedelta
+    limit_date = datetime.utcnow() - timedelta(days=days)
+    
+    results = db.query(
+        Contact.company,
+        func.count(Email.id).label("count")
+    ).join(Email, Contact.email == Email.recipient_email)\
+     .filter(Email.sent_at >= limit_date)\
+     .group_by(Contact.company).order_by(func.count(Email.id).desc()).all()
+    
+    return [{"name": r[0] or "Unknown", "value": r[1]} for r in results]
 
 
 def create_campaign(db: Session, data):

@@ -222,12 +222,18 @@ def get_realtime_analytics(response: Response, campaign: str = "all", limit: int
 def get_system_health(db: Session = Depends(get_db)):
     return services.get_system_health(db)
 
+@router.get("/analytics/emails-per-company")
+def get_emails_per_company(days: int = 30, db: Session = Depends(get_db)):
+    return services.get_emails_per_company(db, days)
+
 @router.get("/dashboard/stats", response_model=DashboardStats)
-def dashboard_stats(response: Response, days: int = 30, campaign: str = "all"):
+def dashboard_stats(response: Response, days: int = 30, campaign: str = "all", company: str | None = None):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
-        debug.debug_log(f"Fetching dashboard stats for last {days} days (campaign: {campaign})")
-        data = services.get_dashboard_stats(days, campaign_name=campaign)
+        # Handle comma-separated list of companies from frontend
+        company_list = company.split(",") if company and company != "all" else "all"
+        debug.debug_log(f"Fetching dashboard stats for last {days} days (campaign: {campaign}, company: {company_list})")
+        data = services.get_dashboard_stats(days, campaign_name=campaign, company_name=company_list)
         return data
     except Exception as e:
         debug.debug_log(f"ERROR in dashboard_stats: {str(e)}")
@@ -239,11 +245,12 @@ def dashboard_stats(response: Response, days: int = 30, campaign: str = "all"):
         )
 
 @router.get("/dashboard/email-stats")
-def get_email_stats(response: Response, days: int = 7, db: Session = Depends(get_db)):
+def get_email_stats(response: Response, days: int = 7, company: str | None = None, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
-        debug.debug_log(f"Fetching email stats for last {days} days")
-        data = services.emails_over_time(db, days)
+        company_list = company.split(",") if company and company != "all" else "all"
+        debug.debug_log(f"Fetching email stats for last {days} days (company: {company_list})")
+        data = services.emails_over_time(db, days, company_name=company_list)
         return data
     except Exception as e:
         debug.debug_log(f"ERROR in get_email_stats: {str(e)}")
@@ -255,11 +262,12 @@ def get_email_stats(response: Response, days: int = 7, db: Session = Depends(get
         )
 
 @router.get("/dashboard/recent-events")
-def get_recent_events(response: Response, days: int = 30, campaign: str = "all", db: Session = Depends(get_db)):
+def get_recent_events(response: Response, days: int = 30, campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
-        debug.debug_log(f"Fetching recent events: campaign={campaign}, days={days}")
-        return services.recent_events(db, days, campaign_name=campaign)
+        company_list = company.split(",") if company and company != "all" else "all"
+        debug.debug_log(f"Fetching recent events: campaign={campaign}, days={days}, company={company_list}")
+        return services.recent_events(db, days, campaign_name=campaign, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"ERROR in get_recent_events: {str(e)}")
         import traceback

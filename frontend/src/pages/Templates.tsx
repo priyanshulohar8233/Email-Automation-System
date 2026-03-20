@@ -22,7 +22,10 @@ import {
   Upload,
   Link,
   Sparkles,
-  Plus
+  Plus,
+  Layers,
+  Check,
+  Pencil
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 
@@ -219,53 +222,103 @@ export default function Templates() {
 
       {/* Builder Area */}
       <div className="flex flex-1 gap-6 overflow-hidden">
-        {/* Left Sidebar - Blocks */}
-        <Card className="w-[280px] flex flex-col overflow-y-auto border-border bg-card shadow-sm">
-          <div className="p-4 border-b border-border">
-            <h3 className="font-semibold text-foreground">Content Blocks</h3>
+        {/* Left Sidebar - Templates & Blocks */}
+        <Card className="w-[300px] flex flex-col overflow-y-auto border-border bg-card shadow-sm scrollbar-hide">
+          <div className="p-4 border-b border-border bg-muted/10">
+            <h3 className="font-bold text-foreground flex items-center gap-2">
+              <Layers className="h-4 w-4 text-indigo-500" />
+              Templates
+            </h3>
           </div>
-          <div className="p-4 grid grid-cols-2 gap-3">
-            <BlockButton
-              icon={Type}
-              label="Text"
-              active={activeInsertType === 'text'}
-              onClick={() => setActiveInsertType(activeInsertType === 'text' ? null : 'text')}
-            />
-            <BlockButton
-              icon={ImageIcon}
-              label="Image"
-              active={activeInsertType === 'image'}
-              onClick={() => setActiveInsertType(activeInsertType === 'image' ? null : 'image')}
-            />
-            <BlockButton
-              icon={Sparkles}
-              label="AI Media"
-              active={activeInsertType === 'imageContent'}
-              onClick={() => setActiveInsertType(activeInsertType === 'imageContent' ? null : 'imageContent')}
-            />
-            <BlockButton
-              icon={MousePointerClick}
-              label="Button"
-              active={activeInsertType === 'button'}
-              onClick={() => setActiveInsertType(activeInsertType === 'button' ? null : 'button')}
-            />
-            <BlockButton
-              icon={Minus}
-              label="Divider"
-              active={activeInsertType === 'divider'}
-              onClick={() => setActiveInsertType(activeInsertType === 'divider' ? null : 'divider')}
-            />
-            <BlockButton
-              icon={Paperclip}
-              label="Attach"
-              active={activeInsertType === 'attachment'}
-              onClick={() => setActiveInsertType(activeInsertType === 'attachment' ? null : 'attachment')}
-            />
-            <BlockButton icon={AlignLeft} label="Columns" onClick={() => addBlock("columns")} />
-            <BlockButton icon={ShareIcon} label="Social" onClick={() => addBlock("social")} />
+
+          {/* Default Section */}
+          <div className="p-5 border-b border-border">
+            <h4 className="text-[10px] font-bold uppercase text-muted-foreground mb-4 tracking-widest flex items-center gap-2">
+              <Check className="h-3 w-3 text-emerald-500" />
+              Default Templates
+            </h4>
+            <div className="space-y-2">
+              <button 
+                onClick={() => alert("Pre-built templates are being synthesized...")}
+                className="w-full flex items-center gap-3 p-3 rounded-xl border border-dashed border-border hover:border-indigo-500/50 hover:bg-indigo-500/[0.02] text-left transition-all group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+                   <Plus className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-foreground">Standard Layout</p>
+                  <p className="text-[10px] text-muted-foreground font-medium">Coming soon</p>
+                </div>
+              </button>
+            </div>
           </div>
+
+          {/* Custom Builder Section */}
+          <div className="p-5 border-b border-border">
+            <h4 className="text-[10px] font-bold uppercase text-muted-foreground mb-4 tracking-widest flex items-center gap-2">
+              <Pencil className="h-3 w-3 text-indigo-500" />
+              Custom Builder
+            </h4>
+            <div className="grid grid-cols-2 gap-3">
+              <BlockButton
+                icon={Type}
+                label="Text"
+                active={activeInsertType === 'text'}
+                onClick={() => setActiveInsertType(activeInsertType === 'text' ? null : 'text')}
+              />
+              <BlockButton
+                icon={ImageIcon}
+                label="Image"
+                active={activeInsertType === 'image'}
+                onClick={() => setActiveInsertType(activeInsertType === 'image' ? null : 'image')}
+              />
+              <BlockButton
+                icon={Sparkles}
+                label="AI Media"
+                active={activeInsertType === 'imageContent'}
+                onClick={() => setActiveInsertType(activeInsertType === 'imageContent' ? null : 'imageContent')}
+              />
+              <BlockButton
+                icon={MousePointerClick}
+                label="Button"
+                active={activeInsertType === 'button'}
+                onClick={() => setActiveInsertType(activeInsertType === 'button' ? null : 'button')}
+              />
+              <BlockButton
+                icon={Minus}
+                label="Divider"
+                active={activeInsertType === 'divider'}
+                onClick={() => setActiveInsertType(activeInsertType === 'divider' ? null : 'divider')}
+              />
+              <BlockButton
+                icon={Paperclip}
+                label="Attach"
+                active={activeInsertType === 'attachment'}
+                onClick={() => setActiveInsertType(activeInsertType === 'attachment' ? null : 'attachment')}
+              />
+              <BlockButton icon={AlignLeft} label="Columns" onClick={() => addBlock("columns")} />
+              <BlockButton icon={ShareIcon} label="Social" onClick={() => addBlock("social")} />
+            </div>
+          </div>
+
+          {/* AI Templates Section */}
+          <div className="p-5">
+            <h4 className="text-[10px] font-bold uppercase text-muted-foreground mb-4 tracking-widest flex items-center gap-2">
+              <Sparkles className="h-3 w-3 text-amber-500" />
+              AI Templates
+            </h4>
+            <Button 
+               variant="outline" 
+               className="w-full justify-start text-[11px] font-bold h-10 border-indigo-500/20 hover:bg-indigo-500/5 text-indigo-600 dark:text-indigo-400 rounded-xl"
+               onClick={() => alert("AI synthesis engine initializing...")}
+            >
+               <Sparkles className="w-3.5 h-3.5 mr-2 animate-pulse" />
+               Generate with AI
+            </Button>
+          </div>
+
           {activeInsertType && (
-            <div className="p-3 m-4 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl animate-pulse">
+            <div className="p-3 m-4 mt-2 bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 rounded-xl animate-pulse">
               <p className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase text-center">Click in body to insert {activeInsertType}</p>
             </div>
           )}

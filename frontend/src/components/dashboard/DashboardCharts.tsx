@@ -18,12 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 
-const COLOR_MAP: Record<string, string> = {
-  Opened: "#6366F1", // Indigo
-  Unread: "#10B981", // Emerald
-  Bounced: "#F59E0B", // Amber
-  "No Data": "#E2E8F0", // Slate
-};
+const COMPANY_COLORS = ["#6366F1", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4"];
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -50,7 +45,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export function DashboardCharts({ days = 30 }: { days?: number }) {
+export function DashboardCharts({ days = 30, company = "all" }: { days?: number, company?: string }) {
   const [lineData, setLineData] = useState<{ day: string; emails: number }[]>([]);
   const [pieData, setPieData] = useState<{ name: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,32 +57,25 @@ export function DashboardCharts({ days = 30 }: { days?: number }) {
 
     // Fetch both stats and email stats in parallel
     Promise.all([
-      dashboardAPI.getEmailStats(days),
-      dashboardAPI.getStats(days)
+      dashboardAPI.getEmailStats(days, company),
+      dashboardAPI.getStats(days, "all", company),
+      dashboardAPI.getEmailsPerCompany(days)
     ])
-      .then(([emailStats, stats]) => {
+      .then(([emailStats, stats, companyStats]) => {
         // Process email stats for line chart
         if (Array.isArray(emailStats)) {
           setLineData(emailStats);
         }
 
-        if (stats.raw) {
+        // Use emails per company for the donut chart
+        if (Array.isArray(companyStats) && companyStats.length > 0) {
+           setPieData(companyStats);
+        } else if (stats.raw) {
+          // Fallback to old status data if no company data yet
           setPieData([
             { name: "Opened", value: stats.raw.opened },
             { name: "Unread", value: stats.raw.unread },
             { name: "Bounced", value: stats.raw.bounced },
-          ]);
-        } else {
-          // Fallback to rate-based approximation if raw is missing
-          const total = stats.totalEmails || 0;
-          const opened = Math.round(total * (stats.openRate / 100));
-          const bounced = Math.round(total * (stats.bounceRate / 100));
-          const unread = Math.max(0, total - opened - bounced);
-
-          setPieData([
-            { name: "Opened", value: opened },
-            { name: "Unread", value: unread },
-            { name: "Bounced", value: bounced },
           ]);
         }
         setLoading(false);
@@ -97,16 +85,11 @@ export function DashboardCharts({ days = 30 }: { days?: number }) {
         setError("Failed to load chart data. Please check your connection and try again.");
         setLoading(false);
         setLineData([]);
-        setPieData([
-          { name: "Delivered", value: 0 },
-          { name: "Opened", value: 0 },
-          { name: "Unread", value: 0 },
-          { name: "Bounced", value: 0 },
-        ]);
+        setPieData([]);
       });
-  }, [days]);
+  }, [days, company]);
 
-  const hasData = pieData.some(d => d.value > 0);
+  const hasData = pieData.length > 0 && pieData.some(d => d.value > 0);
   const chartData = hasData ? pieData : [{ name: "No Data", value: 1 }];
 
   return (
@@ -215,7 +198,7 @@ export function DashboardCharts({ days = 30 }: { days?: number }) {
                     animationBegin={200}
                   >
                     {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLOR_MAP[entry.name] || "#CBD5E1"} />
+                      <Cell key={`cell-${index}`} fill={entry.name === "No Data" ? "#E2E8F0" : COMPANY_COLORS[index % COMPANY_COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -231,7 +214,7 @@ export function DashboardCharts({ days = 30 }: { days?: number }) {
                         <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4">
                           {payload?.map((entry: any, index: number) => (
                             <div key={`item-${index}`} className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: COLOR_MAP[entry.value] || entry.color }} />
+                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.value === "No Data" ? "#E2E8F0" : COMPANY_COLORS[index % COMPANY_COLORS.length] }} />
                               <span className="text-xs font-bold text-slate-600 dark:text-slate-400 capitalize">
                                 {entry.value}
                               </span>
