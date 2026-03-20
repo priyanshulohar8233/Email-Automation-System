@@ -16,20 +16,19 @@ import {
   Search,
   Filter,
   ChevronDown,
-  MoreHorizontal,
   Check,
   Mail,
   Users,
   MousePointer2,
   MessageSquare,
-  Settings,
   Play,
   Pause,
-  Edit,
+  Edit2,
   Trash2,
   AlertCircle,
   ShieldAlert,
-  RefreshCw
+  RefreshCw,
+  Layout
 } from "lucide-react";
 import { CreateCampaignModal } from "@/components/dashboard/CreateCampaignModal";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -38,24 +37,14 @@ interface Campaign {
   id: string;
   name: string;
   status: string;
-  sent: string;
-  delivered: string;
-  failed: string;
+  sent: number;
+  delivered: number;
+  failed: number;
   opens: string;
   unread: string;
   bounce: string;
   scheduled: string;
 }
-
-const statusStyles: Record<string, "secondary" | "warning" | "default" | "success"> = {
-  draft: "secondary",
-  queued: "warning",
-  scheduled: "warning",
-  running: "default",
-  completed: "success",
-  complete: "success",
-  "complete with errors": "warning",
-};
 
 export default function Campaigns() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -101,12 +90,13 @@ export default function Campaigns() {
       if (statusFilter && statusFilter !== "all") params.append("status", statusFilter);
 
       const response = await fetch(`/api/campaigns?${params.toString()}`);
+      const data = await response.json();
       
-      if (response.ok) {
-        const data = await response.json();
-        setCampaignsData(data);
+      if (response.ok && data.success) {
+        setCampaignsData(data.data || []);
       } else {
-        setError(`Server returned ${response.status}: ${response.statusText}`);
+        const errorMsg = data.error || `Server returned ${response.status}: ${response.statusText}`;
+        setError(errorMsg);
         if (response.status === 404) {
           setConnectionWarning(true);
         }
@@ -189,7 +179,8 @@ export default function Campaigns() {
     }
   }
 
-  async function handleDeleteCampaign(id: string) {
+  async function handleDeleteCampaign(id: string | null) {
+    if (!id) return;
     try {
       const response = await fetch(`/api/campaigns/${id}`, {
         method: "DELETE",
@@ -223,17 +214,15 @@ export default function Campaigns() {
         </Button>
       </PageHeader>
 
-      {
-        showCreateModal && (
-          <CreateCampaignModal
-            onClose={() => setShowCreateModal(false)}
-            onSuccess={() => {
-              setShowCreateModal(false);
-              fetchCampaigns(); // reload list
-            }}
-          />
-        )
-      }
+      {showCreateModal && (
+        <CreateCampaignModal
+          onClose={() => setShowCreateModal(false)}
+          onSuccess={() => {
+            setShowCreateModal(false);
+            fetchCampaigns();
+          }}
+        />
+      )}
 
       <Card>
         <CardHeader className="pb-4">
@@ -295,17 +284,17 @@ export default function Campaigns() {
         </CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <div className="w-12 h-12 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-              <p className="text-slate-400 animate-pulse">Loading campaigns...</p>
+            <div className="flex flex-col items-center justify-center py-24">
+              <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
+              <p className="text-slate-400 font-medium animate-pulse">Syncing campaigns...</p>
             </div>
           ) : error ? (
-            <div className="text-center py-16 bg-red-500/5 rounded-2xl border border-red-500/20">
-              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-8 h-8 text-red-500" />
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4 transition-transform hover:scale-110 duration-300">
+                <AlertCircle className="h-8 w-8 text-red-500" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-2">Sync Error</h3>
-              <p className="text-slate-400 max-w-sm mx-auto mb-6">
+              <p className="text-slate-200 font-bold text-lg mb-1">Sync Error</p>
+              <p className="text-slate-400 text-sm max-w-xs mb-6 px-4">
                 {error}
               </p>
               {connectionWarning && (
@@ -321,144 +310,107 @@ export default function Campaigns() {
                   </div>
                 </div>
               )}
-              <button 
+              <Button 
                 onClick={() => fetchCampaigns()}
-                className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl transition-colors inline-flex items-center gap-2"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6"
               >
-                <RefreshCw className="w-4 h-4" />
                 Retry Sync
-              </button>
+              </Button>
             </div>
           ) : filteredCampaigns.length > 0 ? (
-            <div className="bg-slate-900/50 rounded-2xl border border-slate-800 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b border-slate-800 bg-slate-800/50">
-                      <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Campaign</th>
-                      <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Status</th>
-                      <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Delivery stats</th>
-                      <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Engagement</th>
-                      <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Scheduled</th>
-                      <th className="px-6 py-4 text-xs font-semibold text-slate-400 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800/50">
-                    {filteredCampaigns.map((campaign) => {
-                      const isCompleted = ['complete', 'completed'].includes(campaign.status.toLowerCase());
-                      return (
-                        <tr 
-                          key={campaign.id}
-                          className="group hover:bg-slate-800/30 transition-colors cursor-pointer"
-                          onClick={() => setSelectedCampaign(campaign)}
+            <div className="overflow-hidden border border-border rounded-2xl shadow-sm">
+              <Table>
+                <TableHeader className="bg-muted/30">
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="w-12"></TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4">Campaign</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sent</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Delivered</TableHead>
+                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Bounced</TableHead>
+                    <TableHead className="text-right text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 pr-6">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredCampaigns.map((campaign) => (
+                    <TableRow key={campaign.id} className="border-border hover:bg-muted/30 transition-colors group">
+                      <TableCell className="py-4">
+                        <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500 font-bold text-xs group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300">
+                          {campaign.name.charAt(0).toUpperCase()}
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-bold text-slate-200 py-4">
+                        {campaign.name}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="outline" 
+                          className={`rounded-full px-3 py-0.5 text-[10px] font-bold border ${getStatusColor(campaign.status)}`}
                         >
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-110 transition-transform">
-                                <Mail className="w-5 h-5" />
-                              </div>
-                              <span className="font-medium text-slate-200 group-hover:text-white transition-colors">
-                                {campaign.name}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(campaign.status)}`}>
-                              {campaign.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="space-y-2">
-                              <div className="flex justify-between text-xs text-slate-400">
-                                <span>Delivered</span>
-                                <span className="text-slate-300 font-medium">
-                                  {campaign.delivered} / {campaign.sent}
-                                </span>
-                              </div>
-                              <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                <div 
-                                  className="h-full bg-blue-500 rounded-full"
-                                  style={{ 
-                                    width: `${campaign.sent > 0 ? (campaign.delivered / campaign.sent) * 100 : 0}%` 
-                                  }}
-                                />
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-4">
-                              <div className="flex items-center gap-1.5 text-slate-400 hover:text-emerald-400 transition-colors">
-                                <MousePointer2 className="w-4 h-4" />
-                                <span className="text-sm font-medium">{campaign.opens}</span>
-                              </div>
-                              <div className="flex items-center gap-1.5 text-slate-400 hover:text-orange-400 transition-colors">
-                                <MessageSquare className="w-4 h-4" />
-                                <span className="text-sm font-medium">{campaign.unread}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-sm text-slate-400">
-                            {campaign.scheduled}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="flex justify-end gap-2">
-                              <button 
-                                disabled={isCompleted}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleCampaign(campaign.id);
-                                }}
-                                className={`p-2 rounded-lg transition-all ${isCompleted ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-700 text-slate-400 hover:text-white'}`}
-                              >
-                                {campaign.status.toLowerCase() === 'running' ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                              </button>
-                              <button 
-                                disabled={isCompleted}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEditCampaign(campaign);
-                                }}
-                                className={`p-2 rounded-lg transition-all ${isCompleted ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-700 text-slate-400 hover:text-white'}`}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setCampaignToDelete(campaign.id);
-                                  setShowDeleteConfirm(true);
-                                }}
-                                className="p-2 hover:bg-red-500/10 rounded-lg text-slate-400 hover:text-red-400 transition-all"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                          {campaign.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs font-medium text-slate-400">
+                        {campaign.sent}
+                      </TableCell>
+                      <TableCell className="text-xs font-medium text-slate-400">
+                        {campaign.delivered}
+                      </TableCell>
+                      <TableCell className="text-xs font-medium text-slate-400">
+                        {campaign.bounce}
+                      </TableCell>
+                      <TableCell className="text-right py-4 pr-6">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleToggleCampaign(campaign.id)}
+                            className="p-2 text-muted-foreground hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all"
+                            title={campaign.status.toLowerCase() === 'running' ? 'Pause' : 'Start'}
+                          >
+                            {campaign.status.toLowerCase() === 'running' ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                          </button>
+                          <button
+                            onClick={() => handleEditCampaign(campaign)}
+                            className="p-2 text-muted-foreground hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all"
+                            title="Edit"
+                          >
+                            <Edit2 className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                             onClick={() => {
+                              setCampaignToDelete(campaign.id);
+                              setShowDeleteConfirm(true);
+                            }}
+                            className="p-2 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           ) : (
-            <div className="text-center py-20 bg-slate-900/50 rounded-2xl border border-dashed border-slate-700">
-              <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Users className="w-8 h-8 text-blue-400" />
+            <div className="flex flex-col items-center justify-center py-20 text-center bg-card/50 rounded-2xl border border-dashed border-border/50">
+              <div className="w-16 h-16 bg-slate-500/10 rounded-full flex items-center justify-center mb-4 text-slate-500">
+                <Layout className="h-8 w-8" />
               </div>
-              <h3 className="text-xl font-semibold text-white mb-2">No campaigns found</h3>
-              <p className="text-slate-400 max-w-xs mx-auto mb-6">
-                {statusFilter === 'all' 
-                  ? "You haven't created any campaigns yet. Start your first outreach today!"
-                  : `No campaigns with status "${statusFilter}" found.`}
+              <p className="text-slate-200 font-bold text-lg mb-1">No Campaigns Found</p>
+              <p className="text-slate-500 text-sm max-w-xs mb-6 px-4">
+                {searchTerm || statusFilter !== "all" 
+                  ? "No results matching your filters. Try adjusting your search." 
+                  : "You haven't created any campaigns yet. Start by creating a new outreach campaign."}
               </p>
-              <button 
-                onClick={() => setShowCreateModal(true)}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl transition-all hover:scale-105 hover:shadow-lg hover:shadow-blue-500/25 inline-flex items-center gap-2"
-              >
-                <Plus className="w-5 h-5" />
-                Create Campaign
-              </button>
+              {!searchTerm && statusFilter === "all" && (
+                <Button 
+                  onClick={() => setShowCreateModal(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-6"
+                >
+                  Create Your First Campaign
+                </Button>
+              )}
             </div>
           )}
         </CardContent>
@@ -467,35 +419,36 @@ export default function Campaigns() {
       {/* Edit Campaign Modal */}
       {showEditModal && selectedCampaign && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md bg-slate-900 border-slate-800 shadow-2xl">
+          <Card className="w-full max-w-md bg-card border-border shadow-2xl">
             <CardHeader>
-              <CardTitle className="text-xl font-bold text-white">Edit Campaign</CardTitle>
+              <CardTitle className="text-xl font-bold text-foreground">Edit Campaign</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 pt-4">
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Campaign Name</label>
-                <input
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 block">Campaign Name</label>
+                <Input
                   value={selectedCampaign.name}
                   onChange={(e) => setSelectedCampaign({ ...selectedCampaign, name: e.target.value })}
-                  className="w-full bg-slate-800 border-slate-700 rounded-xl px-4 py-2.5 text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                  className="w-full bg-muted border-border rounded-xl px-4 py-2.5 text-foreground focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                 />
               </div>
               <div className="flex gap-3 justify-end mt-8">
-                <button
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     setShowEditModal(false);
                     setSelectedCampaign(null);
                   }}
-                  className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                  className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Cancel
-                </button>
-                <button
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/20"
+                </Button>
+                <Button
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-xl font-medium transition-all shadow-lg"
                   onClick={handleSaveEdit}
                 >
                   Save Changes
-                </button>
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -505,7 +458,7 @@ export default function Campaigns() {
       {/* Delete Confirmation Dialog */}
       {showDeleteConfirm && campaignToDelete && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-md bg-slate-900 border-red-500/20 shadow-2xl">
+          <Card className="w-full max-w-md bg-card border-red-500/20 shadow-2xl">
             <CardHeader>
               <CardTitle className="text-xl font-bold text-red-500">Delete Campaign</CardTitle>
             </CardHeader>
@@ -517,21 +470,22 @@ export default function Campaigns() {
                 Are you sure you want to delete this campaign? This action cannot be undone.
               </p>
               <div className="flex gap-3 justify-center mt-8">
-                <button
+                <Button
+                  variant="ghost"
                   onClick={() => {
                     setShowDeleteConfirm(false);
                     setCampaignToDelete(null);
                   }}
-                  className="px-4 py-2 text-slate-400 hover:text-white transition-colors"
+                  className="px-4 py-2 text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Cancel
-                </button>
-                <button
-                  className="bg-red-600 hover:bg-red-500 text-white px-8 py-2 rounded-xl font-medium transition-all shadow-lg shadow-red-500/20"
+                </Button>
+                <Button
+                  className="bg-red-600 hover:bg-red-700 text-white px-8 py-2 rounded-xl font-medium transition-all shadow-lg"
                   onClick={() => handleDeleteCampaign(campaignToDelete)}
                 >
                   Delete Permanently
-                </button>
+                </Button>
               </div>
             </CardContent>
           </Card>
