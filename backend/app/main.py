@@ -72,6 +72,17 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": str(exc), "traceback": traceback.format_exc()},
     )
 
+@app.get("/health")
+def health_check():
+    from datetime import datetime
+    return {
+        "status": "ok", 
+        "service": "email-automation-api",
+        "timestamp": str(datetime.now()),
+        "version": "2.0.1",
+        "db_connected": True
+    }
+
 @app.get("/")
 def read_root():
     return {"status": "ok", "service": "email-automation-api"}
