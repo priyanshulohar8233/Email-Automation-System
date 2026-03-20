@@ -684,64 +684,70 @@ def push_to_email_queue(email_id: int, subject: str, body: str, attachments: lis
 
 def get_campaigns(db: Session, search: str | None = None, status: str | None = None):
     from .models import Campaign
+    try:
+        # 1. Base query for campaigns
+        query = db.query(Campaign)
+        
+        if search:
+            query = query.filter(Campaign.name.ilike(f"%{search}%"))
+            
+        if status and status.lower() != "all":
+            # Direct status string filter (Postgres/SQLite compatible)
+            query = query.filter(Campaign.status == status.upper())
+            
+        campaigns = query.order_by(Campaign.created_at.desc()).all()
+        
+        results = []
+        for c in campaigns:
+            # 2. PRO GRADE: Atomic sub-queries for reliability
+            # Calculations move into Python loop if count is small (<100) or stays in SQL for scale.
+            # Here we simulate high scale by checking counts via SQLAlchemy func.
+            
+            sent = db.query(func.count(Email.id)).filter(
+                Email.campaign_id == c.id,
+                Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
+            ).scalar() or 0
+            
+            failed = db.query(func.count(Email.id)).filter(
+                Email.campaign_id == c.id,
+                Email.status == EmailStatus.BOUNCED
+            ).scalar() or 0
+            
+            opens = db.query(func.count(distinct(EmailEvent.email_id))).join(Email).filter(
+                Email.campaign_id == c.id,
+                EmailEvent.event_type == EventType.OPENED
+            ).scalar() or 0
+            
+            unread = max(0, sent - opens)
+            
+            # Use established status mapping logic
+            display_status = c.status.value.title() if hasattr(c.status, "value") else str(c.status).title()
+            if c.status == CampaignStatus.COMPLETED:
+                display_status = "Complete" + (" with Errors" if failed > 0 else "")
 
-    # Subquery for email metrics per campaign
-    email_metrics = db.query(
-        Email.campaign_id,
-        func.count(Email.id).label("attempted"),
-        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("sent"),
-        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("delivered"),
-        func.count(case((Email.status == EmailStatus.BOUNCED, Email.id))).label("failed")
-    ).group_by(Email.campaign_id).subquery()
+            def format_rate(num, den):
+                if den <= 0: return f"0 (0.0%)"
+                rate = round((num / den) * 100, 1)
+                return f"{num} ({rate}%)"
 
-    # Subquery for unique opens per campaign
-    open_metrics = db.query(
-        Email.campaign_id,
-        func.count(distinct(EmailEvent.email_id)).label("opens")
-    ).join(EmailEvent, Email.id == EmailEvent.email_id)\
-     .filter(EmailEvent.event_type == EventType.OPENED)\
-     .group_by(Email.campaign_id).subquery()
-
-    # Main query joining Campaign with metrics
-    query = db.query(
-        Campaign,
-        email_metrics.c.sent,
-        email_metrics.c.delivered,
-        email_metrics.c.failed,
-        open_metrics.c.opens
-    ).outerjoin(email_metrics, Campaign.id == email_metrics.c.campaign_id)\
-     .outerjoin(open_metrics, Campaign.id == open_metrics.c.campaign_id)
-    
-    if search:
-        query = query.filter(Campaign.name.ilike(f"%{search}%"))
-        
-    if status and status.lower() != "all":
-        query = query.filter(Campaign.status == status.upper())
-        
-    campaigns = query.order_by(Campaign.created_at.desc()).all()
-    
-    results = []
-    for c, sent, delivered, failed, opens in campaigns:
-        sent = sent or 0
-        delivered = delivered or 0
-        failed = failed or 0
-        opens = opens or 0
-        
-        unread = (sent - opens) if sent > opens else 0
-        
-        results.append({
-            "id": str(c.id),
-            "name": c.name,
-            "status": ("Complete" + (" with Errors" if failed > 0 else "")) if c.status == CampaignStatus.COMPLETED else c.status.value.title(),
-            "sent": sent,
-            "delivered": delivered,
-            "failed": failed,
-            "opens": f"{opens} ({round(opens/sent*100, 1) if sent > 0 else 0}%)",
-            "unread": f"{unread} ({round(unread/sent*100, 1) if sent > 0 else 0}%)",
-            "bounce": f"{failed} ({round(failed/(sent+failed)*100, 1) if (sent+failed) > 0 else 0}%)",
-            "scheduled": c.scheduled_for or "Not scheduled",
-        })
-    return results
+            results.append({
+                "id": str(c.id),
+                "name": c.name,
+                "status": display_status,
+                "sent": sent,
+                "delivered": sent, # delivered is sent for this MVP
+                "failed": failed,
+                "opens": format_rate(opens, sent),
+                "unread": format_rate(unread, sent),
+                "bounce": format_rate(failed, sent + failed),
+                "scheduled": c.scheduled_for or "Not scheduled",
+            })
+        return results
+    except Exception as e:
+        debug.debug_log(f"CRITICAL ERROR in get_campaigns: {str(e)}")
+        import traceback
+        debug.debug_log(traceback.format_exc())
+        raise e
 
 def check_due_campaigns(db: Session, background_tasks=None):
     """

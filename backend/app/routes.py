@@ -88,7 +88,22 @@ def trigger_due_campaigns(background_tasks: BackgroundTasks, db: Session = Depen
 
 @router.get("/campaigns")
 def get_campaigns(search: str | None = None, status: str | None = None, db: Session = Depends(get_db)):
-    return services.get_campaigns(db, search=search, status=status)
+    try:
+        data = services.get_campaigns(db, search=search, status=status)
+        return {
+            "success": True,
+            "data": data
+        }
+    except Exception as e:
+        debug.debug_log(f"ERROR in get_campaigns route: {str(e)}")
+        return JSONResponse(
+            status_code=200, # Per requirement to prevent 500
+            content={
+                "success": False,
+                "error": str(e),
+                "data": []
+            }
+        )
 
 @router.post("/campaigns")
 def create_campaign(req: CampaignCreate, db: Session = Depends(get_db)):
