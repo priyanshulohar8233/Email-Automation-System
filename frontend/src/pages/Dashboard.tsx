@@ -166,16 +166,11 @@ export default function Dashboard() {
                           : [...prev, company]
                       );
                     }}
-                    className={`px-4 py-3 cursor-pointer transition-colors hover:bg-muted flex items-center justify-between gap-4 ${selectedCompanies.includes(company) ? 'bg-emerald-500/5' : ''}`}
+                    className={`px-4 py-2.5 cursor-pointer transition-colors hover:bg-muted flex items-center justify-between gap-4 ${selectedCompanies.includes(company) ? 'bg-emerald-500/5' : ''}`}
                   >
-                    <div className="flex flex-col min-w-0">
-                      <span className={`text-sm font-semibold truncate ${selectedCompanies.includes(company) ? 'text-emerald-500' : 'text-foreground'}`}>
-                        {formatCompanyName(company)}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">
-                        {company.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '')}
-                      </span>
-                    </div>
+                    <span className={`text-sm font-semibold truncate ${selectedCompanies.includes(company) ? 'text-emerald-500' : 'text-foreground'}`}>
+                      {formatCompanyName(company)}
+                    </span>
                     {selectedCompanies.includes(company) && <Check className="h-4 w-4 text-emerald-500 shrink-0" />}
                   </div>
                 ))}
