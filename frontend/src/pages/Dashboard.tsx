@@ -27,6 +27,17 @@ export default function Dashboard() {
     "https://mpconsulting.com/mplumina"
   ];
 
+  const formatCompanyName = (url: string) => {
+    let domain = url.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
+    if (domain === "amakingcompany.com") return "A Making Company";
+    if (domain === "mpconsulting.com") return "MP Consulting";
+    if (domain === "mpconsulting.com/mplumina") return "MP Lumina";
+    
+    // Fallback logic for dynamic names
+    let namePart = domain.split(/[./-]/)[0];
+    return namePart.charAt(0).toUpperCase() + namePart.slice(1);
+  };
+
   useEffect(() => {
     localStorage.setItem("dashboard_days", days.toString());
   }, [days]);
@@ -135,7 +146,7 @@ export default function Dashboard() {
             >
               <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <span className="text-foreground transition-colors duration-300">
-                {selectedCompanies.length === 0 ? "All Companies" : selectedCompanies.length === 1 ? selectedCompanies[0].replace('https://', '') : `${selectedCompanies.length} Selected`}
+                {selectedCompanies.length === 0 ? "All Companies" : selectedCompanies.length === 1 ? formatCompanyName(selectedCompanies[0]) : `${selectedCompanies.length} Selected`}
               </span>
               <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showCompanyMenu ? 'rotate-90' : 'rotate-0'}`} />
             </div>
@@ -155,14 +166,21 @@ export default function Dashboard() {
                           : [...prev, company]
                       );
                     }}
-                    className={`px-4 py-2 text-xs font-semibold cursor-pointer transition-colors hover:bg-muted flex items-center justify-between gap-4 ${selectedCompanies.includes(company) ? 'text-emerald-500 bg-emerald-500/5' : 'text-muted-foreground'}`}
+                    className={`px-4 py-3 cursor-pointer transition-colors hover:bg-muted flex items-center justify-between gap-4 ${selectedCompanies.includes(company) ? 'bg-emerald-500/5' : ''}`}
                   >
-                    <span className="truncate">{company.replace('https://', '')}</span>
-                    {selectedCompanies.includes(company) && <Check className="h-3 w-3 text-emerald-500" />}
+                    <div className="flex flex-col min-w-0">
+                      <span className={`text-sm font-semibold truncate ${selectedCompanies.includes(company) ? 'text-emerald-500' : 'text-foreground'}`}>
+                        {formatCompanyName(company)}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                        {company.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '')}
+                      </span>
+                    </div>
+                    {selectedCompanies.includes(company) && <Check className="h-4 w-4 text-emerald-500 shrink-0" />}
                   </div>
                 ))}
                 {selectedCompanies.length > 0 && (
-                  <div 
+                  <div
                     onClick={() => setSelectedCompanies([])}
                     className="mt-1 border-t border-border px-4 py-2 text-[10px] text-center font-bold text-destructive hover:bg-destructive/10 cursor-pointer uppercase tracking-wider"
                   >

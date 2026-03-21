@@ -45,6 +45,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
+const formatCompanyName = (url: string) => {
+  let domain = url.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
+  if (domain === "amakingcompany.com") return "A Making Company";
+  if (domain === "mpconsulting.com") return "MP Consulting";
+  if (domain === "mpconsulting.com/mplumina") return "MP Lumina";
+  
+  // Fallback logic for dynamic names
+  let namePart = domain.split(/[./-]/)[0];
+  return namePart.charAt(0).toUpperCase() + namePart.slice(1);
+};
+
 export function DashboardCharts({ days = 30, company = "all" }: { days?: number, company?: string }) {
   const [lineData, setLineData] = useState<{ day: string; emails: number }[]>([]);
   const [pieData, setPieData] = useState<{ name: string; value: number }[]>([]);
@@ -69,7 +80,11 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
 
         // Use emails per company for the donut chart
         if (Array.isArray(companyStats) && companyStats.length > 0) {
-           setPieData(companyStats);
+           const formattedStats = companyStats.map(stat => ({
+             ...stat,
+             name: formatCompanyName(stat.name)
+           }));
+           setPieData(formattedStats);
         } else if (stats.raw) {
           // Fallback to old status data if no company data yet
           setPieData([
