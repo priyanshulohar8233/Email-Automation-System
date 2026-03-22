@@ -18,7 +18,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 
-const COMPANY_COLORS = ["#6366F1", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4"];
+const COMPANY_COLORS: Record<string, string> = {
+  "MP Consultant LLC": "#2563EB", // Blue brand color
+  "MP Lumina": "#06B6D4",         // Cyan brand color
+  "A Making Company": "#8B5CF6",  // Violet/Pink brand color
+};
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
@@ -45,15 +49,23 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-const formatCompanyName = (url: string) => {
-  let domain = url.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
-  if (domain === "amakingcompany.com") return "A Making Company";
-  if (domain === "mpconsulting.com") return "MP Consulting";
-  if (domain === "mpconsulting.com/mplumina") return "MP Lumina";
-  
-  // Fallback logic for dynamic names
-  let namePart = domain.split(/[./-]/)[0];
-  return namePart.charAt(0).toUpperCase() + namePart.slice(1);
+const PieTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    if (data.name === "No Data") return null;
+    return (
+      <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 p-3 rounded-xl shadow-xl ring-1 ring-white/10">
+        <p className="text-sm font-semibold text-white flex items-center gap-2 m-0">
+          <span 
+            className="w-2.5 h-2.5 rounded-full" 
+            style={{ backgroundColor: COMPANY_COLORS[data.name] || "#6366F1" }}
+          />
+          {data.name} - {data.value} Emails
+        </p>
+      </div>
+    );
+  }
+  return null;
 };
 
 export function DashboardCharts({ days = 30, company = "all" }: { days?: number, company?: string }) {
@@ -80,9 +92,9 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
 
         // Use emails per company for the donut chart
         if (Array.isArray(companyStats) && companyStats.length > 0) {
-           const formattedStats = companyStats.map(stat => ({
-             ...stat,
-             name: formatCompanyName(stat.name)
+           const formattedStats = companyStats.map((stat: any) => ({
+             name: stat.company,
+             value: stat.emails_sent
            }));
            setPieData(formattedStats);
         } else if (stats.raw) {
@@ -213,33 +225,40 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     animationBegin={200}
                   >
                     {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.name === "No Data" ? "#E2E8F0" : COMPANY_COLORS[index % COMPANY_COLORS.length]} />
+                      <Cell key={`cell-${index}`} fill={entry.name === "No Data" ? "#E2E8F0" : (COMPANY_COLORS[entry.name] || "#6366F1")} />
                     ))}
                   </Pie>
                   <Tooltip
-                    contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0' }}
+                    content={<PieTooltip />}
+                    cursor={{ fill: 'transparent' }}
                   />
                   <Legend
                     verticalAlign="bottom"
                     align="center"
                     iconType="square"
+                    wrapperStyle={{ paddingTop: "20px" }}
                     content={(props) => {
                       const { payload } = props;
                       return (
-                        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-4">
-                          {payload?.map((entry: any, index: number) => (
-                            <div key={`item-${index}`} className="flex items-center gap-2">
-                              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.value === "No Data" ? "#E2E8F0" : COMPANY_COLORS[index % COMPANY_COLORS.length] }} />
-                              <span className="text-xs font-bold text-slate-600 dark:text-slate-400 capitalize">
-                                {entry.value}
-                              </span>
-                              {pieData.some(d => d.value > 0) && entry.value !== "No Data" && (
-                                <span className="text-[10px] text-slate-400 font-mono">
-                                  ({pieData.find(d => d.name === entry.value)?.value || 0})
+                        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
+                          {payload?.map((entry: any, index: number) => {
+                            const name = entry.value;
+                            const value = entry.payload.value;
+                            const color = name === "No Data" ? "#E2E8F0" : (COMPANY_COLORS[name] || "#6366F1");
+                            return (
+                              <div key={`item-${index}`} className="flex items-center gap-2">
+                                <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
+                                <span className="text-xs font-bold text-slate-600 dark:text-slate-400 capitalize">
+                                  {name}
                                 </span>
-                              )}
-                            </div>
-                          ))}
+                                {pieData.some(d => d.value > 0) && name !== "No Data" && (
+                                  <span className="text-xs text-slate-500 font-medium ml-1">
+                                    {value} {value === 1 ? 'Email' : 'Emails'}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       );
                     }}

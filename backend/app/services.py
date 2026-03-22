@@ -690,9 +690,31 @@ def get_emails_per_company(db: Session, days: int = 30):
         func.count(Email.id).label("count")
     ).join(Email, Contact.email == Email.recipient_email)\
      .filter(Email.sent_at >= limit_date)\
-     .group_by(Contact.company).order_by(func.count(Email.id).desc()).all()
+     .group_by(Contact.company).all()
     
-    return [{"name": r[0] or "Unknown", "value": r[1]} for r in results]
+    counts = {
+        "MP Consultant LLC": 0,
+        "MP Lumina": 0,
+        "A Making Company": 0
+    }
+    
+    for row in results:
+        raw_company = (row[0] or "").lower()
+        if "mplumina" in raw_company:
+            counts["MP Lumina"] += row[1]
+        elif "mpconsulting" in raw_company:
+            counts["MP Consultant LLC"] += row[1]
+        elif "amakingcompany" in raw_company:
+            counts["A Making Company"] += row[1]
+            
+    return {
+        "success": True,
+        "data": [
+            {"company": "MP Consultant LLC", "emails_sent": counts["MP Consultant LLC"]},
+            {"company": "MP Lumina", "emails_sent": counts["MP Lumina"]},
+            {"company": "A Making Company", "emails_sent": counts["A Making Company"]}
+        ]
+    }
 
 
 def create_campaign(db: Session, data):

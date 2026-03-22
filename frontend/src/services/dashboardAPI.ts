@@ -108,7 +108,8 @@ export const dashboardAPI = {
         if (!response.ok) {
             throw new Error(`Error fetching emails per company: ${response.status} ${response.statusText}`);
         }
-        return await response.json();
+        const json = await response.json();
+        return json.success ? json.data : [];
     },
     updateCompany: async (email: string, company: string): Promise<any> => {
         const response = await fetch('/api/contacts/company', {
