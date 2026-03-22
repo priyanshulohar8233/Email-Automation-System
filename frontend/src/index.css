@@ -54,5 +54,11 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased transition-colors duration-300;
+    cursor: url('/cursor-default.svg') 4 4, auto;
+  }
+
+  /* Custom Global Pointer Cursor */
+  a, button, [role="button"], input[type="submit"], input[type="button"], input[type="reset"], .cursor-pointer {
+    cursor: url('/cursor-pointer.svg') 13 2, pointer !important;
   }
 }
