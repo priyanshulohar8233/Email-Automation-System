@@ -19,9 +19,9 @@ import { RefreshCcw } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 
 const COMPANY_COLORS: Record<string, string> = {
-  "MP Consultant LLC": "#2563EB", // Blue brand color
-  "MP Lumina": "#06B6D4",         // Cyan brand color
-  "A Making Company": "#8B5CF6",  // Violet/Pink brand color
+  "MP Consultant LLC": "#FFC107", // Yellow
+  "MP Lumina": "#7B61FF",         // Purple
+  "A Making Company": "#FF4D4F",  // Red
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -40,7 +40,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
             <span className="text-xs font-medium text-slate-400">emails sent</span>
           </div>
           <div className="h-0.5 w-full bg-slate-800 rounded-full overflow-hidden">
-             <div className="h-full bg-indigo-500 w-full opacity-50" />
+            <div className="h-full bg-indigo-500 w-full opacity-50" />
           </div>
         </div>
       </div>
@@ -56,8 +56,8 @@ const PieTooltip = ({ active, payload }: any) => {
     return (
       <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 p-3 rounded-xl shadow-xl ring-1 ring-white/10">
         <p className="text-sm font-semibold text-white flex items-center gap-2 m-0">
-          <span 
-            className="w-2.5 h-2.5 rounded-full" 
+          <span
+            className="w-2.5 h-2.5 rounded-full"
             style={{ backgroundColor: COMPANY_COLORS[data.name] || "#6366F1" }}
           />
           {data.name} - {data.value} Emails
@@ -73,6 +73,17 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
   const [pieData, setPieData] = useState<{ name: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    };
+    checkTheme();
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -92,11 +103,11 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
 
         // Use emails per company for the donut chart
         if (Array.isArray(companyStats) && companyStats.length > 0) {
-           const formattedStats = companyStats.map((stat: any) => ({
-             name: stat.company,
-             value: stat.emails_sent
-           }));
-           setPieData(formattedStats);
+          const formattedStats = companyStats.map((stat: any) => ({
+            name: stat.company,
+            value: stat.emails_sent
+          }));
+          setPieData(formattedStats);
         } else if (stats.raw) {
           // Fallback to old status data if no company data yet
           setPieData([
@@ -124,8 +135,8 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
       <Card className="col-span-12 lg:col-span-8 border-indigo-500/10 shadow-xl shadow-indigo-500/5">
         <CardHeader className="pb-2">
           <CardTitle className="text-lg font-bold flex items-center gap-2">
-             <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
-             Emails Sent Over Time
+            <div className="w-1.5 h-6 bg-indigo-500 rounded-full" />
+            Emails Sent Over Time
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -155,21 +166,17 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                   <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="hsl(var(--border))" opacity={0.3} />
                   <XAxis
                     dataKey="day"
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={11}
-                    fontWeight={600}
+                    tick={{ fill: isDark ? "#E5E7EB" : "#111827", fontSize: 11, fontWeight: 600 }}
                     tickLine={false}
                     axisLine={false}
                     dy={12}
                     interval={days === 365 ? 1 : 0}
                   />
                   <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={11}
-                    fontWeight={600}
+                    tick={{ fill: isDark ? "#E5E7EB" : "#111827", fontSize: 11, fontWeight: 600 }}
                     tickLine={false}
                     axisLine={false}
-                    tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(1)}k` : v}
+                    tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
                   />
                   <Tooltip
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4, radius: [8, 8, 0, 0] }}
