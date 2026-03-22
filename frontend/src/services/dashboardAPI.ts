@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 export interface DashboardStats {
     totalEmails: number;
     openRate: number;
@@ -40,10 +41,12 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: numbe
     return Promise.race([fetchPromise, timeoutPromise]);
 };
 
+const API_URL = import.meta.env.VITE_API_URL || '';
+
 export const dashboardAPI = {
     getStats: async (days?: number, campaign: string = "all", company?: string, signal?: AbortSignal): Promise<DashboardStats> => {
         try {
-            let url = `/api/dashboard/stats?campaign=${encodeURIComponent(campaign)}`;
+            let url = `${API_URL}/api/dashboard/stats?campaign=${encodeURIComponent(campaign)}`;
             if (days) url += `&days=${days}`;
             if (company && company !== "all") url += `&company=${encodeURIComponent(company)}`;
             
@@ -68,7 +71,7 @@ export const dashboardAPI = {
         }
     },
     getEmailStats: async (days?: number, company?: string, signal?: AbortSignal): Promise<any> => {
-        let url = days ? `/api/dashboard/email-stats?days=${days}` : '/api/dashboard/email-stats';
+        let url = days ? `${API_URL}/api/dashboard/email-stats?days=${days}` : `${API_URL}/api/dashboard/email-stats`;
         if (company && company !== "all") {
             url += (url.includes('?') ? '&' : '?') + `company=${encodeURIComponent(company)}`;
         }
@@ -84,7 +87,7 @@ export const dashboardAPI = {
         return await response.json();
     },
     getRecentEvents: async (days?: number, company?: string, signal?: AbortSignal): Promise<any[]> => {
-        let url = days ? `/api/dashboard/recent-events?days=${days}` : '/api/dashboard/recent-events';
+        let url = days ? `${API_URL}/api/dashboard/recent-events?days=${days}` : `${API_URL}/api/dashboard/recent-events`;
         if (company && company !== "all") {
             url += (url.includes('?') ? '&' : '?') + `company=${encodeURIComponent(company)}`;
         }
@@ -100,19 +103,25 @@ export const dashboardAPI = {
         return await response.json();
     },
     getEmailsPerCompany: async (days?: number, signal?: AbortSignal): Promise<any[]> => {
-        const url = `/api/analytics/emails-per-company?days=${days || 30}`;
-        const response = await fetchWithTimeout(url, { 
-            signal,
-            cache: 'no-store'
-        }, 10000);
-        if (!response.ok) {
-            throw new Error(`Error fetching emails per company: ${response.status} ${response.statusText}`);
+        const url = `${API_URL}/api/analytics/emails-per-company?days=${days || 30}`;
+        try {
+            const response = await fetchWithTimeout(url, { 
+                signal,
+                cache: 'no-store'
+            }, 10000);
+            if (!response.ok) {
+                console.error(`Error fetching emails per company: ${response.status} ${response.statusText}`);
+                return [];
+            }
+            const json = await response.json();
+            return json.success ? json.data : [];
+        } catch (error) {
+            console.error("Dashboard API Email Stats Error:", error);
+            return []; // Fallback to empty array to show "No Data" gracefully
         }
-        const json = await response.json();
-        return json.success ? json.data : [];
     },
     updateCompany: async (email: string, company: string): Promise<any> => {
-        const response = await fetch('/api/contacts/company', {
+        const response = await fetch(`${API_URL}/api/contacts/company`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
