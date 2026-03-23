@@ -115,6 +115,25 @@ def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_p
 
 # functions used by API
 
+def get_country_from_ip(ip: str):
+    """
+    Resolves IP to Country using ipapi.co (Free tier: 1000 requests/day).
+    """
+    if not ip or ip in ["127.0.0.1", "localhost", "::1"]:
+        return "Unknown"
+        
+    try:
+        # User requested ipapi.co
+        response = requests.get(f"https://ipapi.co/{ip}/json/", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            if not data.get("error"):
+                return data.get("country_name", "Unknown")
+        return "Unknown"
+    except Exception as e:
+        debug.debug_log(f"GEOLOCATION_ERROR for IP {ip}: {str(e)}")
+        return "Unknown"
+
 def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None, ua: str = None, url: str = None):
     from .models import Email, EmailEvent, Campaign, Suppression, SuppressionReason
     
@@ -131,6 +150,11 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
             
     debug.debug_log(f"TRACKING_FLOW: Received {event_type} for email {email_id}")
     
+    # SaaS Grade Geolocation
+    country = "Unknown"
+    if ip and ip not in ["127.0.0.1", "::1"]:
+        country = get_country_from_ip(ip)
+
     browser, os, device = "Unknown", "Unknown", "Desktop"
     if ua:
         ua_lower = ua.lower()
@@ -153,6 +177,7 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
             browser=browser,
             os=os,
             device=device,
+            country=country,
             timestamp=datetime.now(timezone.utc)
         )
         if url: ev.url = url
@@ -629,14 +654,13 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
             
         # Country deduction
         country = "Unknown"
-        if ev.country:
+        if ev.country and ev.country != "Unknown":
             country = ev.country
         elif domain:
             tld = domain.rsplit(".", 1)[-1] if "." in domain else ""
             if tld in TLD_COUNTRY_MAP:
                 country = TLD_COUNTRY_MAP[tld]
-            elif tld == "com":
-                country = "USA"
+            # Removed hardcoded .com -> USA guess to ensure real data priority
 
         ev_type = ev.event_type.value if hasattr(ev.event_type, 'value') else str(ev.event_type)
         if "EventType." in ev_type: ev_type = ev_type.split(".")[-1].lower()
