@@ -14,22 +14,23 @@ export function ThemeToggle() {
 
     const isFirstRender = useRef(true);
 
-    useEffect(() => {
-        if (isDarkMode) {
-            document.documentElement.classList.add("dark");
-            localStorage.setItem("theme", "dark");
-        } else {
-            document.documentElement.classList.remove("dark");
-            localStorage.setItem("theme", "light");
-        }
-    }, [isDarkMode]);
-
     const toggleTheme = (event: React.MouseEvent, dark: boolean) => {
         if (dark === isDarkMode) return;
 
+        const updateTheme = () => {
+            setIsDarkMode(dark);
+            if (dark) {
+                document.documentElement.classList.add("dark");
+                localStorage.setItem("theme", "dark");
+            } else {
+                document.documentElement.classList.remove("dark");
+                localStorage.setItem("theme", "light");
+            }
+        };
+
         // Check for View Transitions API support
         if (!(document as any).startViewTransition) {
-            setIsDarkMode(dark);
+            updateTheme();
             return;
         }
 
@@ -39,9 +40,7 @@ export function ThemeToggle() {
         document.documentElement.style.setProperty('--x', `${x}px`);
         document.documentElement.style.setProperty('--y', `${y}px`);
 
-        (document as any).startViewTransition(() => {
-            setIsDarkMode(dark);
-        });
+        (document as any).startViewTransition(updateTheme);
     };
 
     return (
