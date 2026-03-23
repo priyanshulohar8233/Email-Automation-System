@@ -130,6 +130,9 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
   const hasData = pieData.length > 0 && pieData.some(d => d.value > 0);
   const chartData = hasData ? pieData : [{ name: "No Data", value: 1 }];
 
+  const axisColor = isDark ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)';
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+
   return (
     <div className="grid grid-cols-12 gap-6">
       <Card className="col-span-12 lg:col-span-8 border-indigo-500/10 shadow-xl shadow-indigo-500/5">
@@ -163,12 +166,12 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                       <stop offset="100%" stopColor="#4F46E5" stopOpacity={0.8} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="hsl(var(--border))" opacity={0.3} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
                   <XAxis
                     dataKey="day"
                     tick={{ fill: isDark ? "#E5E7EB" : "#111827", fontSize: 11, fontWeight: 600 }}
                     tickLine={false}
-                    axisLine={false}
+                    axisLine={{ stroke: axisColor, strokeWidth: 1 }}
                     dy={12}
                     interval={0}
                     label={{ 
@@ -184,7 +187,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     allowDecimals={false}
                     tick={{ fill: isDark ? "#E5E7EB" : "#111827", fontSize: 11, fontWeight: 600 }}
                     tickLine={false}
-                    axisLine={false}
+                    axisLine={{ stroke: axisColor, strokeWidth: 1 }}
                     tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
                     label={{ 
                       value: 'Emails Sent', 
