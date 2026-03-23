@@ -17,8 +17,10 @@ export function ThemeToggle() {
     const toggleTheme = (event: React.MouseEvent, dark: boolean) => {
         if (dark === isDarkMode) return;
 
+        // Apply no-transition to prevent micro-lag during the state swap
+        document.documentElement.classList.add("no-transition");
+
         const updateTheme = () => {
-            setIsDarkMode(dark);
             if (dark) {
                 document.documentElement.classList.add("dark");
                 localStorage.setItem("theme", "dark");
@@ -26,11 +28,20 @@ export function ThemeToggle() {
                 document.documentElement.classList.remove("dark");
                 localStorage.setItem("theme", "light");
             }
+            setIsDarkMode(dark);
+        };
+
+        const cleanup = () => {
+            // Short delay to ensure the new state is painted before re-enabling transitions
+            setTimeout(() => {
+                document.documentElement.classList.remove("no-transition");
+            }, 50);
         };
 
         // Check for View Transitions API support
         if (!(document as any).startViewTransition) {
             updateTheme();
+            cleanup();
             return;
         }
 
@@ -40,7 +51,8 @@ export function ThemeToggle() {
         document.documentElement.style.setProperty('--x', `${x}px`);
         document.documentElement.style.setProperty('--y', `${y}px`);
 
-        (document as any).startViewTransition(updateTheme);
+        const transition = (document as any).startViewTransition(updateTheme);
+        transition.finished.finally(cleanup);
     };
 
     return (
