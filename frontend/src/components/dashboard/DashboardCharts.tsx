@@ -183,7 +183,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
                   />
                   <Tooltip
-                    cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4, radius: [8, 8, 0, 0] }}
+                    cursor={false}
                     content={<CustomTooltip />}
                     animationDuration={200}
                   />
@@ -194,11 +194,23 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     barSize={days === 365 ? 20 : days === 90 ? 30 : 40}
                     animationDuration={1500}
                     animationEasing="ease-out"
-                    activeBar={{
-                      fill: '#818CF8',
-                      stroke: '#6366F1',
-                      strokeWidth: 2,
-                      radius: [10, 10, 2, 2]
+                    activeBar={(props: any) => {
+                      const { x, y, width, height } = props;
+                      return (
+                        <rect
+                          x={x}
+                          y={y - 6}
+                          width={width}
+                          height={height + 6}
+                          fill="#818CF8"
+                          rx={8}
+                          ry={8}
+                          style={{ 
+                            filter: 'drop-shadow(0 0 8px rgba(99,102,241,0.6))',
+                            transition: 'all 0.3s ease'
+                          }}
+                        />
+                      );
                     }}
                   />
                 </BarChart>
