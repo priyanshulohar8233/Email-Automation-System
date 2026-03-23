@@ -88,29 +88,33 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
     return () => observer.disconnect();
   }, []);
 
-  const fetchEvents = async (signal?: AbortSignal) => {
-    setLoading(true);
-    setError(null);
+  const fetchEvents = async (signal?: AbortSignal, silently: boolean = false) => {
+    if (!silently) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const data = await dashboardAPI.getRecentEvents(days, company, signal);
       setEvents(data);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
-        setError("Failed to load recent activity.");
+        if (!silently) setError("Failed to load recent activity.");
         console.error("Failed to load recent activity:", err);
       }
     } finally {
-      setLoading(false);
+      if (!silently) setLoading(false);
     }
   };
 
   useEffect(() => {
     const controller = new AbortController();
+    
+    // Initial fetch (not silent)
     fetchEvents(controller.signal);
 
-    // Real-Time Polling: Refresh every 10 seconds
+    // Real-Time Polling: Refresh every 10 seconds (silent)
     const interval = setInterval(() => {
-      fetchEvents(controller.signal);
+      fetchEvents(controller.signal, true);
     }, 10000);
 
     return () => {

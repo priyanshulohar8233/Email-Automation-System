@@ -3,7 +3,7 @@ import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
 import { RecentActivityTable } from "@/components/dashboard/RecentActivityTable";
 import { Button } from "@/components/ui/button";
 import { Calendar, Mail, EyeOff, Send, XCircle, Activity, MousePointerClick, ChevronRight, RefreshCcw, Sun, Moon, Layers, Check } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { CreateCampaignModal } from "@/components/dashboard/CreateCampaignModal";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -20,6 +20,9 @@ export default function Dashboard() {
   });
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
+  const company = useMemo(() => {
+    return selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all";
+  }, [selectedCompanies]);
 
   const COMPANIES = [
     "https://amakingcompany.com/",
@@ -63,8 +66,7 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
       }
-      const companyParam = selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all";
-      const data = await dashboardAPI.getStats(days, "all", companyParam, signal);
+      const data = await dashboardAPI.getStats(days, "all", company, signal);
       setStats(data);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -243,11 +245,11 @@ export default function Dashboard() {
       ) : null}
 
       {/* Charts Section */}
-      <DashboardCharts days={days} company={selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all"} />
+      <DashboardCharts days={days} company={company} />
 
       {/* Recent Activity */}
       <div className="grid gap-4">
-        <RecentActivityTable days={days} company={selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all"} />
+        <RecentActivityTable days={days} company={company} />
       </div>
     </div>
   );
