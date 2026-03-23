@@ -159,7 +159,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={lineData} margin={{ top: 10, right: 20, left: 20, bottom: 50 }}>
+                <BarChart data={lineData} margin={{ top: 10, right: 10, left: 0, bottom: 10 }}>
                   <defs>
                     <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#6366F1" stopOpacity={1} />
@@ -174,14 +174,6 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     axisLine={{ stroke: axisColor, strokeWidth: 1 }}
                     dy={12}
                     interval={0}
-                    label={{ 
-                      value: days === 7 ? 'Week' : days === 365 ? 'Months' : 'Days', 
-                      position: 'insideBottom', 
-                      offset: -35, 
-                      fill: isDark ? "#94A3B8" : "#64748B", 
-                      fontSize: 12, 
-                      fontWeight: 500 
-                    }}
                   />
                   <YAxis
                     allowDecimals={false}
@@ -189,15 +181,6 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     tickLine={false}
                     axisLine={{ stroke: axisColor, strokeWidth: 1 }}
                     tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
-                    label={{ 
-                      value: 'Emails Sent', 
-                      angle: -90, 
-                      position: 'insideLeft', 
-                      offset: -5, 
-                      fill: isDark ? "#94A3B8" : "#64748B", 
-                      fontSize: 12, 
-                      fontWeight: 500 
-                    }}
                   />
                   <Tooltip
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4, radius: [8, 8, 0, 0] }}
