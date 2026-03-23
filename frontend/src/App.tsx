@@ -13,10 +13,12 @@ import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import AITemplates from "./pages/AITemplates";
+import { LottieCursor } from "./components/ui/LottieCursor";
 
 export default function App() {
   return (
     <BrowserRouter>
+      <LottieCursor />
       <Routes>
         <Route path="/auth" element={<Auth />} />
         <Route path="/" element={<Layout />}>
