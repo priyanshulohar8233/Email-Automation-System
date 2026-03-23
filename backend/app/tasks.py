@@ -8,6 +8,7 @@ from .debug import debug_log
 from .database import SessionLocal
 from .models import Email, EmailStatus, EmailEvent, Campaign, CampaignStatus, EventType
 from . import services
+from .sendgrid_bridge import send_email_sendgrid
 
 from celery import Celery
 
@@ -71,14 +72,38 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         part = MIMEText(tracking_body, "html")
         msg.attach(part)
 
-        # 4. Send via SMTP
-        debug_log(f"DEBUG: Connecting to SMTP {settings.SMTP_HOST}:{settings.SMTP_PORT}")
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=30) as server:
-            server.starttls()
-            server.login(settings.SMTP_USER, settings.SMTP_PASS)
-            server.sendmail(settings.SMTP_USER, [to_addr], msg.as_string())
+        # 4. Fetch Mail Provider & Send
+        from .models import Settings as DBSettings
+        s = db.query(DBSettings).first()
+        provider = (s.email_provider or "SMTP").upper() if s else "SMTP"
         
-        debug_log(f"SUCCESS: Email {email_id} sent via SMTP")
+        if provider == "SENDGRID" and s and s.sendgrid_api_key:
+            debug_log(f"DEBUG: Sending via SendGrid API to {to_addr}")
+            # Use specific SendGrid sender if configured, else fallback
+            sender = s.from_email or s.smtp_username or "noreply@mailflow.com"
+            res = send_email_sendgrid(
+                api_key=s.sendgrid_api_key,
+                from_email=sender,
+                to_email=to_addr,
+                subject=subject,
+                html_content=tracking_body
+            )
+            if not res.get("success"):
+                raise Exception(f"SendGrid Error: {res.get('error')}")
+            debug_log(f"SUCCESS: Email {email_id} sent via SendGrid")
+        else:
+            # SMTP Fallback/Default
+            host = s.smtp_host if s else settings.SMTP_HOST
+            port = s.smtp_port if s else settings.SMTP_PORT
+            user = s.smtp_username if s else settings.SMTP_USER
+            password = s.smtp_password if s else settings.SMTP_PASS
+            
+            debug_log(f"DEBUG: Connecting to SMTP {host}:{port}")
+            with smtplib.SMTP(host, port, timeout=30) as server:
+                server.starttls()
+                server.login(user, password)
+                server.sendmail(user, [to_addr], msg.as_string())
+            debug_log(f"SUCCESS: Email {email_id} sent via SMTP")
         now = datetime.now(timezone.utc)
         
         # 5. Update Status

@@ -162,11 +162,14 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
     if not s:
         s = Settings()
         db.add(s)
-    s.smtp_host = req.smtp_host
-    s.smtp_port = req.smtp_port
-    s.smtp_user = req.smtp_user
-    if req.smtp_pass:
-        s.smtp_pass = req.smtp_pass
+    if req.smtp_host:
+        s.smtp_host = req.smtp_host
+    if req.smtp_port is not None:
+        s.smtp_port = req.smtp_port
+    if req.smtp_username:
+        s.smtp_username = req.smtp_username
+    if req.smtp_password:
+        s.smtp_password = req.smtp_password
     if req.sendgrid_api_key:
         s.sendgrid_api_key = req.sendgrid_api_key
     if req.email_provider:
@@ -175,7 +178,8 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
         s.from_email = req.from_email
     if req.base_url:
         s.base_url = req.base_url
-    s.monthly_limit = req.monthly_limit
+    if req.monthly_limit is not None:
+        s.monthly_limit = req.monthly_limit
     db.commit()
     return s
 

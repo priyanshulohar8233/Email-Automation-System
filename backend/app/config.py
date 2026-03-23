@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # For tracking links
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost")
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
+    SENDGRID_API_KEY: str | None = os.getenv("SENDGRID_API_KEY")
 
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")

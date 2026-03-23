@@ -11,6 +11,9 @@ interface SettingsState {
   smtpPort: number;
   smtpUsername: string;
   smtpPassword: string;
+  sendgridApiKey: string;
+  emailProvider: string;
+  fromEmail: string;
   webhookUrl: string;
   monthlyLimit: number;
   monthlySent: number;
@@ -22,6 +25,9 @@ export default function Settings() {
     smtpPort: 587,
     smtpUsername: "",
     smtpPassword: "",
+    sendgridApiKey: "",
+    emailProvider: "SMTP",
+    fromEmail: "",
     webhookUrl: "",
     monthlyLimit: 500000,
     monthlySent: 0,
@@ -41,6 +47,9 @@ export default function Settings() {
             smtpPort: data.smtp_port || 587,
             smtpUsername: data.smtp_username || "",
             smtpPassword: data.smtp_password || "",
+            sendgridApiKey: data.sendgrid_api_key || "",
+            emailProvider: data.email_provider || "SMTP",
+            fromEmail: data.from_email || "",
             webhookUrl: data.webhook_url || "",
             monthlyLimit: data.monthly_limit ?? 500000,
             monthlySent: data.monthly_sent ?? 0,
@@ -67,6 +76,9 @@ export default function Settings() {
           smtp_port: settings.smtpPort,
           smtp_username: settings.smtpUsername,
           smtp_password: settings.smtpPassword,
+          sendgrid_api_key: settings.sendgridApiKey,
+          email_provider: settings.emailProvider,
+          from_email: settings.fromEmail,
           webhook_url: settings.webhookUrl,
           monthly_limit: settings.monthlyLimit,
         }),
@@ -123,38 +135,87 @@ export default function Settings() {
               <Server className="h-5 w-5 text-indigo-600" />
               <CardTitle>SMTP Configuration</CardTitle>
             </div>
-            <CardDescription>Configure your outgoing mail server settings.</CardDescription>
+            <CardDescription>Choose your preferred mail service and configure its settings.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             {isLoading ? (
               <p className="text-sm text-slate-500">Loading settings...</p>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col space-y-4">
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Host</label>
-                    <Input name="smtpHost" value={settings.smtpHost} onChange={handleChange} placeholder="smtp.example.com" />
+                    <label className="text-sm font-medium">Mail Service Type</label>
+                    <div className="flex p-1 bg-muted rounded-xl w-fit">
+                      <button
+                        onClick={() => setSettings(prev => ({ ...prev, emailProvider: "SMTP" }))}
+                        className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${settings.emailProvider === "SMTP" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500 hover:text-slate-700"}`}
+                      >
+                        SMTP
+                      </button>
+                      <button
+                        onClick={() => setSettings(prev => ({ ...prev, emailProvider: "SENDGRID" }))}
+                        className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all ${settings.emailProvider === "SENDGRID" ? "bg-white shadow-sm text-indigo-600" : "text-slate-500 hover:text-slate-700"}`}
+                      >
+                        SendGrid API
+                      </button>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Port</label>
-                    <Input name="smtpPort" type="number" value={settings.smtpPort} onChange={handleChange} placeholder="587" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Username</label>
-                    <Input name="smtpUsername" value={settings.smtpUsername} onChange={handleChange} placeholder="user@example.com" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Password</label>
-                    <Input name="smtpPassword" type="password" value={settings.smtpPassword} onChange={handleChange} placeholder="••••••••••••" />
+
+                  <div className="space-y-4 pt-2">
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">From Email</label>
+                      <Input name="fromEmail" value={settings.fromEmail} onChange={handleChange} placeholder="noreply@mailflow.com" />
+                      <p className="text-[10px] text-slate-500 italic">This will be the default sender address.</p>
+                    </div>
+
+                    {settings.emailProvider === "SMTP" ? (
+                      <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Host</label>
+                          <Input name="smtpHost" value={settings.smtpHost} onChange={handleChange} placeholder="smtp.example.com" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Port</label>
+                          <Input name="smtpPort" type="number" value={settings.smtpPort} onChange={handleChange} placeholder="587" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Username</label>
+                          <Input name="smtpUsername" value={settings.smtpUsername} onChange={handleChange} placeholder="user@example.com" />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">Password</label>
+                          <Input name="smtpPassword" type="password" value={settings.smtpPassword} onChange={handleChange} placeholder="••••••••••••" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <label className="text-sm font-medium flex items-center gap-2">
+                          SendGrid API Key
+                          <Badge variant="outline" className="text-[9px] font-normal border-indigo-200 text-indigo-600">Secure</Badge>
+                        </label>
+                        <Input 
+                          name="sendgridApiKey" 
+                          type="password" 
+                          value={settings.sendgridApiKey} 
+                          onChange={handleChange} 
+                          placeholder="SG.xxxxxxxxxxxxxxxxxxxx" 
+                        />
+                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                          Create an API key in your SendGrid dashboard with "Mail Send" permissions.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex justify-end gap-3">
+
+                <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
                   <Button
                     onClick={async () => {
                       try {
-                        const res = await fetch("/api/settings/test-smtp", { method: "POST" });
+                        const path = settings.emailProvider === "SENDGRID" ? "/api/settings/test-sendgrid" : "/api/settings/test-smtp";
+                        const res = await fetch(path, { method: "POST" });
                         if (!res.ok) throw new Error(await res.text());
-                        setSaveMessage({ type: "success", text: "Test email sent successfully! Please check your inbox." });
+                        setSaveMessage({ type: "success", text: `Test connection successful via ${settings.emailProvider}!` });
                       } catch (e: any) {
                         setSaveMessage({ type: "error", text: `Connection failed: ${e.message}` });
                       } finally {
