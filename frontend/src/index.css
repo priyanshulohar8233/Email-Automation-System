@@ -56,3 +56,43 @@
     @apply bg-background text-foreground font-sans antialiased transition-colors duration-300;
   }
 }
+
+/* View Transitions for radial reveal */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 9999;
+}
+
+.dark::view-transition-old(root) {
+  z-index: 9999;
+}
+
+.dark::view-transition-new(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  animation: 800ms cubic-bezier(0.4, 0, 0.2, 1) both reveal-animation;
+}
+
+.dark::view-transition-old(root) {
+  animation: 800ms cubic-bezier(0.4, 0, 0.2, 1) both reveal-animation;
+}
+
+@keyframes reveal-animation {
+  from {
+    clip-path: circle(0px at var(--x) var(--y));
+  }
+  to {
+    clip-path: circle(125% at var(--x) var(--y));
+  }
+}

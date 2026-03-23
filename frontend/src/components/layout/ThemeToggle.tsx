@@ -1,5 +1,6 @@
 import { Sun, Moon } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import React from "react";
 
 export function ThemeToggle() {
     const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -11,6 +12,8 @@ export function ThemeToggle() {
         return false;
     });
 
+    const isFirstRender = useRef(true);
+
     useEffect(() => {
         if (isDarkMode) {
             document.documentElement.classList.add("dark");
@@ -21,6 +24,26 @@ export function ThemeToggle() {
         }
     }, [isDarkMode]);
 
+    const toggleTheme = (event: React.MouseEvent, dark: boolean) => {
+        if (dark === isDarkMode) return;
+
+        // Check for View Transitions API support
+        if (!(document as any).startViewTransition) {
+            setIsDarkMode(dark);
+            return;
+        }
+
+        // Calculate click coordinates for the radial reveal
+        const x = event.clientX;
+        const y = event.clientY;
+        document.documentElement.style.setProperty('--x', `${x}px`);
+        document.documentElement.style.setProperty('--y', `${y}px`);
+
+        (document as any).startViewTransition(() => {
+            setIsDarkMode(dark);
+        });
+    };
+
     return (
         <div
             style={{ borderRadius: "14px" }}
@@ -29,23 +52,23 @@ export function ThemeToggle() {
             {/* Sliding Highlight */}
             <div
                 style={{ borderRadius: "10px" }}
-                className={`absolute h-7 w-[36px] bg-indigo-600 transition-all duration-300 shadow-sm ${!isDarkMode ? 'translate-x-[36px]' : 'translate-x-0'}`}
+                className={`absolute h-7 w-[36px] bg-indigo-600 transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) shadow-sm ${!isDarkMode ? 'translate-x-[36px]' : 'translate-x-0'}`}
             />
 
             <button
-                onClick={() => setIsDarkMode(true)}
-                className={`relative z-10 w-9 h-7 flex items-center justify-center transition-colors ${isDarkMode ? 'text-white' : 'text-muted-foreground dark:text-slate-500 hover:text-foreground dark:hover:text-slate-300'}`}
+                onClick={(e) => toggleTheme(e, true)}
+                className={`relative z-10 w-9 h-7 flex items-center justify-center transition-all duration-500 ${isDarkMode ? 'text-white' : 'text-muted-foreground dark:text-slate-500 hover:text-foreground dark:hover:text-slate-300'}`}
                 title="Dark Mode"
             >
-                <Moon className="h-3.5 w-3.5" />
+                <Moon className={`h-3.5 w-3.5 transition-transform duration-500 ${isDarkMode ? 'scale-110 rotate-0' : 'scale-100 -rotate-12'}`} />
             </button>
 
             <button
-                onClick={() => setIsDarkMode(false)}
-                className={`relative z-10 w-9 h-7 flex items-center justify-center transition-colors ${!isDarkMode ? 'text-white' : 'text-muted-foreground dark:text-slate-500 hover:text-foreground dark:hover:text-slate-300'}`}
+                onClick={(e) => toggleTheme(e, false)}
+                className={`relative z-10 w-9 h-7 flex items-center justify-center transition-all duration-500 ${!isDarkMode ? 'text-white' : 'text-muted-foreground dark:text-slate-500 hover:text-foreground dark:hover:text-slate-300'}`}
                 title="Light Mode"
             >
-                <Sun className="h-3.5 w-3.5" />
+                <Sun className={`h-3.5 w-3.5 transition-transform duration-500 ${!isDarkMode ? 'scale-110 rotate-0' : 'scale-100 rotate-45'}`} />
             </button>
         </div>
     );
