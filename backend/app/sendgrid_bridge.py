@@ -20,5 +20,18 @@ def send_email_sendgrid(api_key: str, from_email: str, to_email: str, subject: s
         debug_log(f"SENDGRID_SUCCESS: Status {response.status_code}")
         return {"success": True, "status_code": response.status_code}
     except Exception as e:
-        debug_log(f"SENDGRID_ERROR: {str(e)}")
-        return {"success": False, "error": str(e)}
+        # SendGrid errors often have a body with details
+        error_msg = str(e)
+        if hasattr(e, 'body'):
+            import json
+            try:
+                body_data = json.loads(e.body.decode('utf-8') if hasattr(e.body, 'decode') else str(e.body))
+                if "errors" in body_data and len(body_data["errors"]) > 0:
+                    error_msg = body_data["errors"][0].get("message", str(e))
+                else:
+                    error_msg = str(body_data)
+            except:
+                error_msg = f"{e.body.decode('utf-8') if hasattr(e.body, 'decode') else str(e.body)}"
+        
+        debug_log(f"SENDGRID_ERROR: {error_msg}")
+        return {"success": False, "error": error_msg}

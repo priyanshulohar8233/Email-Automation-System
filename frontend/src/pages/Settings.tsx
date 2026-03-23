@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Server, Key, Webhook, Gauge, Save, ShieldCheck, Info, ExternalLink, ChevronRight, Check } from "lucide-react";
+import { Server, Key, Webhook, Gauge, Save, ShieldCheck, Info, ExternalLink, ChevronRight, Check, AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 
 interface SettingsState {
@@ -165,7 +165,16 @@ export default function Settings() {
                     <div className="space-y-2">
                       <label className="text-sm font-medium">From Email</label>
                       <Input name="fromEmail" value={settings.fromEmail} onChange={handleChange} placeholder="noreply@mailflow.com" />
-                      <p className="text-[10px] text-slate-500 italic">This will be the default sender address.</p>
+                      {settings.emailProvider === "SENDGRID" ? (
+                        <div className="mt-2 p-2.5 rounded-lg bg-amber-50 border border-amber-200 flex items-start gap-2">
+                          <AlertCircle className="h-3.5 w-3.5 text-amber-600 mt-0.5 shrink-0" />
+                          <p className="text-[10px] text-amber-800 leading-normal">
+                            <strong>Verification Required:</strong> This must be a <strong>Verified Sender</strong> in your SendGrid dashboard. Unverified emails will be rejected.
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic">This will be the default sender address.</p>
+                      )}
                     </div>
 
                     {settings.emailProvider === "SMTP" ? (
