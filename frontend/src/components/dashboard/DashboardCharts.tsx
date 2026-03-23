@@ -12,7 +12,8 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend
+  Legend,
+  Sector
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw } from "lucide-react";
@@ -68,12 +69,31 @@ const PieTooltip = ({ active, payload }: any) => {
   return null;
 };
 
+const renderActiveShape = (props: any) => {
+  const { cx, cy, innerRadius, outerRadius, startAngle, endAngle, fill } = props;
+  return (
+    <g>
+      <Sector
+        cx={cx}
+        cy={cy}
+        innerRadius={innerRadius}
+        outerRadius={outerRadius + 8}
+        startAngle={startAngle}
+        endAngle={endAngle}
+        fill={fill}
+        style={{ filter: 'drop-shadow(0 0 8px rgba(99,102,241,0.4))', transition: 'all 0.3s ease' }}
+      />
+    </g>
+  );
+};
+
 export function DashboardCharts({ days = 30, company = "all" }: { days?: number, company?: string }) {
   const [lineData, setLineData] = useState<{ day: string; emails: number }[]>([]);
   const [pieData, setPieData] = useState<{ name: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isDark, setIsDark] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
 
   useEffect(() => {
     const checkTheme = () => {
@@ -126,6 +146,14 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
         setPieData([]);
       });
   }, [days, company]);
+
+  const onPieEnter = (_: any, index: number) => {
+    setActiveIndex(index);
+  };
+
+  const onPieLeave = () => {
+    setActiveIndex(-1);
+  };
 
   const hasData = pieData.length > 0 && pieData.some(d => d.value > 0);
   const chartData = hasData ? pieData : [{ name: "No Data", value: 1 }];
@@ -246,6 +274,10 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     stroke="none"
                     animationDuration={1500}
                     animationBegin={200}
+                    activeIndex={activeIndex}
+                    activeShape={renderActiveShape}
+                    onMouseEnter={onPieEnter}
+                    onMouseLeave={onPieLeave}
                   >
                     {chartData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.name === "No Data" ? "#E2E8F0" : (COMPANY_COLORS[entry.name] || "#6366F1")} />
@@ -253,7 +285,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                   </Pie>
                   <Tooltip
                     content={<PieTooltip />}
-                    cursor={{ fill: 'transparent' }}
+                    cursor={false}
                   />
                   <Legend
                     verticalAlign="bottom"
