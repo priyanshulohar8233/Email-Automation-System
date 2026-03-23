@@ -54,11 +54,18 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased transition-colors duration-300;
-    cursor: url('/cursor-default.svg') 4 4, auto;
+    cursor: url('/cursors/light-default.svg') 8 5, auto;
   }
 
-  /* Custom Global Pointer Cursor */
-  a, button, [role="button"], input[type="submit"], input[type="button"], input[type="reset"], .cursor-pointer {
-    cursor: url('/cursor-pointer.svg') 13 2, pointer !important;
+  a, button, [role="button"], .cursor-pointer, input[type="submit"] {
+    cursor: url('/cursors/light-pointer.svg') 12 12, pointer !important;
+  }
+
+  .dark body {
+    cursor: url('/cursors/dark-default.svg') 8 5, auto;
+  }
+
+  .dark a, .dark button, .dark [role="button"], .dark .cursor-pointer, .dark input[type="submit"] {
+    cursor: url('/cursors/dark-pointer.svg') 12 12, pointer !important;
   }
 }
