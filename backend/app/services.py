@@ -576,47 +576,71 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
     from .models import Contact
     limit_date = datetime.utcnow() - timedelta(days=days)
     
-    # Outer join with Contact to get name and company
+    # Outer join with Contact and Campaign to get name, company, and campaign details
     query = db.query(
         EmailEvent, 
         Contact.name.label("contact_name"), 
-        Contact.company.label("contact_company")
-    ).join(Email, EmailEvent.email_id == Email.id).outerjoin(Contact, Email.recipient_email == Contact.email)
+        Contact.company.label("contact_company"),
+        Campaign.name.label("campaign_name")
+    ).join(Email, EmailEvent.email_id == Email.id)\
+     .outerjoin(Contact, Email.recipient_email == Contact.email)\
+     .outerjoin(Campaign, Email.campaign_id == Campaign.id)
     
     if campaign_name != "all":
-        query = query.join(Campaign).filter(Campaign.name == campaign_name)
+        query = query.filter(Campaign.name == campaign_name)
     
     if company_name and company_name != "all":
         companies = [company_name] if isinstance(company_name, str) else company_name
         query = query.filter(Contact.company.in_(companies))
         
-    events = query.filter(EmailEvent.timestamp >= limit_date).order_by(EmailEvent.timestamp.desc()).all() # Fetch more for grouping
+    events = query.filter(EmailEvent.timestamp >= limit_date).order_by(EmailEvent.timestamp.desc()).limit(limit * 5).all() # Fetch more for grouping
     
-    PERSONAL_PROVIDERS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "aol.com"}
+    PERSONAL_PROVIDERS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "aol.com", "protonmail.com"}
+    TLD_COUNTRY_MAP = {"in": "India", "uk": "United Kingdom", "us": "USA", "au": "Australia", "de": "Germany", "fr": "France", "ca": "Canada"}
     
     result = []
     for ev_data in events:
         ev = ev_data[0]
         contact_name = ev_data[1]
-        contact_company = ev_data[2]
+        
+        # Determine Sender
+        camp_name = (ev_data[3] or "").lower()
+        if "making" in camp_name:
+            sender_company = "A Making Company"
+        elif "lumina" in camp_name:
+            sender_company = "MP Lumina"
+        elif "mp" in camp_name or "consulting" in camp_name:
+            sender_company = "MP Consulting"
+        else:
+            sender_company = "MP Consulting"
         
         # Smart Company Extraction Logic
         email_str = ev.email.recipient_email
-        if not contact_company:
-            domain = email_str.split("@")[-1].lower() if "@" in email_str else ""
-            if domain in PERSONAL_PROVIDERS:
-                contact_company = "Personal Email"
-            elif domain:
-                # Extract main domain parts and capitalize (google.com -> Google)
-                company_name = domain.split(".")[0]
-                contact_company = company_name.capitalize()
-            else:
-                contact_company = "Unknown"
+        domain = email_str.split("@")[-1].lower() if "@" in email_str else ""
+        
+        if domain in PERSONAL_PROVIDERS:
+            contact_company = "Personal Email"
+        elif domain:
+            company_base = domain.rsplit(".", 1)[0]
+            contact_company = company_base.capitalize()
+        else:
+            contact_company = "Unknown"
+            
+        # Country deduction
+        country = "Unknown"
+        if ev.country:
+            country = ev.country
+        elif domain:
+            tld = domain.rsplit(".", 1)[-1] if "." in domain else ""
+            if tld in TLD_COUNTRY_MAP:
+                country = TLD_COUNTRY_MAP[tld]
+            elif tld == "com":
+                country = "USA"
 
         ev_type = ev.event_type.value if hasattr(ev.event_type, 'value') else str(ev.event_type)
         if "EventType." in ev_type: ev_type = ev_type.split(".")[-1].lower()
         
-        loc = f"{ev.city}, {ev.country}" if ev.city and ev.country else (ev.country or "Unknown")
+        loc = f"{ev.city}, {country}" if ev.city and country != "Unknown" else country
         
         # Robust Name Fallback
         if not contact_name and email_str:
@@ -634,10 +658,10 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
             "event_type": ev_type,
             "type": ev_type,
             "subject": ev.email.subject or "No Subject",
-            "sender": "marketing@mailflow.app", # Fixed sender for now or campaign owner
+            "sender": sender_company,
             "timestamp": ev.timestamp.isoformat() if hasattr(ev.timestamp, "isoformat") else str(ev.timestamp),
             "location": loc,
-            "country": ev.country or "Unknown",
+            "country": country,
             "metadata": {
                 "browser": ev.browser or "Unknown",
                 "os": ev.os or "Unknown",

@@ -161,6 +161,9 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
                 <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">
                   Company
                 </TableHead>
+                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">
+                  Country
+                </TableHead>
                 <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0 text-center">
                   Status
                 </TableHead>
@@ -186,7 +189,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
                     </div>
                   </TableCell>
                   <TableCell className="px-4 py-4">
-                     <span className="text-xs text-muted-foreground font-medium italic">
+                     <span className="text-[13px] font-semibold text-slate-700 dark:text-slate-300 tracking-tight">
                         {ev.sender}
                       </span>
                   </TableCell>
@@ -233,6 +236,11 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
                         </div>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell className="px-4 py-4">
+                     <span className="text-[13px] font-medium text-slate-600 dark:text-slate-400">
+                        {ev.country}
+                     </span>
                   </TableCell>
                   <TableCell className="text-center px-4 py-4 relative">
                     <div 
