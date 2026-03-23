@@ -156,7 +156,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={lineData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
+                <BarChart data={lineData} margin={{ top: 10, right: 20, left: 20, bottom: 40 }}>
                   <defs>
                     <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#6366F1" stopOpacity={1} />
@@ -170,11 +170,11 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     tickLine={false}
                     axisLine={false}
                     dy={12}
-                    interval={days === 365 ? 1 : 0}
+                    interval={0}
                     label={{ 
                       value: days === 7 ? 'Week' : days === 365 ? 'Months' : 'Days', 
                       position: 'insideBottom', 
-                      offset: -10, 
+                      offset: -25, 
                       fill: isDark ? "#94A3B8" : "#64748B", 
                       fontSize: 12, 
                       fontWeight: 500 
