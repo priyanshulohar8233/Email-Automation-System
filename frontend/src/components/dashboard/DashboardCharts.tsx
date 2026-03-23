@@ -156,7 +156,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={lineData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                <BarChart data={lineData} margin={{ top: 10, right: 10, left: 10, bottom: 20 }}>
                   <defs>
                     <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#6366F1" stopOpacity={1} />
@@ -171,6 +171,14 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     axisLine={false}
                     dy={12}
                     interval={days === 365 ? 1 : 0}
+                    label={{ 
+                      value: days === 7 ? 'Week' : days === 365 ? 'Months' : 'Days', 
+                      position: 'insideBottom', 
+                      offset: -10, 
+                      fill: isDark ? "#94A3B8" : "#64748B", 
+                      fontSize: 12, 
+                      fontWeight: 500 
+                    }}
                   />
                   <YAxis
                     allowDecimals={false}
@@ -178,6 +186,15 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v}
+                    label={{ 
+                      value: 'Emails Sent', 
+                      angle: -90, 
+                      position: 'insideLeft', 
+                      offset: -5, 
+                      fill: isDark ? "#94A3B8" : "#64748B", 
+                      fontSize: 12, 
+                      fontWeight: 500 
+                    }}
                   />
                   <Tooltip
                     cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4, radius: [8, 8, 0, 0] }}

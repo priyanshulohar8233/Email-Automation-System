@@ -471,12 +471,13 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
             })
             
     elif days == 30:
-        # Month View: 5-day intervals of current month
+        # Month View: 3-day intervals of current month
         start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         last_day = calendar.monthrange(now.year, now.month)[1]
         end_date = (start_date + timedelta(days=last_day-1)).replace(hour=23, minute=59, second=59) + timedelta(seconds=1)
         
-        intervals = [(1, 5), (6, 10), (11, 15), (16, 20), (21, 25), (26, last_day)]
+        # New 3-day grouping logic: 1-3, 4-6, ..., 25-27, 28-30/31
+        intervals = [(1, 3), (4, 6), (7, 9), (10, 12), (13, 15), (16, 18), (19, 21), (22, 24), (25, 27), (28, last_day)]
         for s, e in intervals:
             b_start = start_date.replace(day=s)
             # b_end is the start of the day AFTER 'e'
@@ -495,15 +496,15 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
             })
             
     elif days == 90:
-        # Quarter View: 15-day intervals for the last 90 days
+        # Quarter View: 10-day grouping (10, 20, ..., 90)
         end_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
         start_date = end_date - timedelta(days=90)
         
-        for i in range(0, 90, 15):
+        for i in range(0, 90, 10):
             b_start = start_date + timedelta(days=i)
-            b_end = b_start + timedelta(days=15)
+            b_end = b_start + timedelta(days=10)
             buckets.append({
-                "label": f"D{i+1}-{i+15}",
+                "label": str(i + 10), # 10, 20, 30... 90
                 "start": b_start,
                 "end": b_end
             })
