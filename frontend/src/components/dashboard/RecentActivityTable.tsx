@@ -14,6 +14,7 @@ import { dashboardAPI } from "@/services/dashboardAPI";
 
 interface RecentEvent {
   id: number;
+  email_id: number;
   recipient: string;
   recipient_name: string;
   company: string;
@@ -174,7 +175,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
             </TableHeader>
             <TableBody>
               {events.map((ev, index) => (
-                <TableRow key={`${ev.id}-${index}`} className="group hover:bg-muted/50 transition-colors duration-200 border-b border-border/50">
+                <TableRow key={ev.email_id} className="group hover:bg-muted/50 transition-colors duration-200 border-b border-border/50">
                   <TableCell className="text-muted-foreground/60 font-medium px-6 py-4">
                     {index + 1}
                   </TableCell>
@@ -245,11 +246,11 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
                   <TableCell className="text-center px-4 py-4 relative">
                     <div 
                       className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-tight border cursor-pointer hover:shadow-md transition-all ${getBadgeStyles(ev.latest_type)}`}
-                      onClick={() => setOpenStatusId(openStatusId === ev.id ? null : ev.id)}
+                      onClick={() => setOpenStatusId(openStatusId === ev.email_id ? null : ev.email_id)}
                     >
                       {ev.latest_type}
                     </div>
-                    {openStatusId === ev.id && (
+                    {openStatusId === ev.email_id && (
                       <div className="absolute top-12 left-1/2 -translate-x-1/2 w-48 bg-card border border-border shadow-xl rounded-xl z-50 p-3 animate-in fade-in zoom-in-95 duration-200">
                          <h4 className="text-[10px] font-bold uppercase text-muted-foreground mb-2 border-b border-border pb-1">Event Timeline</h4>
                          <div className="space-y-2">

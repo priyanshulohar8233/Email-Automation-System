@@ -26,7 +26,7 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: numbe
     const { signal } = controller;
     
     // If a signal was passed in, we need to handle it
-    if (options.signal) {
+    if (options.signal && typeof options.signal.addEventListener === 'function') {
         options.signal.addEventListener('abort', () => controller.abort());
     }
 

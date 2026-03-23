@@ -672,13 +672,14 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
             }
         })
     
-    # Grouping Logic: Merge entries for the same email + campaign
+    # Grouping Logic: Each unique email send (email_id) gets its own timeline
     grouped = {}
     for r in result:
-        key = f"{r['recipient']}-{r['subject']}" # Using subject as proxy for campaign if not available
+        key = r['email_id']
         if key not in grouped:
             grouped[key] = {
                 "id": r["id"],
+                "email_id": r["email_id"],
                 "recipient": r["recipient"],
                 "recipient_name": r["recipient_name"],
                 "company": r["company"],
@@ -690,16 +691,30 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
                 "latest_timestamp": r["timestamp"],
                 "events": []
             }
-        grouped[key]["events"].append({
-            "type": r["type"],
-            "timestamp": r["timestamp"]
-        })
-        # Update latest status
+        
+        # Deduplication Logic: Only one SENT and one DELIVERED per email
+        # Multiple OPENED/CLICKED are allowed
+        is_duplicate = False
+        if r["type"] in ["sent", "delivered"]:
+            if any(e["type"] == r["type"] for e in grouped[key]["events"]):
+                is_duplicate = True
+        
+        if not is_duplicate:
+            grouped[key]["events"].append({
+                "type": r["type"],
+                "timestamp": r["timestamp"]
+            })
+            
+        # Update latest status info
         if r["timestamp"] > grouped[key]["latest_timestamp"]:
              grouped[key]["latest_timestamp"] = r["timestamp"]
              grouped[key]["latest_type"] = r["type"]
 
-    # Flatten and sort by latest activity
+    # Final Polish: Sort events chronologically inside each group
+    for group in grouped.values():
+        group["events"].sort(key=lambda x: x["timestamp"])
+
+    # Flatten and sort rows by most recent activity
     final_grouped = list(grouped.values())
     final_grouped.sort(key=lambda x: x["latest_timestamp"], reverse=True)
     
