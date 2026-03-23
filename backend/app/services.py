@@ -705,16 +705,17 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
     return final_grouped[:limit]
 
 def get_emails_per_company(db: Session, days: int = 30):
-    from .models import Contact, Email
+    from .models import Campaign, Email
     from datetime import datetime, timedelta
+    from sqlalchemy import func
     limit_date = datetime.utcnow() - timedelta(days=days)
     
     results = db.query(
-        Contact.company,
+        Campaign.name,
         func.count(Email.id).label("count")
-    ).join(Email, Contact.email == Email.recipient_email)\
+    ).join(Email, Campaign.id == Email.campaign_id)\
      .filter(Email.sent_at >= limit_date)\
-     .group_by(Contact.company).all()
+     .group_by(Campaign.name).all()
     
     counts = {
         "MP Consultant LLC": 0,
@@ -723,13 +724,15 @@ def get_emails_per_company(db: Session, days: int = 30):
     }
     
     for row in results:
-        raw_company = (row[0] or "").lower()
-        if "mplumina" in raw_company:
-            counts["MP Lumina"] += row[1]
-        elif "mpconsulting" in raw_company:
-            counts["MP Consultant LLC"] += row[1]
-        elif "amakingcompany" in raw_company:
+        camp_name = (row[0] or "").lower()
+        if "making" in camp_name:
             counts["A Making Company"] += row[1]
+        elif "lumina" in camp_name:
+            counts["MP Lumina"] += row[1]
+        elif "mp" in camp_name or "consulting" in camp_name:
+            counts["MP Consultant LLC"] += row[1]
+        else:
+            counts["MP Consultant LLC"] += row[1] # fallback priority
             
     return {
         "success": True,
