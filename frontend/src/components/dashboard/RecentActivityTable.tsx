@@ -107,7 +107,16 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
   useEffect(() => {
     const controller = new AbortController();
     fetchEvents(controller.signal);
-    return () => controller.abort();
+
+    // Real-Time Polling: Refresh every 10 seconds
+    const interval = setInterval(() => {
+      fetchEvents(controller.signal);
+    }, 10000);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [days, company]);
 
   const handleUpdateCompany = async (eventId: number, email: string) => {

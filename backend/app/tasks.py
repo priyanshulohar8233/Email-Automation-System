@@ -1,7 +1,7 @@
 import smtplib
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import quote
 from .config import settings
 from .debug import debug_log
@@ -79,7 +79,7 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             server.sendmail(settings.SMTP_USER, [to_addr], msg.as_string())
         
         debug_log(f"SUCCESS: Email {email_id} sent via SMTP")
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         
         # 5. Update Status
         email_record.status = EmailStatus.DELIVERED
@@ -104,7 +104,7 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         if email_record:
             email_record.status = EmailStatus.BOUNCED
             email_record.failure_reason = error_msg
-            db.add(EmailEvent(email_id=email_id, event_type=EventType.BOUNCED, timestamp=datetime.utcnow()))
+            db.add(EmailEvent(email_id=email_id, event_type=EventType.BOUNCED, timestamp=datetime.now(timezone.utc)))
             
             camp = db.query(Campaign).get(email_record.campaign_id)
             if camp:

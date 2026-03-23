@@ -1,6 +1,6 @@
 from typing import List
 import smtplib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, distinct, case, select, and_, cast, Date
 from sqlalchemy.orm import Session
 from .models import Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, Settings, Suppression, SuppressionReason, BounceType
@@ -45,7 +45,7 @@ def check_and_complete_campaign(db: Session, campaign_id: int):
     # Trigger completion if everything is processed AND nothing is pending
     if processed_emails >= total_emails and pending_count == 0:
         camp.status = CampaignStatus.COMPLETED
-        camp.completed_at = datetime.utcnow()
+        camp.completed_at = datetime.now(timezone.utc)
         db.commit()
         debug.debug_log(f"CAMPAIGN_COMPLETE: Campaign {campaign_id} (Done at {camp.completed_at})")
 
@@ -123,7 +123,7 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
         recent_open = db.query(EmailEvent).filter(
             EmailEvent.email_id == email_id,
             EmailEvent.event_type == EventType.OPENED,
-            EmailEvent.timestamp >= datetime.utcnow() - timedelta(seconds=60)
+            EmailEvent.timestamp >= datetime.now(timezone.utc) - timedelta(seconds=60)
         ).first()
         if recent_open:
             debug.debug_log(f"TRACKING_FLOW: Blocked duplicate open for email {email_id} (within 60s)")
@@ -153,7 +153,7 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
             browser=browser,
             os=os,
             device=device,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
         if url: ev.url = url
         
@@ -174,10 +174,10 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
                     add_to_suppression(db, email.recipient_email, SuppressionReason.BOUNCE, metadata={"reason": email.bounce_reason})
             elif event_type == EventType.OPENED:
                 if not email.opened_at:
-                    email.opened_at = datetime.utcnow()
+                    email.opened_at = datetime.now(timezone.utc)
             elif event_type == EventType.CLICKED:
                 if not email.clicked_at:
-                    email.clicked_at = datetime.utcnow()
+                    email.clicked_at = datetime.now(timezone.utc)
             elif event_type == EventType.SPAM_REPORT:
                 email.status = EmailStatus.SPAM
                 add_to_suppression(db, email.recipient_email, SuppressionReason.SPAM)
@@ -293,7 +293,7 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
     from datetime import datetime, timedelta
     from sqlalchemy import func, distinct, case
     
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     limit_date = now - timedelta(days=days)
     
     # 1. Base Query Filter
@@ -360,7 +360,7 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
     from datetime import datetime, timedelta
     from sqlalchemy import func
     
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     
     # Current Metrics
     metrics = get_unified_metrics(db, days=days, campaign_name=campaign_name)
@@ -449,7 +449,7 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
     import calendar
     from sqlalchemy import cast, Date
     
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     
     # Define buckets and range based on 'days' parameter
     buckets = []
@@ -575,7 +575,7 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
 def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: str = "all", company_name: str | list = "all"):
     from datetime import datetime, timedelta
     from .models import Contact
-    limit_date = datetime.utcnow() - timedelta(days=days)
+    limit_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     # Outer join with Contact and Campaign to get name, company, and campaign details
     query = db.query(
@@ -660,7 +660,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
             "type": ev_type,
             "subject": ev.email.subject or "No Subject",
             "sender": sender_company,
-            "timestamp": ev.timestamp.isoformat() if hasattr(ev.timestamp, "isoformat") else str(ev.timestamp),
+            "timestamp": (ev.timestamp.isoformat() if hasattr(ev.timestamp, "isoformat") else str(ev.timestamp)).replace("+00:00", "Z") + ("Z" if "Z" not in str(ev.timestamp) and "+00:00" not in str(ev.timestamp) else ""),
             "location": loc,
             "country": country,
             "metadata": {
@@ -724,7 +724,7 @@ def get_emails_per_company(db: Session, days: int = 30):
     from .models import Campaign, Email
     from datetime import datetime, timedelta
     from sqlalchemy import func
-    limit_date = datetime.utcnow() - timedelta(days=days)
+    limit_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     results = db.query(
         Campaign.name,
@@ -894,7 +894,7 @@ def check_due_campaigns(db: Session, background_tasks=None):
     from .models import Campaign, CampaignStatus
     from datetime import datetime
     
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     # Find due campaigns
     due_campaigns = db.query(Campaign).filter(
         Campaign.status.in_([CampaignStatus.QUEUED, CampaignStatus.SCHEDULED]),
@@ -1173,7 +1173,7 @@ def get_settings(db: Session):
         db.commit()
     
     # Count emails sent this calendar month
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     monthly_sent = db.query(Email).filter(
         Email.status == EmailStatus.SENT,
@@ -1575,7 +1575,7 @@ def get_system_health(db: Session) -> dict:
         reputation = "Warning"
 
     # 3. Delivery Velocity (Last Hour)
-    hour_ago = datetime.utcnow() - timedelta(hours=1)
+    hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
     vel_sent = db.query(Email).filter(Email.sent_at >= hour_ago, Email.status == EmailStatus.SENT).count()
     vel_delivered = db.query(Email).filter(Email.sent_at >= hour_ago, Email.status == EmailStatus.DELIVERED).count()
 
@@ -1590,7 +1590,7 @@ def get_system_health(db: Session) -> dict:
             "sent_last_hour": vel_sent,
             "delivered_last_hour": vel_delivered
         },
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 def check_reputation_guard(db: Session):

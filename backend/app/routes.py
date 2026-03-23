@@ -23,12 +23,12 @@ router = APIRouter(prefix="/api")
 
 @router.get("/health")
 def health_check():
-    from datetime import datetime
-    return {"status": "ok", "timestamp": str(datetime.now())}
+    from datetime import datetime, timezone
+    return {"status": "ok", "timestamp": str(datetime.now(timezone.utc))}
 
 @router.post("/send-campaign")
 def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    from datetime import datetime
+    from datetime import datetime, timezone
     eta = None
     if req.scheduled_at:
         try:
@@ -57,7 +57,7 @@ def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: S
         records.append(e)
     
     # Update campaign status based on scheduling
-    if eta and eta > datetime.utcnow():
+    if eta and eta > datetime.now(timezone.utc):
         camp.status = CampaignStatus.QUEUED
         camp.scheduled_for = eta.isoformat()
     else:
@@ -66,7 +66,7 @@ def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: S
     db.commit()
     
     # Standard Grade: Use background_tasks for immediate sending.
-    if eta and eta > datetime.utcnow():
+    if eta and eta > datetime.now(timezone.utc):
         # DO NOT trigger background_tasks for scheduled campaigns here.
         # They will be picked up by the background scheduler/cron.
         pass
