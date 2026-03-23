@@ -286,15 +286,15 @@ export default function Campaigns() {
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-24">
               <div className="w-12 h-12 border-4 border-indigo-500/20 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
-              <p className="text-slate-400 font-medium animate-pulse">Syncing campaigns...</p>
+              <p className="text-muted-foreground font-medium animate-pulse">Syncing campaigns...</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4 transition-transform hover:scale-110 duration-300">
                 <AlertCircle className="h-8 w-8 text-red-500" />
               </div>
-              <p className="text-slate-200 font-bold text-lg mb-1">Sync Error</p>
-              <p className="text-slate-400 text-sm max-w-xs mb-6 px-4">
+              <p className="text-foreground font-bold text-lg mb-1">Sync Error</p>
+              <p className="text-muted-foreground text-sm max-w-xs mb-6 px-4">
                 {error}
               </p>
               {connectionWarning && (
@@ -320,15 +320,15 @@ export default function Campaigns() {
           ) : filteredCampaigns.length > 0 ? (
             <div className="overflow-hidden border border-border rounded-2xl shadow-sm">
               <Table>
-                <TableHeader className="bg-muted/30">
+                <TableHeader className="bg-muted/50">
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="w-12"></TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground py-4">Campaign</TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Sent</TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Delivered</TableHead>
-                    <TableHead className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Bounced</TableHead>
-                    <TableHead className="text-right text-xs font-bold uppercase tracking-wider text-muted-foreground py-4 pr-6">Actions</TableHead>
+                    <TableHead className="text-xs font-black uppercase tracking-widest text-foreground py-4">Campaign</TableHead>
+                    <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Status</TableHead>
+                    <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Sent</TableHead>
+                    <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Delivered</TableHead>
+                    <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Bounced</TableHead>
+                    <TableHead className="text-right text-xs font-black uppercase tracking-widest text-foreground py-4 pr-6">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -339,7 +339,7 @@ export default function Campaigns() {
                           {campaign.name.charAt(0).toUpperCase()}
                         </div>
                       </TableCell>
-                      <TableCell className="font-bold text-slate-200 py-4">
+                      <TableCell className="font-bold text-foreground py-4">
                         {campaign.name}
                       </TableCell>
                       <TableCell>
@@ -350,13 +350,13 @@ export default function Campaigns() {
                           {campaign.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs font-medium text-slate-400">
+                      <TableCell className="text-xs font-medium text-muted-foreground">
                         {campaign.sent}
                       </TableCell>
-                      <TableCell className="text-xs font-medium text-slate-400">
+                      <TableCell className="text-xs font-medium text-muted-foreground">
                         {campaign.delivered}
                       </TableCell>
-                      <TableCell className="text-xs font-medium text-slate-400">
+                      <TableCell className="text-xs font-medium text-muted-foreground">
                         {campaign.bounce}
                       </TableCell>
                       <TableCell className="text-right py-4 pr-6">
@@ -394,11 +394,11 @@ export default function Campaigns() {
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center py-20 text-center bg-card/50 rounded-2xl border border-dashed border-border/50">
-              <div className="w-16 h-16 bg-slate-500/10 rounded-full flex items-center justify-center mb-4 text-slate-500">
+              <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mb-4 text-indigo-500">
                 <Layout className="h-8 w-8" />
               </div>
-              <p className="text-slate-200 font-bold text-lg mb-1">No Campaigns Found</p>
-              <p className="text-slate-500 text-sm max-w-xs mb-6 px-4">
+              <p className="text-foreground font-bold text-lg mb-1">No Campaigns Found</p>
+              <p className="text-muted-foreground text-sm max-w-xs mb-6 px-4">
                 {searchTerm || statusFilter !== "all" 
                   ? "No results matching your filters. Try adjusting your search." 
                   : "You haven't created any campaigns yet. Start by creating a new outreach campaign."}
@@ -466,7 +466,7 @@ export default function Campaigns() {
               <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trash2 className="w-8 h-8 text-red-500" />
               </div>
-              <p className="text-slate-300">
+              <p className="text-muted-foreground">
                 Are you sure you want to delete this campaign? This action cannot be undone.
               </p>
               <div className="flex gap-3 justify-center mt-8">

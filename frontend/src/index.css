@@ -20,7 +20,10 @@
   --color-card-foreground: #0F172A;
 
   --color-muted: #F1F5F9;
-  --color-muted-foreground: #64748B;
+  --color-muted-foreground: #475569;
+
+  --color-text-primary: var(--color-foreground);
+  --color-text-secondary: var(--color-muted-foreground);
 
   --color-border: #E2E8F0;
 
@@ -38,7 +41,7 @@
     --color-card: #FFFFFF;
     --color-card-foreground: #0F172A;
     --color-muted: #F1F5F9;
-    --color-muted-foreground: #64748B;
+    --color-muted-foreground: #475569;
     --color-border: #E2E8F0;
   }
 
