@@ -173,6 +173,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     interval={days === 365 ? 1 : 0}
                   />
                   <YAxis
+                    allowDecimals={false}
                     tick={{ fill: isDark ? "#E5E7EB" : "#111827", fontSize: 11, fontWeight: 600 }}
                     tickLine={false}
                     axisLine={false}
