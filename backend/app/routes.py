@@ -12,9 +12,9 @@ from .schemas import (
     AIGenerateRequest, TestEmailRequest, DashboardStats, AutomationCreate, 
     AutomationResponse, ContactResponse, ContactCreate, BulkContactsRequest, 
     SegmentCreate, SegmentResponse, ContactProfileResponse, AIChatRequest,
-    ContactCompanyUpdate
+    ContactCompanyUpdate, ActivityLogResponse, CampaignStatusResponse
 )
-from .models import Email, EmailStatus, EventType
+from .models import Email, EmailStatus, EventType, ActivityLog
 from .config import settings
 from .tasks import send_email_task, send_email_fn
 from . import debug
@@ -542,3 +542,18 @@ def update_contact_company(req: ContactCompanyUpdate, db: Session = Depends(get_
         return services.update_contact_company(db, req.email, req.company)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@router.get("/activity", response_model=List[ActivityLogResponse])
+def get_activity(db: Session = Depends(get_db)):
+    from .models import ActivityLog
+    return db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(20).all()
+
+@router.get("/campaign-status", response_model=List[CampaignStatusResponse])
+def get_campaign_status(db: Session = Depends(get_db)):
+    from .models import ActivityLog
+    from sqlalchemy import func
+    results = db.query(
+        ActivityLog.company, 
+        func.count(ActivityLog.id).label("total")
+    ).group_by(ActivityLog.company).all()
+    
+    return [{"company": r.company, "total": r.total} for r in results]

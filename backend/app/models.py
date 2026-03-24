@@ -192,3 +192,13 @@ class AutomationStep(Base):
     position = Column(Integer, default=0)
 
     automation = relationship("Automation", back_populates="steps")
+
+class ActivityLog(Base):
+    __tablename__ = "activity_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    recipient_email = Column(String)
+    sender = Column(String)
+    company = Column(String)
+    status = Column(String)
+    country = Column(String)
+    timestamp = Column(DateTime, default=func.now())

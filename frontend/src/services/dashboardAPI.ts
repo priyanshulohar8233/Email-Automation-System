@@ -120,6 +120,18 @@ export const dashboardAPI = {
             return []; // Fallback to empty array to show "No Data" gracefully
         }
     },
+    getActivity: async (signal?: AbortSignal): Promise<any[]> => {
+        const url = `${API_URL}/api/activity`;
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        if (!response.ok) throw new Error("Error fetching activity");
+        return await response.json();
+    },
+    getCampaignStatus: async (signal?: AbortSignal): Promise<any[]> => {
+        const url = `${API_URL}/api/campaign-status`;
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        if (!response.ok) throw new Error("Error fetching campaign status");
+        return await response.json();
+    },
     updateCompany: async (email: string, company: string): Promise<any> => {
         const response = await fetch(`${API_URL}/api/contacts/company`, {
             method: 'PUT',

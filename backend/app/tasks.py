@@ -6,7 +6,7 @@ from urllib.parse import quote
 from .config import settings
 from .debug import debug_log
 from .database import SessionLocal
-from .models import Email, EmailStatus, EmailEvent, Campaign, CampaignStatus, EventType
+from .models import Email, EmailStatus, EmailEvent, Campaign, CampaignStatus, EventType, ActivityLog
 from . import services
 from .sendgrid_bridge import send_email_sendgrid
 
@@ -111,9 +111,32 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         email_record.sent_at = now
         email_record.subject = subject
         
-        # Log events
-        db.add(EmailEvent(email_id=email_id, event_type=EventType.SENT, timestamp=now))
-        db.add(EmailEvent(email_id=email_id, event_type=EventType.DELIVERED, timestamp=now))
+        # Log activity_logs (SENT & DELIVERED)
+        try:
+            camp = db.query(Campaign).get(campaign_id)
+            company_name = camp.company if camp else "Unknown"
+            
+            # Log SENT
+            log_sent = ActivityLog(
+                recipient_email=to_addr,
+                sender=settings.SMTP_USER,
+                company=company_name,
+                status="SENT",
+                country="Unknown" # Default for now
+            )
+            db.add(log_sent)
+            
+            # Log DELIVERED
+            log_delivered = ActivityLog(
+                recipient_email=to_addr,
+                sender=settings.SMTP_USER,
+                company=company_name,
+                status="DELIVERED",
+                country="Unknown"
+            )
+            db.add(log_delivered)
+        except Exception as log_ex:
+            debug_log(f"WARNING: Activity logging failed: {log_ex}")
 
         # Standard Grade: Use the centralized service for completion check
         services.check_and_complete_campaign(db, campaign_id)
@@ -134,6 +157,20 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             camp = db.query(Campaign).get(email_record.campaign_id)
             if camp:
                 camp.failed_count = (camp.failed_count or 0) + 1
+                
+                # Log BOUNCED to activity_logs
+                try:
+                    log_bounced = ActivityLog(
+                        recipient_email=email_record.recipient_email,
+                        sender=settings.SMTP_USER,
+                        company=camp.company or "Unknown",
+                        status="BOUNCED",
+                        country="Unknown"
+                    )
+                    db.add(log_bounced)
+                except:
+                    pass
+
             db.commit()
             
             # Ensure campaign completes even if this was a failure (as long as it's the last one)

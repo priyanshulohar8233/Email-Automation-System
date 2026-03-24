@@ -113,19 +113,19 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
     Promise.all([
       dashboardAPI.getEmailStats(days, company),
       dashboardAPI.getStats(days, "all", company),
-      dashboardAPI.getEmailsPerCompany(days)
+      dashboardAPI.getCampaignStatus()
     ])
-      .then(([emailStats, stats, companyStats]) => {
+      .then(([emailStats, stats, companyStatus]) => {
         // Process email stats for line chart
         if (Array.isArray(emailStats)) {
           setLineData(emailStats);
         }
 
-        // Use emails per company for the donut chart
-        if (Array.isArray(companyStats) && companyStats.length > 0) {
-          const formattedStats = companyStats.map((stat: any) => ({
+        // Use emails per company (new endpoint) for the donut chart
+        if (Array.isArray(companyStatus) && companyStatus.length > 0) {
+          const formattedStats = companyStatus.map((stat: any) => ({
             name: stat.company,
-            value: stat.emails_sent
+            value: stat.total
           }));
           setPieData(formattedStats);
         } else if (stats.raw) {

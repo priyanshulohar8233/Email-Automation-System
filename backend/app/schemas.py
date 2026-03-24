@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, AnyHttpUrl
+from datetime import datetime
 from typing import List, Optional
-import datetime
 
 class AutomationStepSchema(BaseModel):
     id: Optional[int] = None
@@ -21,8 +21,8 @@ class AutomationResponse(BaseModel):
     trigger_type: str
     trigger_config: str
     steps: List[AutomationStepSchema]
-    created_at: datetime.datetime
-    updated_at: datetime.datetime
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True
@@ -111,12 +111,12 @@ class SegmentResponse(BaseModel):
     name: str
     description: Optional[str] = None
     criteria: str
-    created_at: datetime.datetime
+    created_at: datetime
 
 class ContactActivityItem(BaseModel):
     id: int
     event_type: str
-    timestamp: datetime.datetime
+    timestamp: datetime
     metadata: Optional[dict] = None
     campaign_name: Optional[str] = None
 
@@ -131,7 +131,7 @@ class ContactProfileResponse(BaseModel):
     status: str
     total_opens: int
     total_clicks: int
-    created_at: datetime.datetime
+    created_at: datetime
     activity: List[ContactActivityItem]
 
 class SettingsResponse(BaseModel):
@@ -187,3 +187,19 @@ class AIChatRequest(BaseModel):
 class ContactCompanyUpdate(BaseModel):
     email: EmailStr
     company: str
+
+class ActivityLogResponse(BaseModel):
+    id: int
+    recipient_email: str
+    sender: str
+    company: str
+    status: str
+    country: str
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+class CampaignStatusResponse(BaseModel):
+    company: str
+    total: int

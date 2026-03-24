@@ -14,17 +14,12 @@ import { dashboardAPI } from "@/services/dashboardAPI";
 
 interface RecentEvent {
   id: number;
-  email_id: number;
-  recipient: string;
-  recipient_name: string;
-  company: string;
-  subject: string;
+  recipient_email: string;
   sender: string;
-  location: string;
+  company: string;
+  status: string;
   country: string;
-  latest_type: string;
-  latest_timestamp: string;
-  events: { type: string; timestamp: string }[];
+  timestamp: string;
 }
 
 function getBadgeStyles(event_type: string): string {
@@ -94,7 +89,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
       setError(null);
     }
     try {
-      const data = await dashboardAPI.getRecentEvents(days, company, signal);
+      const data = await dashboardAPI.getActivity(signal);
       setEvents(data);
     } catch (err: any) {
       if (err.name !== 'AbortError') {
@@ -121,7 +116,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
       controller.abort();
       clearInterval(interval);
     };
-  }, [days, company]);
+  }, []);
 
   const handleUpdateCompany = async (eventId: number, email: string) => {
     const trimmed = editValue.trim();
@@ -133,7 +128,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
       
       // Update local state for immediate feedback
       setEvents(prev => prev.map(ev => 
-        ev.recipient === email ? { ...ev, company: trimmed } : ev
+        ev.recipient_email === email ? { ...ev, company: trimmed } : ev
       ));
       setEditingId(null);
     } catch (err) {
@@ -188,17 +183,14 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
             </TableHeader>
             <TableBody>
               {events.map((ev, index) => (
-                <TableRow key={ev.email_id} className="group hover:bg-muted/50 transition-colors duration-200 border-b border-border/50">
+                <TableRow key={ev.id} className="group hover:bg-muted/50 transition-colors duration-200 border-b border-border/50">
                   <TableCell className="text-muted-foreground/60 font-medium px-6 py-4">
                     {index + 1}
                   </TableCell>
                   <TableCell className="px-4 py-4">
                     <div className="flex flex-col">
-                      <span className="font-semibold text-foreground leading-tight text-sm">
-                        {ev.recipient_name}
-                      </span>
                       <span className="text-xs text-muted-foreground font-medium mt-0.5">
-                        {ev.recipient}
+                        {ev.recipient_email}
                       </span>
                     </div>
                   </TableCell>
@@ -216,7 +208,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
                             value={editValue}
                             onChange={(e) => setEditValue(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleUpdateCompany(ev.id, ev.recipient);
+                              if (e.key === 'Enter') handleUpdateCompany(ev.id, ev.recipient_email);
                               if (e.key === 'Escape') setEditingId(null);
                             }}
                             className="flex-1 px-2 py-1 text-sm bg-background border border-indigo-500 rounded-md outline-none ring-1 ring-indigo-500 focus:border-indigo-600 focus:ring-indigo-600 transition-all"
@@ -224,7 +216,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
                             disabled={isSaving}
                           />
                           <button 
-                            onClick={() => handleUpdateCompany(ev.id, ev.recipient)}
+                            onClick={() => handleUpdateCompany(ev.id, ev.recipient_email)}
                             disabled={isSaving}
                             className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-950/30 rounded-md transition-colors"
                             title="Save"
@@ -258,27 +250,13 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
                   </TableCell>
                   <TableCell className="text-center px-4 py-4 relative">
                     <div 
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-tight border cursor-pointer hover:shadow-md transition-all ${getBadgeStyles(ev.latest_type)}`}
-                      onClick={() => setOpenStatusId(openStatusId === ev.email_id ? null : ev.email_id)}
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-tight border cursor-default hover:shadow-md transition-all ${getBadgeStyles(ev.status)}`}
                     >
-                      {ev.latest_type}
+                      {ev.status}
                     </div>
-                    {openStatusId === ev.email_id && (
-                      <div className="absolute top-12 left-1/2 -translate-x-1/2 w-48 bg-card border border-border shadow-xl rounded-xl z-50 p-3 animate-in fade-in zoom-in-95 duration-200">
-                         <h4 className="text-[10px] font-bold uppercase text-muted-foreground mb-2 border-b border-border pb-1">Event Timeline</h4>
-                         <div className="space-y-2">
-                            {ev.events.map((e, i) => (
-                              <div key={i} className="flex justify-between items-center gap-2">
-                                <Badge variant="outline" className={`text-[9px] px-1 h-4 ${getBadgeStyles(e.type)}`}>{e.type}</Badge>
-                                <span className="text-[10px] text-muted-foreground tabular-nums">{formatTime(e.timestamp)}</span>
-                              </div>
-                            ))}
-                         </div>
-                      </div>
-                    )}
                   </TableCell>
                   <TableCell className="text-right text-muted-foreground text-xs px-6 py-4 tabular-nums font-medium">
-                    {formatTime(ev.latest_timestamp)}
+                    {formatTime(ev.timestamp)}
                   </TableCell>
                 </TableRow>
               ))}

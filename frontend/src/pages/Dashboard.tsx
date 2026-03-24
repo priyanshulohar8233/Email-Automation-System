@@ -75,7 +75,7 @@ export default function Dashboard() {
 
     const interval = setInterval(() => {
       fetchStats(undefined, true);
-    }, 30000);
+    }, 10000);
 
     return () => {
       controller.abort();
