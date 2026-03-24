@@ -194,6 +194,9 @@ export default function Settings() {
                         <div className="space-y-2">
                           <label className="text-sm font-medium">Password</label>
                           <Input name="smtpPassword" type="password" value={settings.smtpPassword} onChange={handleChange} placeholder="••••••••••••" />
+                          {settings.smtpPassword.includes(" ") && (
+                            <p className="text-[10px] text-red-500 font-medium">Password must not contain spaces.</p>
+                          )}
                         </div>
                       </div>
                     ) : (

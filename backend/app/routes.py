@@ -192,19 +192,28 @@ def test_smtp(db: Session = Depends(get_db)):
     s = db.query(Settings).first()
     
     # 1. Prioritize DB settings, fallback to ENV
+    source = "Database" if s and s.smtp_host else "Environment (.env)"
     host = (s.smtp_host if s and s.smtp_host else env_settings.SMTP_HOST)
     port = (s.smtp_port if s and s.smtp_port else env_settings.SMTP_PORT)
     user = (s.smtp_username if s and s.smtp_username else env_settings.SMTP_USER)
     pw = (s.smtp_password if s and s.smtp_password else env_settings.SMTP_PASS)
     
     if not host or not user:
-        raise HTTPException(status_code=400, detail="SMTP settings not configured (DB or ENV)")
+        raise HTTPException(status_code=400, detail=f"SMTP settings not configured in {source}")
     
-    # 2. Add defensive stripping
+    # 2. Strict validation as requested
+    if pw and " " in pw:
+        debug.debug_log(f"SMTP_VALIDATION_ERROR: Password from {source} contains spaces.")
+        raise HTTPException(
+            status_code=400, 
+            detail="SMTP Password contains spaces. Gmail 'App Passwords' must be entered WITHOUT spaces (16 characters total)."
+        )
+
+    # 3. Add defensive stripping for leading/trailing only
     user = user.strip() if user else user
     pw = pw.strip() if pw else pw
     
-    debug.debug_log(f"SMTP_TEST: Attempting connection to {host}:{port} for {user}")
+    debug.debug_log(f"SMTP_TEST: Using {source} credentials. Attempting {host}:{port} for {user}")
     
     try:
         from .services import send_mail
@@ -218,15 +227,21 @@ def test_smtp(db: Session = Depends(get_db)):
             smtp_user=user,
             smtp_pass=pw
         )
-        return {"status": "success", "message": f"Test email sent to {user}"}
+        return {"status": "success", "message": f"Test email sent to {user} (Source: {source})"}
     except Exception as e:
         error_detail = str(e)
-        debug.debug_log(f"SMTP_TEST_ERROR: {error_detail}")
+        debug.debug_log(f"SMTP_TEST_ERROR ({source}): {error_detail}")
         debug.debug_log(traceback.format_exc())
         
-        # Surfacing more helpful messages for Gmail users
-        if "authentication" in error_detail.lower():
-            error_detail = "Authentication failed. If using Gmail, ensure you use an 'App Password' without spaces."
+        # Surfacing more helpful messages specifically for 535 errors
+        if "535" in error_detail or "authentication" in error_detail.lower():
+            error_detail = (
+                "535 Authentication Failed. Remediation Steps:\n"
+                "1. Ensure '2-Step Verification' is ON in your Google Account.\n"
+                "2. Use a 16-character 'App Password' generated at accounts.google.com.\n"
+                "3. REMOVE ALL SPACES from the App Password.\n"
+                "4. Verify SMTP_USER matches the account used to generate the password."
+            )
         
         raise HTTPException(status_code=500, detail=f"SMTP Error: {error_detail}")
 
