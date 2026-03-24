@@ -39,9 +39,10 @@ class CampaignRequest(BaseModel):
 
 class CampaignCreate(BaseModel):
     name: str
-    company: Optional[str] = None
-    subject: Optional[str] = None
-    body: Optional[str] = None
+    company: str
+    subject: str
+    body: str
+    recipients: Optional[List[EmailStr]] = None
 
 class AIGenerateRequest(BaseModel):
     topic: str

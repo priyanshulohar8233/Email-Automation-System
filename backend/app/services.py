@@ -791,25 +791,95 @@ def get_emails_per_company(db: Session, days: int = 30):
     }
 
 
-def create_campaign(db: Session, data):
+def prepare_campaign_emails(db: Session, campaign_id: int, data, background_tasks):
+    from .models import Campaign, CampaignStatus, Email, EmailStatus
+    from .tasks import send_email_fn
+    from datetime import datetime, timezone
+    
+    camp = db.query(Campaign).get(campaign_id)
+    if not camp:
+        raise Exception("Campaign not found")
+        
+    eta = None
+    if getattr(data, 'scheduled_at', None):
+        try:
+            eta = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00"))
+        except:
+            try:
+                eta = datetime.strptime(data.scheduled_at, "%Y-%m-%dT%H:%M:%S.%f")
+            except:
+                pass
+
+    records = []
+    recipients = getattr(data, 'recipients', []) or []
+    for addr in recipients:
+        e = Email(
+            campaign_id=campaign_id, 
+            recipient_email=addr, 
+            status=EmailStatus.PENDING,
+            subject=data.subject,
+            body=data.body
+        )
+        db.add(e)
+        records.append(e)
+    
+    # Update campaign status
+    if eta and eta > datetime.now(timezone.utc):
+        camp.status = CampaignStatus.QUEUED
+        camp.scheduled_for = eta.isoformat()
+    else:
+        camp.status = CampaignStatus.RUNNING
+    
+    db.commit()
+    
+    # Trigger background tasks for immediate sends
+    if not (eta and eta > datetime.now(timezone.utc)):
+        for e in records:
+            background_tasks.add_task(send_email_fn, e.id, data.subject, data.body)
+            
+    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value}
+
+def create_campaign(db: Session, data, background_tasks=None):
     from .models import Campaign, CampaignStatus
+    import traceback
+    
+    # 7. Ensure company field matches allowed values
+    ALLOWED_COMPANIES = ["MP Lumina", "MP Consultant LLC", "A Making Company"]
+    if data.company not in ALLOWED_COMPANIES:
+        debug.debug_log(f"VALIDATION_ERROR: Invalid company '{data.company}'")
+        # Support fallback but log it
+        data.company = "MP Consultant LLC" 
+
     try:
+        # 1-3. Validate, Fix SQL Insert, Ensure Data Types
+        debug.debug_log(f"CAMPAIGN_CREATE: Attempting to insert campaign '{data.name}' for {data.company}")
+        
         new_camp = Campaign(
-            name=data.name,
-            company=data.company or "MP Consultant LLC",
+            name=data.name or "Untitled",
+            company=data.company,
             subject=data.subject or "",
             body=data.body or "",
             status=CampaignStatus.DRAFT,
             sent_count=0,
+            delivered_count=0,
+            failed_count=0,
             opens_count=0,
             unread_count=0,
-            bounce_count=0
+            bounce_count=0,
+            scheduled_for=getattr(data, 'scheduled_at', None) or None
         )
+        
         db.add(new_camp)
         db.commit()
         db.refresh(new_camp)
         
-        return {
+        # 8. Trigger SendGrid email sending if recipients provided
+        send_result = None
+        if getattr(data, 'recipients', None) and background_tasks:
+            debug_log(f"CAMPAIGN_CREATE: Triggering immediate send for {len(data.recipients)} recipients")
+            send_result = prepare_campaign_emails(db, new_camp.id, data, background_tasks)
+
+        result = {
             "id": str(new_camp.id),
             "name": str(new_camp.name),
             "subject": str(new_camp.subject),
@@ -819,13 +889,23 @@ def create_campaign(db: Session, data):
             "opens": "0 (0%)",
             "unread": "0 (0%)",
             "bounce": "0 (0%)",
-            "company": str(new_camp.company or "MP Consultant LLC"),
+            "company": str(new_camp.company),
             "scheduled": str(new_camp.scheduled_for or "-"),
         }
+        
+        if send_result:
+            result["send_status"] = send_result
+            
+        return result
+        
     except Exception as e:
         db.rollback()
-        print(f"CRITICAL ERROR in create_campaign: {str(e)}")
-        raise e
+        # 4 & 6. Log actual SQL error and return readable message
+        error_msg = f"Campaign Insert Error: {str(e)}"
+        debug.debug_log(error_msg)
+        debug.debug_log(traceback.format_exc())
+        print(error_msg) # console.error equivalent
+        raise Exception(error_msg)
 
 def process_sendgrid_webhook(db: Session, events: List[dict]):
     # ... (existing logic)

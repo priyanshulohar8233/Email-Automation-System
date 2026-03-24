@@ -28,54 +28,7 @@ def health_check():
 
 @router.post("/send-campaign")
 def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    from datetime import datetime, timezone
-    eta = None
-    if req.scheduled_at:
-        try:
-            # First attempt: ISO format
-            eta = datetime.fromisoformat(req.scheduled_at.replace("Z", "+00:00"))
-        except:
-            # Fallback for other formats
-            try:
-                eta = datetime.strptime(req.scheduled_at, "%Y-%m-%dT%H:%M:%S.%f")
-            except:
-                pass
-
-    from .models import Campaign, CampaignStatus
-    camp = db.query(Campaign).get(req.campaign_id)
-    if not camp:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    # Check if a campaign with this ID is already RUNNING
-    if camp.status == CampaignStatus.RUNNING:
-        return {"status": "error", "message": "Campaign is already running"}
-
-    records = []
-    for addr in req.recipients:
-        e = Email(campaign_id=req.campaign_id, recipient_email=addr, status=EmailStatus.PENDING)
-        db.add(e)
-        records.append(e)
-    
-    # Update campaign status based on scheduling
-    if eta and eta > datetime.now(timezone.utc):
-        camp.status = CampaignStatus.QUEUED
-        camp.scheduled_for = eta.isoformat()
-    else:
-        camp.status = CampaignStatus.RUNNING
-    
-    db.commit()
-    
-    # Standard Grade: Use background_tasks for immediate sending.
-    if eta and eta > datetime.now(timezone.utc):
-        # DO NOT trigger background_tasks for scheduled campaigns here.
-        # They will be picked up by the background scheduler/cron.
-        pass
-    else:
-        for e in records:
-            # Immediate sends use background_tasks (native to FastAPI/Uvicorn)
-            background_tasks.add_task(send_email_fn, e.id, req.subject, req.body, req.attachments)
-            
-    return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value, "mode": "celery" if (eta and can_use_celery) else "background_tasks"}
+    return services.prepare_campaign_emails(db, req.campaign_id, req, background_tasks)
 
 @router.post("/campaigns/check-due")
 def trigger_due_campaigns(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
@@ -106,8 +59,11 @@ def get_campaigns(search: str | None = None, status: str | None = None, db: Sess
         )
 
 @router.post("/campaigns")
-def create_campaign(req: CampaignCreate, db: Session = Depends(get_db)):
-    return services.create_campaign(db, req)
+def create_campaign(req: CampaignCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    try:
+        return services.create_campaign(db, req, background_tasks)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/campaigns/{id}")
 def update_campaign(id: int, req: CampaignCreate, db: Session = Depends(get_db)):
