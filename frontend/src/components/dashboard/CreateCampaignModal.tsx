@@ -100,7 +100,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                         subject: subject.trim(),
                         body: body.trim(),
                         recipients: finalRecipients,
-                        scheduled_at: isScheduled ? scheduledAt : null
+                        scheduled_at: isScheduled && scheduledAt ? new Date(scheduledAt).toISOString() : null
                     }),
                 });
                 if (!sendRes.ok) {

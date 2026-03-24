@@ -866,8 +866,23 @@ def create_campaign(db: Session, data, background_tasks=None):
             opens_count=0,
             unread_count=0,
             bounce_count=0,
-            scheduled_for=getattr(data, 'scheduled_at', None) or None
+            scheduled_for=None
         )
+        
+        # Handle scheduling with timezone awareness
+        scheduled_at_str = getattr(data, 'scheduled_at', None)
+        if scheduled_at_str:
+            try:
+                # If it's a full ISO string (from frontend JS .toISOString() or similar), parse it.
+                # If it's missing 'Z' or offset, we'll try to use the user's timezone if we had it,
+                # but for now we expect the frontend to send an unambiguous string.
+                if "Z" in scheduled_at_str or "+" in scheduled_at_str:
+                     new_camp.scheduled_for = datetime.fromisoformat(scheduled_at_str.replace("Z", "+00:00"))
+                else:
+                     # Fallback for naive strings if any
+                     new_camp.scheduled_for = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=timezone.utc)
+            except Exception as parse_err:
+                debug.debug_log(f"SCHEDULING_PARSE_ERROR: {str(parse_err)}")
         
         db.add(new_camp)
         db.commit()
@@ -1016,10 +1031,10 @@ def check_due_campaigns(db: Session, background_tasks=None):
     triggered_count = 0
     for camp in due_campaigns:
         try:
-            # Parse scheduled time
-            try:
-                sched_time = datetime.fromisoformat(camp.scheduled_for.replace("Z", "+00:00"))
-            except:
+            # Since scheduled_for is now a DateTime(timezone=True) column, 
+            # it comes back from SQLAlchemy as a timezone-aware datetime object (UTC).
+            sched_time = camp.scheduled_for
+            if not sched_time:
                 continue
                 
             if sched_time <= now:

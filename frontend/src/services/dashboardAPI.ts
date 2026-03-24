@@ -25,12 +25,19 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: numbe
     const controller = new AbortController();
     const { signal } = controller;
     
+    // Auto-detect user timezone and include in headers
+    const userTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const headers = {
+        ...options.headers,
+        "X-Timezone": userTz
+    };
+    
     // If a signal was passed in, we need to handle it
     if (options.signal && typeof options.signal.addEventListener === 'function') {
         options.signal.addEventListener('abort', () => controller.abort());
     }
 
-    const fetchPromise = fetch(url, { ...options, signal });
+    const fetchPromise = fetch(url, { ...options, headers, signal });
     const timeoutPromise = new Promise<Response>((_, reject) =>
         setTimeout(() => {
             controller.abort();

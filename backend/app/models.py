@@ -26,9 +26,9 @@ class Campaign(Base):
     opens_count = Column(Integer, default=0)
     unread_count = Column(Integer, default=0)
     bounce_count = Column(Integer, default=0)
-    scheduled_for = Column(String, nullable=True) # or DateTime
-    created_at = Column(DateTime, default=func.now())
-    completed_at = Column(DateTime, nullable=True)
+    scheduled_for = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    completed_at = Column(DateTime(timezone=True), nullable=True)
 
 class EmailStatus(str, enum.Enum):
     PENDING = "PENDING"
@@ -62,9 +62,9 @@ class Email(Base):
     bounce_reason = Column(String, nullable=True)
     bounce_type = Column(Enum(BounceType), nullable=True)
     delivery_status = Column(String, nullable=True) # e.g., "delivered", "processed", "deferred"
-    sent_at = Column(DateTime, default=func.now(), index=True)
-    opened_at = Column(DateTime, nullable=True)
-    clicked_at = Column(DateTime, nullable=True)
+    sent_at = Column(DateTime(timezone=True), default=func.now(), index=True)
+    opened_at = Column(DateTime(timezone=True), nullable=True)
+    clicked_at = Column(DateTime(timezone=True), nullable=True)
 
     events = relationship("EmailEvent", back_populates="email", order_by="EmailEvent.timestamp.asc()")
 
@@ -99,7 +99,7 @@ class EmailEvent(Base):
     # For Click tracking
     url = Column(String, nullable=True) 
     
-    timestamp = Column(DateTime, default=func.now(), index=True)
+    timestamp = Column(DateTime(timezone=True), default=func.now(), index=True)
 
     email = relationship("Email", back_populates="events")
 
@@ -114,7 +114,7 @@ class Segment(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     criteria = Column(String, default="{}") # JSON criteria for filtering contacts
-    created_at = Column(DateTime, default=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
 class Suppression(Base):
     __tablename__ = "suppressions"
@@ -122,7 +122,7 @@ class Suppression(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     reason = Column(Enum(SuppressionReason), nullable=False)
     metadata_raw = Column(String, nullable=True) # JSON details (e.g., SMTP code)
-    created_at = Column(DateTime, default=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
 class Contact(Base):
     __tablename__ = "contacts"
@@ -140,8 +140,8 @@ class Contact(Base):
     total_clicks = Column(Integer, default=0)
     engagement_score = Column(Integer, default=0)
     
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
 class Settings(Base):
     __tablename__ = "settings"
@@ -162,8 +162,8 @@ class Template(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, default="Untitled Template")
     content = Column(String, default="[]") # JSON string of blocks
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
 class AutomationTrigger(str, enum.Enum):
     WELCOME = "WELCOME" # Subscriber joins list
@@ -178,8 +178,8 @@ class Automation(Base):
     status = Column(String, default="draft") # draft, active, paused
     trigger_type = Column(Enum(AutomationTrigger), default=AutomationTrigger.WELCOME)
     trigger_config = Column(String, default="{}") # JSON config for trigger
-    created_at = Column(DateTime, default=func.now())
-    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     steps = relationship("AutomationStep", back_populates="automation", cascade="all, delete-orphan", order_by="AutomationStep.position.asc()")
 
@@ -201,4 +201,4 @@ class ActivityLog(Base):
     company = Column(String)
     status = Column(String)
     country = Column(String)
-    timestamp = Column(DateTime, default=func.now())
+    timestamp = Column(DateTime(timezone=True), default=func.now())
