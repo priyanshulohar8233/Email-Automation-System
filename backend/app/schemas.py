@@ -33,11 +33,13 @@ class CampaignRequest(BaseModel):
     subject: str
     body: str
     recipients: List[EmailStr]
+    company: Optional[str] = None
     scheduled_at: Optional[str] = None
     attachments: Optional[List[str]] = None
 
 class CampaignCreate(BaseModel):
     name: str
+    company: Optional[str] = None
     subject: Optional[str] = None
     body: Optional[str] = None
 

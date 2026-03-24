@@ -16,6 +16,7 @@ class Campaign(Base):
     __tablename__ = "campaigns"
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
+    company = Column(String, nullable=True) # A Making Company, MP Consultant LLC, MP Lumina
     subject = Column(String, nullable=True)
     body = Column(String, nullable=True)
     status = Column(Enum(CampaignStatus), default=CampaignStatus.DRAFT)

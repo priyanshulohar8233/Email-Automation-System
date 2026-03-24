@@ -339,19 +339,18 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
         query_emails = query_emails.filter(Email.campaign_id == campaign_filter)
         query_events = query_events.join(Email).filter(Email.campaign_id == campaign_filter)
 
-    # 1.5. Company Filter (Join with Contact)
+    # 1.5. Company Filter (Join with Campaign)
     if company_name and company_name != "all":
-        from .models import Contact
         companies = [company_name] if isinstance(company_name, str) else company_name
         
-        # We need to subquery/join to filter Email by recipient's company
-        query_emails = query_emails.join(Contact, Email.recipient_email == Contact.email).filter(Contact.company.in_(companies))
+        # PRO GRADE: Filter by the campaign's company (ownership)
+        query_emails = query_emails.join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
         
-        # Fix: If query_events already joined Email, don't join again
+        # Fix: If query_events already joined Email, join Campaign next
         if campaign_name != "all":
-             query_events = query_events.join(Contact, Email.recipient_email == Contact.email).filter(Contact.company.in_(companies))
+             query_events = query_events.join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
         else:
-             query_events = query_events.join(Email).join(Contact, Email.recipient_email == Contact.email).filter(Contact.company.in_(companies))
+             query_events = query_events.join(Email).join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
              
     email_res = query_emails.first()
     event_res = query_events.first()
@@ -575,7 +574,7 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
 
     if company_name and company_name != "all":
         companies = [company_name] if isinstance(company_name, str) else company_name
-        query = query.join(Contact, Email.recipient_email == Contact.email).filter(Contact.company.in_(companies))
+        query = query.join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
 
     results = query.group_by(cast(Email.sent_at, Date)).all()
     
@@ -629,16 +628,14 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
         ev = ev_data[0]
         contact_name = ev_data[1]
         
-        # Determine Sender
-        camp_name = (ev_data[3] or "").lower()
-        if "making" in camp_name:
-            sender_company = "A Making Company"
-        elif "lumina" in camp_name:
-            sender_company = "MP Lumina"
-        elif "mp" in camp_name or "consulting" in camp_name:
-            sender_company = "MP Consulting"
-        else:
-            sender_company = "MP Consulting"
+        # Determine Sender (Multi-Company Sync)
+        sender_company = ev_data[0].email.campaign.company if ev_data[0].email.campaign else "MP Consultant LLC"
+        if not sender_company:
+            # Fallback to legacy string matching if company record is empty
+            camp_name = (ev_data[3] or "").lower()
+            if "making" in camp_name: sender_company = "A Making Company"
+            elif "lumina" in camp_name: sender_company = "MP Lumina"
+            else: sender_company = "MP Consultant LLC"
         
         # Smart Company Extraction Logic
         email_str = ev.email.recipient_email
@@ -764,15 +761,15 @@ def get_emails_per_company(db: Session, days: int = 30):
     }
     
     for row in results:
-        camp_name = (row[0] or "").lower()
-        if "making" in camp_name:
-            counts["A Making Company"] += row[1]
-        elif "lumina" in camp_name:
-            counts["MP Lumina"] += row[1]
-        elif "mp" in camp_name or "consulting" in camp_name:
-            counts["MP Consultant LLC"] += row[1]
+        company = db.query(Campaign.company).filter(Campaign.name == row[0]).scalar()
+        if company in counts:
+            counts[company] += row[1]
         else:
-            counts["MP Consultant LLC"] += row[1] # fallback priority
+            # Fallback legacy logic
+            camp_name = (row[0] or "").lower()
+            if "making" in camp_name: counts["A Making Company"] += row[1]
+            elif "lumina" in camp_name: counts["MP Lumina"] += row[1]
+            else: counts["MP Consultant LLC"] += row[1]
             
     return {
         "success": True,
@@ -789,6 +786,7 @@ def create_campaign(db: Session, data):
     try:
         new_camp = Campaign(
             name=data.name,
+            company=data.company or "MP Consultant LLC",
             subject=data.subject or "",
             body=data.body or "",
             status=CampaignStatus.DRAFT,
@@ -811,6 +809,7 @@ def create_campaign(db: Session, data):
             "opens": "0 (0%)",
             "unread": "0 (0%)",
             "bounce": "0 (0%)",
+            "company": str(new_camp.company or "MP Consultant LLC"),
             "scheduled": str(new_camp.scheduled_for or "-"),
         }
     except Exception as e:
@@ -901,6 +900,7 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
                 "opens": format_rate(opens, sent),
                 "unread": format_rate(unread, sent),
                 "bounce": format_rate(failed, sent + failed),
+                "company": str(c.company or "MP Consultant LLC"),
                 "scheduled": c.scheduled_for or "Not scheduled",
             })
         return results

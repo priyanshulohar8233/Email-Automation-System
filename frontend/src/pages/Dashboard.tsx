@@ -25,20 +25,13 @@ export default function Dashboard() {
   }, [selectedCompanies]);
 
   const COMPANIES = [
-    "https://amakingcompany.com/",
-    "https://mpconsulting.com/",
-    "https://mpconsulting.com/mplumina"
+    "A Making Company",
+    "MP Consultant LLC",
+    "MP Lumina"
   ];
 
-  const formatCompanyName = (url: string) => {
-    let domain = url.replace(/^(https?:\/\/)?(www\.)?/, '').replace(/\/$/, '');
-    if (domain === "amakingcompany.com") return "A Making Company";
-    if (domain === "mpconsulting.com") return "MP Consulting";
-    if (domain === "mpconsulting.com/mplumina") return "MP Lumina";
-    
-    // Fallback logic for dynamic names
-    let namePart = domain.split(/[./-]/)[0];
-    return namePart.charAt(0).toUpperCase() + namePart.slice(1);
+  const formatCompanyName = (name: string) => {
+    return name;
   };
 
   useEffect(() => {

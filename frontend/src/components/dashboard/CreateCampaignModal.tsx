@@ -12,6 +12,7 @@ interface CreateCampaignModalProps {
 
 export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalProps) {
     const [name, setName] = useState("");
+    const [company, setCompany] = useState(() => localStorage.getItem("last_used_company") || "MP Consultant LLC");
     const [subject, setSubject] = useState("");
     const [body, setBody] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -22,6 +23,12 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
     const [scheduledAt, setScheduledAt] = useState("");
 
     const [recipients, setRecipients] = useState<string[]>([]);
+
+    const COMPANIES = [
+        "A Making Company",
+        "MP Consultant LLC",
+        "MP Lumina"
+    ];
 
     useEffect(() => {
         const aiSubject = localStorage.getItem("ai_draft_subject");
@@ -62,6 +69,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: name.trim(),
+                    company: company,
                     subject: subject.trim(),
                     body: body.trim()
                 }),
@@ -88,6 +96,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         campaign_id: parseInt(campaignData.id),
+                        company: company,
                         subject: subject.trim(),
                         body: body.trim(),
                         recipients: finalRecipients,
@@ -105,6 +114,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
             }
 
             // Success! Clear drafts
+            localStorage.setItem("last_used_company", company);
             localStorage.removeItem("ai_draft_subject");
             localStorage.removeItem("ai_draft_body");
             localStorage.removeItem("ai_draft_recipients");
@@ -139,13 +149,13 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                         )}
                         <CardTitle className="text-xl font-bold text-foreground">Launch New Campaign</CardTitle>
                         {recipients.length > 0 && (
-                            <Badge variant="secondary" {...{ className: "bg-indigo-50 text-indigo-700 border-indigo-100 flex items-center gap-1.5 py-1" } as any}>
+                            <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-indigo-100 flex items-center gap-1.5 py-1">
                                 <Plus className="h-3 w-3" />
                                 {recipients.length} AI Recipients {fileName ? `(${fileName})` : ''}
                             </Badge>
                         )}
                     </div>
-                    <Badge variant="success" className="h-5 text-[9px]" {...{ className: "h-5 text-[9px]" } as any}>Verified</Badge>
+                    <Badge variant="success" className="h-5 text-[9px]">Verified</Badge>
                     <CardDescription className="text-muted-foreground">
                         {hasAIDraft
                             ? "AI content is ready. Review your compliance settings and launch."
@@ -155,6 +165,22 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
 
                 <CardContent className="max-h-[70vh] overflow-y-auto custom-scrollbar">
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        <div className="space-y-2">
+                             <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Select Company</label>
+                             <div className="grid grid-cols-3 gap-2">
+                                 {COMPANIES.map((c) => (
+                                     <button
+                                         key={c}
+                                         type="button"
+                                         onClick={() => setCompany(c)}
+                                         className={`h-10 rounded-xl text-[11px] font-bold transition-all border ${company === c ? 'bg-indigo-600 text-white border-transparent shadow-lg shadow-indigo-500/20' : 'bg-muted/30 text-muted-foreground border-border hover:bg-muted hover:text-foreground'}`}
+                                     >
+                                         {c}
+                                     </button>
+                                 ))}
+                             </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Campaign Name</label>

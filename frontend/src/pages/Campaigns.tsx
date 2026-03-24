@@ -44,6 +44,7 @@ interface Campaign {
   unread: string;
   bounce: string;
   scheduled: string;
+  company: string;
 }
 
 export default function Campaigns() {
@@ -121,6 +122,15 @@ export default function Campaigns() {
       case 'draft': return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
       case 'completed': 
       case 'complete': return 'text-purple-400 bg-purple-400/10 border-purple-400/20';
+      default: return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
+    }
+  };
+
+  const getCompanyColor = (company: string) => {
+    switch (company) {
+      case 'A Making Company': return 'text-amber-400 bg-amber-400/10 border-amber-400/20';
+      case 'MP Lumina': return 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20';
+      case 'MP Consultant LLC': return 'text-indigo-400 bg-indigo-400/10 border-indigo-400/20';
       default: return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
     }
   };
@@ -324,6 +334,7 @@ export default function Campaigns() {
                   <TableRow className="border-border hover:bg-transparent">
                     <TableHead className="w-12"></TableHead>
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground py-4">Campaign</TableHead>
+                    <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Company</TableHead>
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Status</TableHead>
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Sent</TableHead>
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Delivered</TableHead>
@@ -341,6 +352,14 @@ export default function Campaigns() {
                       </TableCell>
                       <TableCell className="font-bold text-foreground py-4">
                         {campaign.name}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="outline" 
+                          className={`rounded-full px-3 py-0.5 text-[10px] font-bold border ${getCompanyColor(campaign.company)}`}
+                        >
+                          {campaign.company}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge 
