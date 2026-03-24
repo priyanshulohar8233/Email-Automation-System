@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost")
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
     SENDGRID_API_KEY: str | None = os.getenv("SENDGRID_API_KEY")
+    SENDGRID_VERIFIED_SENDER: str | None = os.getenv("SENDGRID_VERIFIED_SENDER")
 
     class Config:
         env_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), ".env")

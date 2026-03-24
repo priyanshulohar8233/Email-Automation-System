@@ -310,22 +310,42 @@ def get_link_performance(campaign: str = "all", db: Session = Depends(get_db)):
 
 @router.post("/settings/test-sendgrid")
 def test_sendgrid(db: Session = Depends(get_db)):
-    from .models import Settings as DBSettings
+    from .config import settings
     from .sendgrid_bridge import send_email_sendgrid
-    s = db.query(DBSettings).first()
-    if not s or not s.sendgrid_api_key:
-        raise HTTPException(status_code=400, detail="SendGrid API Key not configured")
+    
+    # Secure Grade: Prioritize ENV keys for testing
+    api_key = settings.SENDGRID_API_KEY
+    sender = settings.SENDGRID_VERIFIED_SENDER
+    
+    # Fallback to DB if ENV is missing (for flexibility)
+    if not api_key or not sender:
+        from .models import Settings as DBSettings
+        s = db.query(DBSettings).first()
+        if s:
+            api_key = api_key or s.sendgrid_api_key
+            sender = sender or s.from_email or s.smtp_username
+            
+    if not api_key:
+        raise HTTPException(status_code=400, detail="SendGrid API Key not found in environment or database.")
+    if not sender:
+        raise HTTPException(status_code=400, detail="SendGrid Verified Sender not configured.")
     
     res = send_email_sendgrid(
-        api_key=s.sendgrid_api_key,
-        from_email=s.from_email or s.smtp_username or "noreply@mailflow.com",
-        to_email=s.from_email or s.smtp_username or "admin@mailflow.com",
+        api_key=api_key,
+        from_email=sender,
+        to_email=sender, # Test send to self
         subject="SendGrid Connection Test",
-        html_content="<h1>Connection Successful!</h1><p>Your SendGrid REST API bridge is now operational.</p>"
+        html_content="<h1>Connection Successful!</h1><p>Your SendGrid REST API bridge is now operational and verified.</p>"
     )
+    
     if not res.get("success"):
-        raise HTTPException(status_code=500, detail=res.get("error"))
-    return {"status": "success"}
+        # SaaS Grade: Surface the specific SendGrid error (captured in our bridge)
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": res.get("error")}
+        )
+        
+    return {"status": "success", "message": "Test email sent to verified sender"}
 
 @router.post("/webhook/sendgrid")
 def sendgrid_webhook(payload: List[dict], db: Session = Depends(get_db)):
