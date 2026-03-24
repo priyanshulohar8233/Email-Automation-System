@@ -60,10 +60,21 @@ def get_campaigns(search: str | None = None, status: str | None = None, db: Sess
 
 @router.post("/campaigns")
 def create_campaign(req: CampaignCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+    # 1. Manual validation for specific 400 error format
+    if not req.name or not req.company or not req.subject or not req.body:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "Missing required fields"}
+        )
+    
     try:
         return services.create_campaign(db, req, background_tasks)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # 5 & 6. User-friendly error message, no raw SQL
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Database error while creating campaign"}
+        )
 
 @router.put("/campaigns/{id}")
 def update_campaign(id: int, req: CampaignCreate, db: Session = Depends(get_db)):

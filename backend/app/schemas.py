@@ -38,11 +38,12 @@ class CampaignRequest(BaseModel):
     attachments: Optional[List[str]] = None
 
 class CampaignCreate(BaseModel):
-    name: str
-    company: str
-    subject: str
-    body: str
+    name: Optional[str] = None
+    company: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
     recipients: Optional[List[EmailStr]] = None
+    scheduled_at: Optional[str] = None
 
 class AIGenerateRequest(BaseModel):
     topic: str

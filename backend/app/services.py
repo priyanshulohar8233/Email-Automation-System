@@ -843,23 +843,23 @@ def create_campaign(db: Session, data, background_tasks=None):
     from .models import Campaign, CampaignStatus
     import traceback
     
-    # 7. Ensure company field matches allowed values
+    # 9. Add logging
+    debug.debug_log(f"Campaign Payload: {data.dict()}")
+
+    # 7 & 8. Ensure company field matches allowed values
     ALLOWED_COMPANIES = ["MP Lumina", "MP Consultant LLC", "A Making Company"]
     if data.company not in ALLOWED_COMPANIES:
         debug.debug_log(f"VALIDATION_ERROR: Invalid company '{data.company}'")
-        # Support fallback but log it
         data.company = "MP Consultant LLC" 
 
     try:
-        # 1-3. Validate, Fix SQL Insert, Ensure Data Types
-        debug.debug_log(f"CAMPAIGN_CREATE: Attempting to insert campaign '{data.name}' for {data.company}")
-        
+        # 3. Fix DB insert query: status -> default "RUNNING"
         new_camp = Campaign(
-            name=data.name or "Untitled",
+            name=data.name,
             company=data.company,
-            subject=data.subject or "",
-            body=data.body or "",
-            status=CampaignStatus.DRAFT,
+            subject=data.subject,
+            body=data.body,
+            status=CampaignStatus.RUNNING,
             sent_count=0,
             delivered_count=0,
             failed_count=0,
@@ -873,14 +873,13 @@ def create_campaign(db: Session, data, background_tasks=None):
         db.commit()
         db.refresh(new_camp)
         
-        # 8. Trigger SendGrid email sending if recipients provided
+        # 7. After successful insert: Trigger SendGrid email sending logic
         send_result = None
         if getattr(data, 'recipients', None) and background_tasks:
-            debug_log(f"CAMPAIGN_CREATE: Triggering immediate send for {len(data.recipients)} recipients")
             send_result = prepare_campaign_emails(db, new_camp.id, data, background_tasks)
 
         result = {
-            "id": str(new_camp.id),
+            "id": int(new_camp.id), # Return as integer as per default DB types
             "name": str(new_camp.name),
             "subject": str(new_camp.subject),
             "body": str(new_camp.body),
@@ -900,12 +899,11 @@ def create_campaign(db: Session, data, background_tasks=None):
         
     except Exception as e:
         db.rollback()
-        # 4 & 6. Log actual SQL error and return readable message
-        error_msg = f"Campaign Insert Error: {str(e)}"
-        debug.debug_log(error_msg)
+        # 5 & 6. Wrap DB logic in try-catch and do NOT expose SQL to frontend
+        debug.debug_log(f"DB ERROR: {str(e)}")
         debug.debug_log(traceback.format_exc())
-        print(error_msg) # console.error equivalent
-        raise Exception(error_msg)
+        # Return user-friendly message
+        raise Exception("Database error while creating campaign")
 
 def process_sendgrid_webhook(db: Session, events: List[dict]):
     # ... (existing logic)
