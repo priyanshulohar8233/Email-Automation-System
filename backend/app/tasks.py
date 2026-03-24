@@ -1,6 +1,7 @@
 import smtplib
 import os
 import re
+import json
 from datetime import datetime, timezone
 from urllib.parse import quote
 from .config import settings
@@ -9,6 +10,68 @@ from .database import SessionLocal
 from .models import Email, EmailStatus, EmailEvent, Campaign, CampaignStatus, EventType, ActivityLog
 from . import services
 from .sendgrid_bridge import send_email_sendgrid
+
+# Status priority: higher index = more advanced event
+STATUS_PRIORITY = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
+
+def _extract_name_from_email(email: str) -> str:
+    """Extract a display name from email prefix, e.g. john.doe@x.com -> John Doe"""
+    prefix = email.split("@")[0]
+    # Replace separators with space and title-case
+    name = prefix.replace(".", " ").replace("_", " ").replace("-", " ").title()
+    return name
+
+def upsert_activity_log(db, email_id: int, campaign_id: int, recipient_email: str,
+                        sender: str, company: str, new_status: str, country: str = None) -> None:
+    """
+    Upsert one ActivityLog row per email_id.
+    - If row exists: update status if new_status has higher priority, append to status_history, update timestamp.
+    - If row doesn't exist: create it.
+    """
+    try:
+        existing = db.query(ActivityLog).filter(ActivityLog.email_id == email_id).first()
+        now = datetime.now(timezone.utc)
+        name = _extract_name_from_email(recipient_email)
+
+        if existing:
+            # Parse existing history
+            try:
+                history = json.loads(existing.status_history or "[]")
+            except Exception:
+                history = []
+
+            # Only append if not already in history
+            if new_status not in history:
+                history.append(new_status)
+                existing.status_history = json.dumps(history)
+
+            # Upgrade status if the new one has higher priority
+            cur_priority = STATUS_PRIORITY.get(existing.status, 0)
+            new_priority = STATUS_PRIORITY.get(new_status, 0)
+            if new_priority > cur_priority:
+                existing.status = new_status
+
+            # Update country if we now have one
+            if country and country != "Unknown" and (not existing.country or existing.country == "Unknown"):
+                existing.country = country
+
+            existing.timestamp = now
+        else:
+            log = ActivityLog(
+                email_id=email_id,
+                campaign_id=campaign_id,
+                recipient_email=recipient_email,
+                recipient_name=name,
+                sender=sender,
+                company=company,
+                status=new_status,
+                status_history=json.dumps([new_status]),
+                country=country or "Unknown",
+                timestamp=now,
+            )
+            db.add(log)
+    except Exception as e:
+        debug_log(f"WARNING: upsert_activity_log failed: {e}")
 
 from celery import Celery
 
@@ -111,30 +174,19 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         email_record.sent_at = now
         email_record.subject = subject
         
-        # Log activity_logs (SENT & DELIVERED)
+        # Log to activity_logs (SENT → then upsert to DELIVERED on success)
         try:
             camp = db.query(Campaign).get(campaign_id)
             company_name = camp.company if camp else "Unknown"
-            
-            # Log SENT
-            log_sent = ActivityLog(
-                recipient_email=to_addr,
-                sender=settings.SMTP_USER,
-                company=company_name,
-                status="SENT",
-                country="Unknown" # Default for now
-            )
-            db.add(log_sent)
-            
-            # Log DELIVERED
-            log_delivered = ActivityLog(
-                recipient_email=to_addr,
-                sender=settings.SMTP_USER,
-                company=company_name,
-                status="DELIVERED",
-                country="Unknown"
-            )
-            db.add(log_delivered)
+
+            # First mark as SENT
+            upsert_activity_log(db, email_id, campaign_id, to_addr,
+                                settings.SMTP_USER, company_name, "SENT")
+            db.flush()  # Ensure row exists before DELIVERED upsert below
+
+            # Immediately upgrade to DELIVERED since SMTP send was successful
+            upsert_activity_log(db, email_id, campaign_id, to_addr,
+                                settings.SMTP_USER, company_name, "DELIVERED")
         except Exception as log_ex:
             debug_log(f"WARNING: Activity logging failed: {log_ex}")
 
@@ -157,18 +209,15 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             camp = db.query(Campaign).get(email_record.campaign_id)
             if camp:
                 camp.failed_count = (camp.failed_count or 0) + 1
-                
-                # Log BOUNCED to activity_logs
+
+                # Log BOUNCED (upsert)
                 try:
-                    log_bounced = ActivityLog(
-                        recipient_email=email_record.recipient_email,
-                        sender=settings.SMTP_USER,
-                        company=camp.company or "Unknown",
-                        status="BOUNCED",
-                        country="Unknown"
-                    )
-                    db.add(log_bounced)
-                except:
+                    upsert_activity_log(db, email_record.id, email_record.campaign_id,
+                                        email_record.recipient_email,
+                                        settings.SMTP_USER,
+                                        camp.company or "Unknown",
+                                        "BOUNCED")
+                except Exception:
                     pass
 
             db.commit()

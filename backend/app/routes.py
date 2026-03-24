@@ -16,7 +16,7 @@ from .schemas import (
 )
 from .models import Email, EmailStatus, EventType, ActivityLog
 from .config import settings
-from .tasks import send_email_task, send_email_fn
+from .tasks import send_email_task, send_email_fn, upsert_activity_log
 from . import debug
 
 router = APIRouter(prefix="/api")
@@ -290,7 +290,33 @@ def get_recent_events(response: Response, days: int = 30, campaign: str = "all",
 @router.get("/t/o/{email_id}")
 def tracking_pixel(email_id: int, request: Request, db: Session = Depends(get_db)):
     services.log_event(db, email_id, EventType.OPENED, ip=request.client.host, ua=request.headers.get("user-agent"))
-    # Return 1x1 transparent pixel
+    
+    # Upsert OPENED status in activity_logs with country from IP
+    try:
+        import requests as req_lib
+        client_ip = request.client.host
+        country = "Unknown"
+        if client_ip and client_ip not in ("127.0.0.1", "::1", "localhost"):
+            try:
+                geo = req_lib.get(f"https://ipapi.co/{client_ip}/json/", timeout=2).json()
+                country = geo.get("country_name") or "Unknown"
+            except Exception:
+                country = "Unknown"
+        
+        email_rec = db.query(Email).get(email_id)
+        if email_rec:
+            from .models import Campaign
+            camp = db.query(Campaign).get(email_rec.campaign_id)
+            company_name = camp.company if camp else "Unknown"
+            upsert_activity_log(
+                db, email_id, email_rec.campaign_id,
+                email_rec.recipient_email, settings.SMTP_USER, company_name,
+                "OPENED", country
+            )
+            db.commit()
+    except Exception as e:
+        debug.debug_log(f"OPEN_TRACK_ERR: {e}")
+    
     import base64
     pixel = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
     return Response(content=pixel, media_type="image/gif")
@@ -299,6 +325,33 @@ def tracking_pixel(email_id: int, request: Request, db: Session = Depends(get_db
 def tracking_click(email_id: int, url: str, request: Request, db: Session = Depends(get_db)):
     from urllib.parse import unquote
     services.log_event(db, email_id, EventType.CLICKED, ip=request.client.host, ua=request.headers.get("user-agent"), url=url)
+    
+    # Upsert CLICKED status in activity_logs with country from IP
+    try:
+        import requests as req_lib
+        client_ip = request.client.host
+        country = "Unknown"
+        if client_ip and client_ip not in ("127.0.0.1", "::1", "localhost"):
+            try:
+                geo = req_lib.get(f"https://ipapi.co/{client_ip}/json/", timeout=2).json()
+                country = geo.get("country_name") or "Unknown"
+            except Exception:
+                country = "Unknown"
+        
+        email_rec = db.query(Email).get(email_id)
+        if email_rec:
+            from .models import Campaign
+            camp = db.query(Campaign).get(email_rec.campaign_id)
+            company_name = camp.company if camp else "Unknown"
+            upsert_activity_log(
+                db, email_id, email_rec.campaign_id,
+                email_rec.recipient_email, settings.SMTP_USER, company_name,
+                "CLICKED", country
+            )
+            db.commit()
+    except Exception as e:
+        debug.debug_log(f"CLICK_TRACK_ERR: {e}")
+    
     return RedirectResponse(url=unquote(url))
 
 # Legacy Aliases (Compatibility for older emails)
@@ -542,10 +595,61 @@ def update_contact_company(req: ContactCompanyUpdate, db: Session = Depends(get_
         return services.update_contact_company(db, req.email, req.company)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@router.get("/activity", response_model=List[ActivityLogResponse])
+@router.get("/api/contacts/company")
+def get_contact_company_info(email: str, db: Session = Depends(get_db)):
+    """Utility: return company details for a contact email."""
+    from .models import Contact
+    contact = db.query(Contact).filter(Contact.email == email).first()
+    return {"company": contact.company if contact else "Unknown"}
+
+@router.get("/activity")
 def get_activity(db: Session = Depends(get_db)):
-    from .models import ActivityLog
-    return db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(20).all()
+    """
+    Return grouped activity: one row per (email_id), ordered by latest event.
+    Falls back to legacy grouping for rows without email_id.
+    """
+    import json
+    
+    # Get latest 50 rows from DB ordered by timestamp desc
+    rows = db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(50).all()
+    
+    # Group by email_id (or recipient_email as fallback for legacy rows)
+    seen = {}  # key -> row
+    for row in rows:
+        # Use email_id as primary key if available, else fall back to recipient email
+        key = row.email_id if row.email_id else f"legacy_{row.recipient_email}"
+        if key not in seen:
+            seen[key] = row
+        else:
+            # For legacy rows, keep the most recent one (highest ID as proxy for latest)
+            if row.id > seen[key].id:
+                seen[key] = row
+    
+    result = []
+    for row in list(seen.values())[:20]:  # Return at most 20 unique entries
+        try:
+            history = json.loads(row.status_history or "[]")
+        except Exception:
+            history = [row.status] if row.status else []
+        
+        # Ensure history is ordered by priority (most advanced last, for display reversed)
+        priority = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
+        history_sorted = sorted(set(history), key=lambda s: priority.get(s, 0))
+        
+        result.append({
+            "id": row.id,
+            "email_id": row.email_id,
+            "recipient_email": row.recipient_email,
+            "recipient_name": row.recipient_name or "",
+            "sender": row.sender or "",
+            "company": row.company or "",
+            "status": row.status or "SENT",
+            "status_history": history_sorted,
+            "country": row.country or "Unknown",
+            "timestamp": row.timestamp.isoformat() if row.timestamp else "",
+        })
+    
+    return result
 
 @router.get("/campaign-status", response_model=List[CampaignStatusResponse])
 def get_campaign_status(db: Session = Depends(get_db)):

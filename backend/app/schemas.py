@@ -190,12 +190,15 @@ class ContactCompanyUpdate(BaseModel):
 
 class ActivityLogResponse(BaseModel):
     id: int
+    email_id: Optional[int] = None
     recipient_email: str
+    recipient_name: Optional[str] = ""
     sender: str
     company: str
     status: str
-    country: str
-    timestamp: datetime
+    status_history: Optional[List[str]] = []
+    country: Optional[str] = "Unknown"
+    timestamp: str  # ISO string
 
     class Config:
         from_attributes = True

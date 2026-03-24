@@ -196,9 +196,13 @@ class AutomationStep(Base):
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
     id = Column(Integer, primary_key=True, index=True)
+    email_id = Column(Integer, nullable=True, index=True)       # Link to emails table
+    campaign_id = Column(Integer, nullable=True, index=True)    # Link to campaigns table
     recipient_email = Column(String)
+    recipient_name = Column(String, nullable=True)              # Extracted name
     sender = Column(String)
     company = Column(String)
-    status = Column(String)
-    country = Column(String)
-    timestamp = Column(DateTime(timezone=True), default=func.now())
+    status = Column(String)                                     # Current/latest status
+    status_history = Column(String, default="[]")              # JSON: ["SENT","DELIVERED",...]
+    country = Column(String, nullable=True)
+    timestamp = Column(DateTime(timezone=True), default=func.now())  # Latest event time
