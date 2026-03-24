@@ -107,10 +107,20 @@ def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_p
             except Exception as e:
                 print(f"Error attaching file: {str(e)}")
 
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.sendmail(smtp_user, [to_addr], message.as_string())
+    # Defensive stripping
+    smtp_user = smtp_user.strip() if smtp_user else smtp_user
+    smtp_pass = smtp_pass.strip() if smtp_pass else smtp_pass
+
+    try:
+        debug.debug_log(f"SMTP: Connecting to {smtp_host}:{smtp_port}...")
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
+            server.starttls()
+            server.login(smtp_user, smtp_pass)
+            server.sendmail(smtp_user, [to_addr], message.as_string())
+            debug.debug_log(f"SMTP: Email sent successfully to {to_addr}")
+    except Exception as e:
+        debug.debug_log(f"SMTP_ERROR: Failed to send email to {to_addr}. Error: {str(e)}")
+        raise e
 
 
 # functions used by API

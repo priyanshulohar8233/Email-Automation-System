@@ -186,25 +186,49 @@ def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
 @router.post("/settings/test-smtp")
 def test_smtp(db: Session = Depends(get_db)):
     from .models import Settings
+    from .config import settings as env_settings
+    import traceback
+    
     s = db.query(Settings).first()
-    if not s or not s.smtp_host or not s.smtp_username:
-        raise HTTPException(status_code=400, detail="SMTP settings not configured")
+    
+    # 1. Prioritize DB settings, fallback to ENV
+    host = (s.smtp_host if s and s.smtp_host else env_settings.SMTP_HOST)
+    port = (s.smtp_port if s and s.smtp_port else env_settings.SMTP_PORT)
+    user = (s.smtp_username if s and s.smtp_username else env_settings.SMTP_USER)
+    pw = (s.smtp_password if s and s.smtp_password else env_settings.SMTP_PASS)
+    
+    if not host or not user:
+        raise HTTPException(status_code=400, detail="SMTP settings not configured (DB or ENV)")
+    
+    # 2. Add defensive stripping
+    user = user.strip() if user else user
+    pw = pw.strip() if pw else pw
+    
+    debug.debug_log(f"SMTP_TEST: Attempting connection to {host}:{port} for {user}")
     
     try:
         from .services import send_mail
         # Try sending a test email to the user themselves
         send_mail(
-            to_addr=s.smtp_username,
+            to_addr=user,
             subject="Test Email from MailFlow",
             body_html="<h1>Success!</h1><p>Your SMTP connection is working correctly.</p>",
-            smtp_host=s.smtp_host,
-            smtp_port=s.smtp_port,
-            smtp_user=s.smtp_username,
-            smtp_pass=s.smtp_password
+            smtp_host=host,
+            smtp_port=port,
+            smtp_user=user,
+            smtp_pass=pw
         )
-        return {"status": "success", "message": "Test email sent"}
+        return {"status": "success", "message": f"Test email sent to {user}"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"SMTP Error: {str(e)}")
+        error_detail = str(e)
+        debug.debug_log(f"SMTP_TEST_ERROR: {error_detail}")
+        debug.debug_log(traceback.format_exc())
+        
+        # Surfacing more helpful messages for Gmail users
+        if "authentication" in error_detail.lower():
+            error_detail = "Authentication failed. If using Gmail, ensure you use an 'App Password' without spaces."
+        
+        raise HTTPException(status_code=500, detail=f"SMTP Error: {error_detail}")
 
 @router.get("/analytics")
 def get_campaign_analytics(response: Response, campaign: str = "all", days: int = 30, db: Session = Depends(get_db)):
