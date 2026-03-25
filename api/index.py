@@ -47,7 +47,7 @@ def error_response(context, exception):
 def log_request(route):
     print(f"API HIT: {route} | Method: {request.method} | DB: {db_available}")
 
-# --- Campaigns ---
+# --- API Routes ---
 @app.route('/api/campaigns', methods=['GET', 'POST', 'DELETE'])
 def handle_campaigns():
     log_request("/api/campaigns")
@@ -67,7 +67,6 @@ def handle_campaigns():
     finally:
         if db: db.close()
 
-# --- Dashboard ---
 @app.route('/api/dashboard/stats')
 def dashboard_stats():
     log_request("/api/dashboard/stats")
@@ -104,71 +103,14 @@ def recent_events():
     finally:
         if db: db.close()
 
-# --- Templates & Contacts ---
-@app.route('/api/templates', methods=['GET', 'POST'])
-def handle_templates():
-    log_request("/api/templates")
-    db = get_safe_db()
-    try:
-        if request.method == 'GET':
-            if not db: return jsonify({"success": True, "data": []})
-            return jsonify({"success": True, "data": services.get_templates(db) or []})
-    except Exception as e:
-        return error_response("TEMPLATES", e)
-    finally:
-        if db: db.close()
-
-@app.route('/api/contacts', methods=['GET', 'POST'])
-def handle_contacts():
-    log_request("/api/contacts")
-    db = get_safe_db()
-    try:
-        if request.method == 'GET':
-            if not db: return jsonify({"success": True, "data": []})
-            return jsonify({"success": True, "data": services.get_contacts(db) or []})
-    except Exception as e:
-        return error_response("CONTACTS", e)
-    finally:
-        if db: db.close()
-
-# --- Activity & Status ---
-@app.route('/api/activity')
-def handle_activity():
-    log_request("/api/activity")
-    db = get_safe_db()
-    try:
-        if not db: return jsonify([])
-        return jsonify(services.recent_events(db, limit=int(request.args.get('limit', 50))) or [])
-    except Exception as e:
-        return error_response("ACTIVITY", e)
-    finally:
-        if db: db.close()
-
-@app.route('/api/campaign-status')
-def handle_campaign_status():
-    log_request("/api/campaign-status")
-    db = get_safe_db()
-    try:
-        if not db: return jsonify([])
-        return jsonify(services.get_campaign_status_summary(db) or [])
-    except Exception as e:
-        return error_response("CAMPAIGN_STATUS", e)
-    finally:
-        if db: db.close()
-
-# --- Test Heartbeat ---
 @app.route('/api/test')
 def test_api():
     return jsonify({
         "status": "ok",
         "message": "Diagnostic API is LIVE",
-        "db": db_available,
-        "env": {
-            "DATABASE_URL_NEW": bool(os.getenv("DATABASE_URL_NEW")),
-            "PYTHON_VERSION": sys.version
-        }
+        "db": db_available
     })
 
-# --- Vercel Entry ---
-def handler(req):
-    return app(req.environ, lambda s, h: None)
+# --- Vercel Entry Point (Flask WSGI) ---
+def handler(request):
+    return app(request.environ, lambda status, headers: None)
