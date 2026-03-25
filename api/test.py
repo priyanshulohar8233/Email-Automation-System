@@ -12,7 +12,7 @@ def handler(event, context):
             "status": "ok",
             "message": "Vercel Serverless Function is LIVE",
             "environment": {
-                "DATABASE_URL": bool(os.getenv("DATABASE_URL")),
+                "DATABASE_URL_NEW": bool(os.getenv("DATABASE_URL_NEW")),
                 "SENDGRID_API_KEY": bool(os.getenv("SENDGRID_API_KEY")),
                 "PYTHON_VERSION": os.getenv("VERCEL_PYTHON_VERSION", "Unknown")
             }
