@@ -60,7 +60,8 @@ app.add_middleware(
         "http://localhost:3000", 
         "http://localhost:3001", 
         "https://mailflow-frontend.vercel.app",
-        "https://*.vercel.app"
+        "https://*.vercel.app",
+        "https://email-automation-system-frontend.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -70,7 +71,7 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     TrustedHostMiddleware, 
-    allowed_hosts=["localhost", "127.0.0.1", "*.vercel.app", "mailflow.com", "email-automation-api.vercel.app"]
+    allowed_hosts=["*"]  # Relaxed for Vercel/Production flexibility
 )
 
 @app.exception_handler(Exception)

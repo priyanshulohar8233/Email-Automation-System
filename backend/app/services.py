@@ -781,14 +781,11 @@ def get_emails_per_company(db: Session, days: int = 30):
             elif "lumina" in camp_name: counts["MP Lumina"] += row[1]
             else: counts["MP Consultant LLC"] += row[1]
             
-    return {
-        "success": True,
-        "data": [
-            {"company": "MP Consultant LLC", "emails_sent": counts["MP Consultant LLC"]},
-            {"company": "MP Lumina", "emails_sent": counts["MP Lumina"]},
-            {"company": "A Making Company", "emails_sent": counts["A Making Company"]}
-        ]
-    }
+    return [
+        {"company": "MP Consultant LLC", "total": counts["MP Consultant LLC"]},
+        {"company": "MP Lumina", "total": counts["MP Lumina"]},
+        {"company": "A Making Company", "total": counts["A Making Company"]}
+    ]
 
 
 def prepare_campaign_emails(db: Session, campaign_id: int, data, background_tasks):

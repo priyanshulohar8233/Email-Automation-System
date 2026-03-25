@@ -105,7 +105,7 @@ export default function Campaigns() {
       }
     } catch (error) {
       console.error("Failed to fetch campaigns:", error);
-      setError("Unable to connect to the backend server. Please check if the service is running on port 8001.");
+      setError("Unable to connect to the backend server. Please ensure the backend service is running and accessible.");
       setConnectionWarning(true);
     } finally {
       setIsLoading(false);
@@ -316,7 +316,7 @@ export default function Campaigns() {
                     <div>
                       <p className="font-medium text-sm">Potential Port Conflict Detected</p>
                       <p className="text-xs text-amber-400/80 mt-1">
-                        The frontend is configured to use port 8001. If another service is occupying this port, data may not sync correctly.
+                        The frontend is having trouble reaching the API. If you're on a custom network, ensure the backend domain is allowed.
                       </p>
                     </div>
                   </div>

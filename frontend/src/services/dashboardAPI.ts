@@ -48,7 +48,9 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: numbe
     return Promise.race([fetchPromise, timeoutPromise]);
 };
 
-const API_URL = import.meta.env.VITE_API_URL || '';
+// Unified API URL logic for both Dev (Proxy) and Production (Absolute)
+const BASE_URL = import.meta.env.VITE_API_URL || "";
+const API_URL = BASE_URL.endsWith("/") ? BASE_URL.slice(0, -1) : BASE_URL;
 
 export const dashboardAPI = {
     getStats: async (days?: number, campaign: string = "all", company?: string, signal?: AbortSignal): Promise<DashboardStats> => {

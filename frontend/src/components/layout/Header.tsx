@@ -1,5 +1,4 @@
 import React from "react";
-import { EmailSearch } from "../dashboard/EmailSearch";
 import { ThemeToggle } from "./ThemeToggle";
 import { Bell } from "lucide-react";
 
@@ -7,8 +6,8 @@ export function Header() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center border-b border-border bg-background/80 px-8 backdrop-blur-md transition-all duration-300">
       <div className="flex w-full items-center justify-between">
-        <div className="flex-1 max-w-xl">
-          <EmailSearch />
+        <div className="flex-1">
+          {/* EmailSearch Removed as per UI Cleanup Request */}
         </div>
         
         <div className="flex items-center gap-4">

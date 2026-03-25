@@ -104,6 +104,7 @@ def toggle_campaign(id: int, background_tasks: BackgroundTasks, db: Session = De
     db.refresh(camp)
     return {"id": camp.id, "status": camp.status.value}
 
+
 @router.get("/settings")
 def get_settings(db: Session = Depends(get_db)):
     from .models import Settings
@@ -234,6 +235,11 @@ def get_system_health(db: Session = Depends(get_db)):
 
 @router.get("/analytics/emails-per-company")
 def get_emails_per_company(days: int = 30, db: Session = Depends(get_db)):
+    return services.get_emails_per_company(db, days)
+
+@router.get("/campaign-status")
+def campaign_status(days: int = 30, db: Session = Depends(get_db)):
+    """Alias for emails-per-company to support legacy frontend calls"""
     return services.get_emails_per_company(db, days)
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
