@@ -91,7 +91,7 @@ def test_api():
         "status": "ok",
         "message": "Vercel function is active",
         "framework": "FastAPI",
-        "database_configured": bool(os.getenv("DATABASE_URL") or os.getenv("DATABASE_URL_NEW"))
+        "database_configured": bool(os.getenv("DATABASE_URL_NEW"))
     }
 
 @app.get("/health")
