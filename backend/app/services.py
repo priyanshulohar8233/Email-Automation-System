@@ -502,7 +502,7 @@ def get_dashboard_stats(days: int = 30, campaign_name: str = "all", company_name
 def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all"):
     from datetime import datetime, timedelta, date, timezone
     import calendar
-    from sqlalchemy import cast, Date
+    from sqlalchemy import cast, Date, func
     
     now = datetime.now(timezone.utc)
     
@@ -607,7 +607,9 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
         companies = [company_name] if isinstance(company_name, str) else company_name
         query = query.join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
 
+    print(f"DEBUG: Running chart query for {days} days...")
     results = query.group_by(cast(Email.sent_at, Date)).all()
+    print(f"DEBUG: Found {len(results)} raw results from DB.")
     
     # Map results into buckets
     chart_data = []
