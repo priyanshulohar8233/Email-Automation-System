@@ -16,7 +16,7 @@ from .schemas import (
 )
 from .models import Email, EmailStatus, EventType, ActivityLog
 from .config import settings
-from .tasks import send_email_task, send_email_fn, upsert_activity_log
+from .activity import upsert_activity_log
 from . import debug
 
 router = APIRouter(prefix="/api")
@@ -30,12 +30,19 @@ def health_check():
 def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     return services.prepare_campaign_emails(db, req.campaign_id, req, background_tasks)
 
+@router.get("/campaigns/check-due")
 @router.post("/campaigns/check-due")
-def trigger_due_campaigns(background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def trigger_due_campaigns(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Manual or Cron-based trigger to process QUEUED campaigns that are now due.
     Useful for serverless (Vercel Cron) or as a backup for the background loop.
     """
+    cron_secret = os.getenv("CRON_SECRET")
+    if cron_secret:
+        auth_header = request.headers.get("authorization")
+        if auth_header != f"Bearer {cron_secret}":
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
     count = services.check_due_campaigns(db, background_tasks)
     return {"status": "ok", "triggered": count}
 
