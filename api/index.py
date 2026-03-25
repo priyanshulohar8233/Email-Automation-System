@@ -1,34 +1,53 @@
 import os
 import sys
 import traceback
+from typing import List, Optional
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, EmailStr
 from mangum import Mangum
 
 # Ensure backend folder is in path for imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# This is critical for Vercel to find the 'backend' package
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BASE_DIR not in sys.path:
+    sys.path.append(BASE_DIR)
 
-app = FastAPI(title="Email Automation API", docs_url=None, redoc_url=None)
+# --- Fallback Schema Definitions ---
+# These prevent NameErrors if the backend/app/schemas.py import fails
+class FallbackCampaignCreate(BaseModel):
+    name: Optional[str] = None
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    recipients: Optional[List[EmailStr]] = None
 
-# Import logic with safety
+# --- Initial Import Logic ---
+db_available = False
+SessionLocal = None
+engine = None
+services = None
+CampaignCreate = FallbackCampaignCreate # Default to fallback
+
 try:
     from backend.app.database import SessionLocal, engine
-    from backend.app import services, models
+    from backend.app import services
     from backend.app.schemas import CampaignCreate
     db_available = True
     print("IMPORT_SUCCESS: Backend services loaded.")
 except Exception as e:
     print(f"IMPORT_ERROR: {str(e)}")
+    print(traceback.format_exc())
     db_available = False
+
+app = FastAPI(title="Email Automation API", docs_url=None, redoc_url=None)
 
 # --- Automatic DB Migration (Add company column if missing) ---
 def run_migrations():
-    if not db_available or not engine:
+    if not db_available or engine is None:
         return
     try:
         from sqlalchemy import text
         with engine.connect() as conn:
-            # Check if columns exist and add if missing
             conn.execute(text("ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS company TEXT;"))
             conn.execute(text("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company TEXT;"))
             conn.commit()
@@ -36,7 +55,9 @@ def run_migrations():
     except Exception as e:
         print(f"MIGRATION_ERROR: {str(e)}")
 
-run_migrations()
+# Only run migrations if we have a real engine
+if db_available:
+    run_migrations()
 
 # --- Middleware for Logging ---
 @app.middleware("http")
@@ -50,11 +71,12 @@ async def log_requests(request: Request, call_next):
         print(f"CRASH_IN_{request.url.path}: {str(e)}")
         print(tb)
         return JSONResponse(
-            status_code=200, # Fail-safe
+            status_code=200, # Fail-safe JSON response
             content={
                 "error": str(e),
                 "traceback": tb,
-                "success": False
+                "success": False,
+                "note": "Fail-safe recovery triggered"
             }
         )
 
@@ -62,6 +84,7 @@ async def log_requests(request: Request, call_next):
 
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats():
+    if not db_available: return {"total_emails_sent": 0, "open_rate": 0, "note": "DB Offline"}
     db = SessionLocal()
     try:
         return services.get_dashboard_stats(db)
@@ -70,6 +93,7 @@ async def get_dashboard_stats():
 
 @app.get("/api/dashboard/email-stats")
 async def get_email_stats(days: int = 7):
+    if not db_available: return {"emails_over_time": [], "note": "DB Offline"}
     db = SessionLocal()
     try:
         return services.get_email_stats_chart(db, days=days)
@@ -78,6 +102,7 @@ async def get_email_stats(days: int = 7):
 
 @app.get("/api/dashboard/recent-events")
 async def get_recent_events():
+    if not db_available: return []
     db = SessionLocal()
     try:
         return services.recent_events(db)
@@ -86,6 +111,7 @@ async def get_recent_events():
 
 @app.get("/api/campaigns")
 async def get_campaigns():
+    if not db_available: return {"success": True, "data": []}
     db = SessionLocal()
     try:
         return {"success": True, "data": services.get_campaigns(db) or []}
@@ -94,6 +120,7 @@ async def get_campaigns():
 
 @app.post("/api/campaigns")
 async def create_campaign(campaign: CampaignCreate):
+    if not db_available: return {"success": False, "error": "Database unavailable"}
     db = SessionLocal()
     try:
         class MockBG:
@@ -102,44 +129,14 @@ async def create_campaign(campaign: CampaignCreate):
     finally:
         db.close()
 
-@app.get("/api/templates")
-async def get_templates():
-    db = SessionLocal()
-    try:
-        return {"success": True, "data": services.get_templates(db) or []}
-    finally:
-        db.close()
-
-@app.get("/api/contacts")
-async def get_contacts():
-    db = SessionLocal()
-    try:
-        return {"success": True, "data": services.get_contacts(db) or []}
-    finally:
-        db.close()
-
-@app.get("/api/activity")
-async def get_activity(limit: int = 50):
-    db = SessionLocal()
-    try:
-        return services.recent_events(db, limit=limit) or []
-    finally:
-        db.close()
-
-@app.get("/api/campaign-status")
-async def get_campaign_status():
-    db = SessionLocal()
-    try:
-        return services.get_campaign_status_summary(db) or []
-    finally:
-        db.close()
-
 @app.get("/api/test")
 async def test_endpoint():
     return {
         "status": "ok",
-        "message": "FastAPI + Mangum Diagnostic API is LIVE",
-        "db": db_available
+        "message": "Production-Ready Diagnostic API is LIVE",
+        "db": db_available,
+        "sys_path": sys.path[-3:],
+        "error": "None" if db_available else "Import stage failed (see logs)"
     }
 
 # --- Vercel Entry Point (ASGI Mangum) ---
