@@ -5,7 +5,6 @@ from typing import List, Optional
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
-from mangum import Mangum
 
 # Ensure backend folder is in path for imports
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -143,5 +142,4 @@ async def create_campaign(campaign: CampaignCreate):
     finally:
         db.close()
 
-# --- Vercel Entry Point ---
-handler = Mangum(app)
+# Vercel's Python runtime can serve the FastAPI ASGI app directly.
