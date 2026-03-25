@@ -2,8 +2,8 @@
     "version": 2,
     "builds": [
         {
-            "src": "api/**/*.js",
-            "use": "@vercel/node"
+            "src": "api/**/*.py",
+            "use": "@vercel/python"
         },
         {
             "src": "backend/app/main.py",
@@ -19,8 +19,21 @@
     ],
     "routes": [
         {
+            "src": "/api/dashboard/stats",
+            "dest": "api/dashboard/stats.py"
+        },
+        {
+            "src": "/api/dashboard/email-stats",
+            "dest": "api/dashboard/email-stats.py"
+        },
+        {
+            "src": "/api/dashboard/recent-events",
+            "dest": "api/dashboard/recent-events.py"
+        },
+        {
             "src": "/api/(.*)",
-            "dest": "backend/app/main.py"
+            "dest": "api/$1.py",
+            "check": true
         },
         {
             "src": "/(.*)",
