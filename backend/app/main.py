@@ -79,11 +79,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 @app.get("/health")
 def health_check():
-    from datetime import datetime
+    from datetime import datetime, timezone
     return {
         "status": "ok", 
         "service": "email-automation-api",
-        "timestamp": str(datetime.now()),
+        "timestamp": str(datetime.now(timezone.utc)),
         "version": "2.0.1",
         "db_connected": True
     }

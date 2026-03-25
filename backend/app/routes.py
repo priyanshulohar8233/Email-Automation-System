@@ -216,7 +216,16 @@ def test_smtp(db: Session = Depends(get_db)):
 @router.get("/analytics")
 def get_campaign_analytics(response: Response, campaign: str = "all", days: int = 30, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    return services.get_analytics(db, campaign_name=campaign, days=days)
+    try:
+        return services.get_analytics(db, campaign_name=campaign, days=days)
+    except Exception as e:
+        debug.debug_log(f"ERROR in get_campaign_analytics: {str(e)}")
+        import traceback
+        debug.debug_log(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Failed to fetch analytics", "error": str(e)}
+        )
 
 @router.get("/campaigns/names")
 def list_campaign_names(db: Session = Depends(get_db)):

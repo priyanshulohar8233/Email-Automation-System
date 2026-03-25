@@ -391,7 +391,7 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
     }
 
 def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from sqlalchemy import func
     
     now = datetime.now(timezone.utc)
@@ -500,7 +500,7 @@ def get_dashboard_stats(days: int = 30, campaign_name: str = "all", company_name
 
 
 def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all"):
-    from datetime import datetime, timedelta, date
+    from datetime import datetime, timedelta, date, timezone
     import calendar
     from sqlalchemy import cast, Date
     
@@ -628,7 +628,7 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
 
 
 def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: str = "all", company_name: str | list = "all"):
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from .models import Contact
     limit_date = datetime.now(timezone.utc) - timedelta(days=days)
     
