@@ -21,7 +21,7 @@ export interface DashboardStats {
 }
 
 // Helper function to add timeout to fetch calls
-const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: number = 5000): Promise<Response> => {
+const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: number = 30000): Promise<Response> => {
     const controller = new AbortController();
     const { signal } = controller;
     
@@ -49,7 +49,8 @@ const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: numbe
 };
 
 // Unified API URL logic for both Dev (Proxy) and Production (Absolute)
-const BASE_URL = import.meta.env.VITE_API_URL || "";
+// Support both standard Vite (VITE_) and Vercel/Next.js style (NEXT_PUBLIC_) env vars
+const BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API_URL || "";
 const API_URL = BASE_URL.endsWith("/") ? BASE_URL.slice(0, -1) : BASE_URL;
 
 export const dashboardAPI = {
