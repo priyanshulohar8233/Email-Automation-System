@@ -256,6 +256,7 @@ def campaign_status(days: int = 30, db: Session = Depends(get_db)):
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
 def dashboard_stats(response: Response, days: int = 30, campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
+    print(f"API HIT: /dashboard/stats (days={days}, campaign={campaign}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
@@ -269,6 +270,7 @@ def dashboard_stats(response: Response, days: int = 30, campaign: str = "all", c
 
 @router.get("/dashboard/email-stats")
 def get_email_stats(response: Response, days: int = 7, company: str | None = None, db: Session = Depends(get_db)):
+    print(f"API HIT: /dashboard/email-stats (days={days}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
@@ -283,6 +285,7 @@ def get_email_stats(response: Response, days: int = 7, company: str | None = Non
 
 @router.get("/dashboard/recent-events")
 def get_recent_events(response: Response, days: int = 30, campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
+    print(f"API HIT: /dashboard/recent-events (days={days}, campaign={campaign}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"

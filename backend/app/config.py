@@ -2,14 +2,19 @@ import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    # Core DB connection (DATABASE_URL_NEW is the primary source of truth)
+    # Support both DATABASE_URL (Standard) and DATABASE_URL_NEW (Custom)
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
     DATABASE_URL_NEW: str = os.getenv("DATABASE_URL_NEW", "")
     
+    # Priority Logic: Use DATABASE_URL if available, then DATABASE_URL_NEW
+    EFFECTIVE_DB_URL: str = DATABASE_URL or DATABASE_URL_NEW
+    
     # Debug logging to verify env at runtime
-    if not DATABASE_URL_NEW:
-        print("CRITICAL: DATABASE_URL_NEW is NOT set in environment!")
+    if not EFFECTIVE_DB_URL:
+        print("CRITICAL: Neither DATABASE_URL nor DATABASE_URL_NEW is set in environment!")
     else:
-        print(f"DATABASE_URL_NEW found: {DATABASE_URL_NEW[:15]}...")
+        source = "DATABASE_URL" if DATABASE_URL else "DATABASE_URL_NEW"
+        print(f"DATABASE_CONNECTION: Found {source} ({EFFECTIVE_DB_URL[:15]}...)")
     
     # Redis for background tasks
     REDIS_URL: str = os.getenv("REDIS_URL") or ""
@@ -23,6 +28,10 @@ class Settings(BaseSettings):
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost")
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
     SENDGRID_API_KEY: str | None = os.getenv("SENDGRID_API_KEY")
+    if SENDGRID_API_KEY:
+        print(f"SENDGRID: API KEY found ({SENDGRID_API_KEY[:8]}...)")
+    else:
+        print("SENDGRID: API KEY NOT FOUND")
     SENDGRID_VERIFIED_SENDER: str | None = os.getenv("SENDGRID_VERIFIED_SENDER")
 
     class Config:

@@ -11,9 +11,12 @@ from .routes import router
 # Selective DB init (lazy)
 def init_db():
     try:
-        print(f"DATABASE_INIT: Initializing {engine.url.drivername}...")
-        Base.metadata.create_all(bind=engine)
-        print("DATABASE_INIT: Success.")
+        print(f"DATABASE_INIT: Initializing DB...")
+        if engine:
+            Base.metadata.create_all(bind=engine)
+            print("DATABASE_INIT: Success.")
+        else:
+            print("DATABASE_INIT: Skipped (No Engine)")
     except Exception as e:
         print(f"DATABASE_INIT_ERROR: {str(e)}")
 
@@ -21,8 +24,12 @@ app = FastAPI(title="Email Tracking API")
 
 @app.on_event("startup")
 async def startup_event():
+    print("SERVER_STARTUP: Initializing services...")
     # Only run in non-serverless or as a lazy background task
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        print(f"STARTUP_ERROR (init_db): {str(e)}")
     
     # PRO GRADE: Start background scheduler for campaigns
     from apscheduler.schedulers.background import BackgroundScheduler
@@ -77,19 +84,33 @@ async def global_exception_handler(request: Request, exc: Exception):
         content={"detail": str(exc), "traceback": traceback.format_exc()},
     )
 
+@app.get("/api/test")
+def test_api():
+    print("API HIT: /api/test")
+    return {
+        "status": "ok",
+        "message": "Vercel function is active",
+        "framework": "FastAPI",
+        "database_configured": bool(os.getenv("DATABASE_URL") or os.getenv("DATABASE_URL_NEW"))
+    }
+
 @app.get("/health")
 def health_check():
+    print("API HIT: /health")
     from datetime import datetime, timezone
     return {
         "status": "ok", 
         "service": "email-automation-api",
         "timestamp": str(datetime.now(timezone.utc)),
-        "version": "2.0.1",
-        "db_connected": True
+        "version": "2.0.2",
+        "db_connected": engine is not None
     }
 
 @app.get("/")
 def read_root():
-    return {"status": "ok", "service": "email-automation-api"}
+    print("API HIT: /")
+    return {"status": "ok", "service": "email-automation-api", "vercel": True}
 
 app.include_router(router)
+
+print("APP_INIT: FastAPI application initialized successfully.")
