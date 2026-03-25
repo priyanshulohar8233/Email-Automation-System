@@ -21,7 +21,7 @@ export interface DashboardStats {
 }
 
 // Helper function to add timeout to fetch calls
-const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: number = 10000): Promise<Response> => {
+const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: number = 5000): Promise<Response> => {
     const controller = new AbortController();
     const { signal } = controller;
     
@@ -62,7 +62,7 @@ export const dashboardAPI = {
             const response = await fetchWithTimeout(url, { 
                 signal,
                 cache: 'no-store'
-            }, 10000);
+            });
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -87,7 +87,7 @@ export const dashboardAPI = {
         const response = await fetchWithTimeout(url, { 
             signal,
             cache: 'no-store'
-        }, 10000);
+        });
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Dashboard API Email Stats Error [${response.status}]: ${response.statusText}`, errorText);
@@ -103,7 +103,7 @@ export const dashboardAPI = {
         const response = await fetchWithTimeout(url, { 
             signal,
             cache: 'no-store'
-        }, 10000);
+        });
         if (!response.ok) {
             const errorText = await response.text();
             console.error(`Dashboard API Recent Events Error [${response.status}]: ${response.statusText}`, errorText);
@@ -117,7 +117,7 @@ export const dashboardAPI = {
             const response = await fetchWithTimeout(url, { 
                 signal,
                 cache: 'no-store'
-            }, 10000);
+            });
             if (!response.ok) {
                 console.error(`Error fetching emails per company: ${response.status} ${response.statusText}`);
                 return [];
@@ -131,18 +131,18 @@ export const dashboardAPI = {
     },
     getActivity: async (signal?: AbortSignal): Promise<any[]> => {
         const url = `${API_URL}/api/activity`;
-        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching activity");
         return await response.json();
     },
     getCampaignStatus: async (signal?: AbortSignal): Promise<any[]> => {
         const url = `${API_URL}/api/campaign-status`;
-        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching campaign status");
         return await response.json();
     },
     updateCompany: async (email: string, company: string): Promise<any> => {
-        const response = await fetch(`${API_URL}/api/contacts/company`, {
+        const response = await fetchWithTimeout(`${API_URL}/api/contacts/company`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
@@ -158,19 +158,19 @@ export const dashboardAPI = {
     getCampaignHistory: async (date?: string, signal?: AbortSignal): Promise<any[]> => {
         let url = `${API_URL}/api/campaigns/history`;
         if (date) url += `?date=${date}`;
-        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching campaign history");
         return await response.json();
     },
     searchEmail: async (email: string, signal?: AbortSignal): Promise<any[]> => {
         const url = `${API_URL}/api/search/email?email=${encodeURIComponent(email)}`;
-        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error searching email");
         return await response.json();
     },
     getActivityDetail: async (logId: number, signal?: AbortSignal): Promise<any> => {
         const url = `${API_URL}/api/activity/${logId}`;
-        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching activity detail");
         return await response.json();
     }

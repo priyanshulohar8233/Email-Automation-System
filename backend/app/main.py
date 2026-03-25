@@ -56,13 +56,7 @@ async def startup_event():
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "http://localhost:3001", 
-        "https://mailflow-frontend.vercel.app",
-        "https://*.vercel.app",
-        "https://email-automation-system-frontend.vercel.app"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

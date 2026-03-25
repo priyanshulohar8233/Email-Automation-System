@@ -407,17 +407,38 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
         if prev <= 0: return 100.0 if cur > 0 else 0.0
         return round(((cur - prev) / prev) * 100, 1)
 
-    # 3. Time Series Data (Standardize on 7 points)
+    # 3. Time Series Data (Optimized Single Query)
     performance = []
+    seven_days_ago = now - timedelta(days=6)
+    d_start_7 = seven_days_ago.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Single query to get counts grouped by day
+    # Note: date_trunc is Postgres-specific (Neon)
+    daily_stats = db.query(
+        func.date_trunc('day', EmailEvent.timestamp).label('day'),
+        func.count(distinct(case(((EmailEvent.event_type == EventType.OPENED), EmailEvent.email_id), else_=None))).label('opens'),
+        func.count(distinct(case(((EmailEvent.event_type == EventType.CLICKED), EmailEvent.email_id), else_=None))).label('clicks')
+    ).filter(
+        EmailEvent.timestamp >= d_start_7
+    )
+    
+    if campaign_name != "all":
+        daily_stats = daily_stats.join(Email).join(Campaign).filter(Campaign.name == campaign_name)
+        
+    results = daily_stats.group_by(func.date_trunc('day', EmailEvent.timestamp)).all()
+    
+    # Map results to index for easy lookup
+    stats_map = {r.day.date(): {"opens": r.opens, "clicks": r.clicks} for r in results}
+    
     for i in range(7):
         d = now - timedelta(days=6-i)
-        d_start = d.replace(hour=0, minute=0, second=0, microsecond=0)
-        d_end = d_start + timedelta(days=1)
-        o = db.query(func.count(distinct(EmailEvent.email_id)))\
-              .filter(EmailEvent.event_type == EventType.OPENED, EmailEvent.timestamp >= d_start, EmailEvent.timestamp < d_end).scalar() or 0
-        c = db.query(func.count(distinct(EmailEvent.email_id)))\
-              .filter(EmailEvent.event_type == EventType.CLICKED, EmailEvent.timestamp >= d_start, EmailEvent.timestamp < d_end).scalar() or 0
-        performance.append({"time": d.strftime('%a'), "opens": o, "clicks": c})
+        d_date = d.date()
+        day_stats = stats_map.get(d_date, {"opens": 0, "clicks": 0})
+        performance.append({
+            "time": d.strftime('%a'), 
+            "opens": day_stats["opens"], 
+            "clicks": day_stats["clicks"]
+        })
 
     return {
         "deliveredEmails": metrics["delivered"],
