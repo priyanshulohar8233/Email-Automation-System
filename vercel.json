@@ -2,11 +2,7 @@
     "version": 2,
     "builds": [
         {
-            "src": "api/**/*.py",
-            "use": "@vercel/python"
-        },
-        {
-            "src": "backend/app/main.py",
+            "src": "api/index.py",
             "use": "@vercel/python"
         },
         {
@@ -19,57 +15,8 @@
     ],
     "routes": [
         {
-            "src": "/api/dashboard/stats",
-            "dest": "api/dashboard/stats.py"
-        },
-        {
-            "src": "/api/dashboard/email-stats",
-            "dest": "api/dashboard/email-stats.py"
-        },
-        {
-            "src": "/api/dashboard/recent-events",
-            "dest": "api/dashboard/recent-events.py"
-        },
-        {
-            "src": "/api/templates",
-            "dest": "api/templates.py"
-        },
-        {
-            "src": "/api/contacts",
-            "dest": "api/contacts.py"
-        },
-        {
-            "src": "/api/automation",
-            "dest": "api/automation.py"
-        },
-        {
-            "src": "/api/activity",
-            "dest": "api/activity.py"
-        },
-        {
-            "src": "/api/campaign-status",
-            "dest": "api/campaign_status.py"
-        },
-        {
-            "src": "/api/uploads",
-            "dest": "api/uploads.py"
-        },
-        {
-            "src": "/api/campaigns",
-            "dest": "api/campaigns.py"
-        },
-        {
-            "src": "/api/settings",
-            "dest": "api/settings.py"
-        },
-        {
-            "src": "/api/test",
-            "dest": "api/test.py"
-        },
-        {
             "src": "/api/(.*)",
-            "dest": "api/$1.py",
-            "check": true
+            "dest": "api/index.py"
         },
         {
             "src": "/(.*)",
