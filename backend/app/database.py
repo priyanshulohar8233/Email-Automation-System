@@ -6,12 +6,11 @@ from .config import settings
 from sqlalchemy.pool import StaticPool
 
 # Strict connection for Neon PostgreSQL
-db_url = settings.EFFECTIVE_DB_URL
+db_url = settings.DATABASE_URL
 
 # Diagnostic print as requested by user
 if not db_url:
     print("DEBUG: DATABASE_URL is None")
-    # We'll allow startup to proceed but DB calls will fail later with clear error
 else:
     print(f"DEBUG: Connecting to: {db_url[:15]}...")
 

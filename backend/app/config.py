@@ -2,19 +2,14 @@ import os
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
-    # Support both DATABASE_URL (Standard) and DATABASE_URL_NEW (Custom)
+    # Core DB connection (DATABASE_URL is the primary source of truth)
     DATABASE_URL: str = os.getenv("DATABASE_URL", "")
-    DATABASE_URL_NEW: str = os.getenv("DATABASE_URL_NEW", "")
-    
-    # Priority Logic: Use DATABASE_URL if available, then DATABASE_URL_NEW
-    EFFECTIVE_DB_URL: str = DATABASE_URL or DATABASE_URL_NEW
     
     # Debug logging to verify env at runtime
-    if not EFFECTIVE_DB_URL:
-        print("CRITICAL: Neither DATABASE_URL nor DATABASE_URL_NEW is set in environment!")
+    if not DATABASE_URL:
+        print("CRITICAL: DATABASE_URL is NOT set in environment!")
     else:
-        source = "DATABASE_URL" if DATABASE_URL else "DATABASE_URL_NEW"
-        print(f"DATABASE_CONNECTION: Found {source} ({EFFECTIVE_DB_URL[:15]}...)")
+        print(f"DATABASE_CONNECTION: Found DATABASE_URL ({DATABASE_URL[:15]}...)")
     
     # Redis for background tasks
     REDIS_URL: str = os.getenv("REDIS_URL") or ""
