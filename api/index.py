@@ -8,13 +8,11 @@ from pydantic import BaseModel, EmailStr
 from mangum import Mangum
 
 # Ensure backend folder is in path for imports
-# This is critical for Vercel to find the 'backend' package
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.append(BASE_DIR)
 
 # --- Fallback Schema Definitions ---
-# These prevent NameErrors if the backend/app/schemas.py import fails
 class FallbackCampaignCreate(BaseModel):
     name: Optional[str] = None
     subject: Optional[str] = None
@@ -26,7 +24,7 @@ db_available = False
 SessionLocal = None
 engine = None
 services = None
-CampaignCreate = FallbackCampaignCreate # Default to fallback
+CampaignCreate = FallbackCampaignCreate 
 
 try:
     from backend.app.database import SessionLocal, engine
@@ -41,7 +39,24 @@ except Exception as e:
 
 app = FastAPI(title="Email Automation API", docs_url=None, redoc_url=None)
 
-# --- Automatic DB Migration (Add company column if missing) ---
+# --- Health & Heartbeat (High Priority) ---
+
+@app.get("/api/health")
+@app.get("/health")
+async def health_check():
+    return {"status": "ok", "service": "email-automation-api", "db": db_available}
+
+@app.get("/api/test")
+async def test_endpoint():
+    return {
+        "status": "ok",
+        "message": "Production-Ready Diagnostic API is LIVE",
+        "db": db_available,
+        "sys_path": sys.path[-3:],
+        "error": "None" if db_available else "Import stage failed (see logs)"
+    }
+
+# --- Automatic DB Migration ---
 def run_migrations():
     if not db_available or engine is None:
         return
@@ -55,7 +70,6 @@ def run_migrations():
     except Exception as e:
         print(f"MIGRATION_ERROR: {str(e)}")
 
-# Only run migrations if we have a real engine
 if db_available:
     run_migrations()
 
@@ -71,7 +85,7 @@ async def log_requests(request: Request, call_next):
         print(f"CRASH_IN_{request.url.path}: {str(e)}")
         print(tb)
         return JSONResponse(
-            status_code=200, # Fail-safe JSON response
+            status_code=200, 
             content={
                 "error": str(e),
                 "traceback": tb,
@@ -80,7 +94,7 @@ async def log_requests(request: Request, call_next):
             }
         )
 
-# --- Routes ---
+# --- Main API Routes ---
 
 @app.get("/api/dashboard/stats")
 async def get_dashboard_stats():
@@ -129,15 +143,5 @@ async def create_campaign(campaign: CampaignCreate):
     finally:
         db.close()
 
-@app.get("/api/test")
-async def test_endpoint():
-    return {
-        "status": "ok",
-        "message": "Production-Ready Diagnostic API is LIVE",
-        "db": db_available,
-        "sys_path": sys.path[-3:],
-        "error": "None" if db_available else "Import stage failed (see logs)"
-    }
-
-# --- Vercel Entry Point (ASGI Mangum) ---
+# --- Vercel Entry Point ---
 handler = Mangum(app)
