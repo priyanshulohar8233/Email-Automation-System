@@ -119,6 +119,11 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
         // Process email stats for line chart
         if (Array.isArray(emailStats)) {
           setLineData(emailStats);
+        } else if (emailStats && (emailStats as any).emails_over_time) {
+          // Step 3 fix: handle unified response if returned
+          setLineData((emailStats as any).emails_over_time);
+        } else {
+          setLineData([]);
         }
 
         // Use emails per company (new endpoint) for the donut chart
@@ -128,24 +133,27 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
             value: stat.total
           }));
           setPieData(formattedStats);
-        } else if (stats.raw) {
+        } else if (stats && stats.raw) {
           // Fallback to old status data if no company data yet
           setPieData([
-            { name: "Opened", value: stats.raw.opened },
-            { name: "Unread", value: stats.raw.unread },
-            { name: "Bounced", value: stats.raw.bounced },
+            { name: "Opened", value: stats.raw.opened || 0 },
+            { name: "Unread", value: stats.raw.unread || 0 },
+            { name: "Bounced", value: stats.raw.bounced || 0 },
           ]);
+        } else {
+          setPieData([]);
         }
         setLoading(false);
       })
       .catch((err) => {
         console.error("Error loading charts:", err);
-        setError("Failed to load chart data. Please check your connection and try again.");
+        // Step 6: Fail Safe - don't show full error if we have default empty data
+        setError("Chart data currently unavailable.");
         setLoading(false);
         setLineData([]);
         setPieData([]);
       });
-  }, [days, company]);
+  }, [days, company]); // Step 7: Clean dependencies
 
   const onPieEnter = (_: any, index: number) => {
     setActiveIndex(index);

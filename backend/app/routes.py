@@ -219,13 +219,12 @@ def get_campaign_analytics(response: Response, campaign: str = "all", days: int 
     try:
         return services.get_analytics(db, campaign_name=campaign, days=days)
     except Exception as e:
-        debug.debug_log(f"ERROR in get_campaign_analytics: {str(e)}")
-        import traceback
-        debug.debug_log(traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Failed to fetch analytics", "error": str(e)}
-        )
+        debug.debug_log(f"DB ERROR in analytics: {e}")
+        return {
+            "emails_over_time": [],
+            "campaign_status": [],
+            "recent_activity": []
+        }
 
 @router.get("/campaigns/names")
 def list_campaign_names(db: Session = Depends(get_db)):
@@ -248,43 +247,39 @@ def get_emails_per_company(days: int = 30, db: Session = Depends(get_db)):
 
 @router.get("/campaign-status")
 def campaign_status(days: int = 30, db: Session = Depends(get_db)):
-    """Alias for emails-per-company to support legacy frontend calls"""
-    return services.get_emails_per_company(db, days)
+    """Step 5: Safe Campaign Status API"""
+    try:
+        return services.get_emails_per_company(db, days)
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in campaign-status: {e}")
+        return []
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
-def dashboard_stats(response: Response, days: int = 30, campaign: str = "all", company: str | None = None):
+def dashboard_stats(response: Response, days: int = 30, campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
-        # Handle comma-separated list of companies from frontend
         company_list = company.split(",") if company and company != "all" else "all"
-        debug.debug_log(f"Fetching dashboard stats for last {days} days (campaign: {campaign}, company: {company_list})")
-        data = services.get_dashboard_stats(days, campaign_name=campaign, company_name=company_list)
-        return data
+        return services.compute_stats(db, days, campaign_name=campaign, company_name=company_list)
     except Exception as e:
-        debug.debug_log(f"ERROR in dashboard_stats: {str(e)}")
-        import traceback
-        debug.debug_log(traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Failed to fetch dashboard metrics", "error": str(e)}
-        )
+        debug.debug_log(f"DB ERROR in dashboard_stats: {e}")
+        return {
+            "totalEmails": 0, "openRate": 0, "clickRate": 0, "bounceRate": 0, 
+            "unread": 0, "activeCampaigns": 0, "totalEmailsGrowth": 0, "openRateGrowth": 0
+        }
 
 @router.get("/dashboard/email-stats")
 def get_email_stats(response: Response, days: int = 7, company: str | None = None, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
-        debug.debug_log(f"Fetching email stats for last {days} days (company: {company_list})")
-        data = services.emails_over_time(db, days, company_name=company_list)
-        return data
+        return services.emails_over_time(db, days, company_name=company_list)
     except Exception as e:
-        debug.debug_log(f"ERROR in get_email_stats: {str(e)}")
-        import traceback
-        debug.debug_log(traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={"detail": "Failed to fetch email stats", "error": str(e)}
-        )
+        debug.debug_log(f"DB ERROR in email-stats: {e}")
+        return {
+            "emails_over_time": [],
+            "campaign_status": [],
+            "recent_activity": []
+        }
 
 @router.get("/dashboard/recent-events")
 def get_recent_events(response: Response, days: int = 30, campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
@@ -428,6 +423,18 @@ def sendgrid_webhook(payload: List[dict], db: Session = Depends(get_db)):
 @router.post("/webhook/email-events")
 def email_events_webhook(payload: dict, db: Session = Depends(get_db)):
     return services.process_webhook_event(db, payload)
+
+@router.get("/activity")
+def get_all_activity(limit: int = 100, db: Session = Depends(get_db)):
+    """Step 4: Safe Activity API"""
+    from sqlalchemy import text
+    try:
+        # Use raw SQL if preferred or standard ORM
+        result = db.execute(text("SELECT * FROM activity_logs ORDER BY id DESC LIMIT :limit"), {"limit": limit})
+        return [dict(row) for row in result]
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in activity: {e}")
+        return []
 
 @router.get("/templates")
 def get_templates(db: Session = Depends(get_db)):

@@ -63,7 +63,16 @@ export default function Dashboard() {
       setStats(data);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
-      if (!silently) setError("Failed to load dashboard metrics. Please try again.");
+      console.error("Dashboard error:", err);
+      if (!silently) {
+        // Step 6: Fail Safe - default to empty stats
+        setStats({
+          totalEmails: 0, openRate: 0, clickRate: 0, bounceRate: 0,
+          unread: 0, activeCampaigns: 0, totalEmailsGrowth: 0, openRateGrowth: 0,
+          raw: { bounced: 0, opened: 0, delivered: 0, unread: 0 }
+        });
+        setError("Dashboard metrics currently unavailable.");
+      }
     } finally {
       if (!silently) setLoading(false);
     }
@@ -75,13 +84,14 @@ export default function Dashboard() {
 
     const interval = setInterval(() => {
       fetchStats(undefined, true);
-    }, 10000);
+    }, 15000);
 
     return () => {
       controller.abort();
       clearInterval(interval);
     };
-  }, [days, selectedCompanies]);
+    // Step 7: Clean dependencies
+  }, [days, company]);
 
   return (
     <div className="space-y-8">
