@@ -20,6 +20,14 @@ def init_db():
     except Exception as e:
         print(f"DATABASE_INIT_ERROR: {str(e)}")
 
+
+def is_serverless_environment() -> bool:
+    return bool(
+        os.getenv("VERCEL")
+        or os.getenv("VERCEL_ENV")
+        or os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+    )
+
 app = FastAPI(title="Email Tracking API")
 
 @app.on_event("startup")
@@ -30,14 +38,17 @@ async def startup_event():
         init_db()
     except Exception as e:
         print(f"STARTUP_ERROR (init_db): {str(e)}")
-    
-    # PRO GRADE: Start background scheduler for campaigns
+
+    if is_serverless_environment():
+        print("SCHEDULER_SKIP: Serverless environment detected.")
+        return
+
+    # Start the in-process scheduler only on long-running platforms.
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.interval import IntervalTrigger
     from .database import SessionLocal
     from . import services
-    
-    # Initialize scheduler
+
     scheduler = BackgroundScheduler()
     scheduler.start()
 
@@ -51,7 +62,6 @@ async def startup_event():
         finally:
             db.close()
 
-    # Add the job to the scheduler
     scheduler.add_job(
         cron_check_campaigns,
         trigger=IntervalTrigger(minutes=1),
