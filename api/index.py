@@ -1,116 +1,146 @@
 import os
 import sys
-import json
 import traceback
-from flask import Flask, jsonify, request
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from mangum import Mangum
 
 # Ensure backend folder is in path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Attempt imports with fallback
+app = FastAPI(title="Email Automation API", docs_url=None, redoc_url=None)
+
+# Import logic with safety
 try:
-    from backend.app.database import SessionLocal
-    from backend.app import services
+    from backend.app.database import SessionLocal, engine
+    from backend.app import services, models
+    from backend.app.schemas import CampaignCreate
     db_available = True
     print("IMPORT_SUCCESS: Backend services loaded.")
 except Exception as e:
     print(f"IMPORT_ERROR: {str(e)}")
     db_available = False
 
-app = Flask(__name__)
-
-# --- Defensive Database Helper ---
-def get_safe_db():
-    if not db_available:
-        print("DB_NOT_AVAILABLE: Skipping connection.")
-        return None
+# --- Automatic DB Migration (Add company column if missing) ---
+def run_migrations():
+    if not db_available or not engine:
+        return
     try:
-        return SessionLocal()
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            # Check if columns exist and add if missing
+            conn.execute(text("ALTER TABLE campaigns ADD COLUMN IF NOT EXISTS company TEXT;"))
+            conn.execute(text("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company TEXT;"))
+            conn.commit()
+            print("MIGRATION_SUCCESS: Columns verified.")
     except Exception as e:
-        print(f"DB_CONNECTION_ERROR: {str(e)}")
-        return None
+        print(f"MIGRATION_ERROR: {str(e)}")
 
-# --- Error Response Helper ---
-def error_response(context, exception):
-    err_msg = str(exception)
-    tb = traceback.format_exc()
-    print(f"CRASH_IN_{context}: {err_msg}")
-    print(tb)
-    return jsonify({
-        "error": err_msg,
-        "traceback": tb,
-        "context": context,
-        "success": False
-    }), 200 # Fail safe JSON
+run_migrations()
 
-# --- Route Logging Helper ---
-def log_request(route):
-    print(f"API HIT: {route} | Method: {request.method} | DB: {db_available}")
-
-# --- API Routes ---
-@app.route('/api/campaigns', methods=['GET', 'POST', 'DELETE'])
-def handle_campaigns():
-    log_request("/api/campaigns")
-    db = get_safe_db()
+# --- Middleware for Logging ---
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    print(f"API HIT: {request.url.path} | Method: {request.method}")
     try:
-        if request.method == 'GET':
-            if not db: return jsonify({"success": True, "data": []})
-            return jsonify({"success": True, "data": services.get_campaigns(db) or []})
-        if request.method == 'POST':
-            if not db: return jsonify({"error": "DB Unavailable"}), 503
-            from backend.app.schemas import CampaignCreate
-            class MockBG:
-                def add_task(self, f, *args, **kwargs): f(*args, **kwargs)
-            return jsonify(services.create_campaign(db, CampaignCreate(**request.json), MockBG()))
+        response = await call_next(request)
+        return response
     except Exception as e:
-        return error_response("CAMPAIGNS", e)
+        tb = traceback.format_exc()
+        print(f"CRASH_IN_{request.url.path}: {str(e)}")
+        print(tb)
+        return JSONResponse(
+            status_code=200, # Fail-safe
+            content={
+                "error": str(e),
+                "traceback": tb,
+                "success": False
+            }
+        )
+
+# --- Routes ---
+
+@app.get("/api/dashboard/stats")
+async def get_dashboard_stats():
+    db = SessionLocal()
+    try:
+        return services.get_dashboard_stats(db)
     finally:
-        if db: db.close()
+        db.close()
 
-@app.route('/api/dashboard/stats')
-def dashboard_stats():
-    log_request("/api/dashboard/stats")
-    db = get_safe_db()
+@app.get("/api/dashboard/email-stats")
+async def get_email_stats(days: int = 7):
+    db = SessionLocal()
     try:
-        if not db: return jsonify({"total_emails_sent": 0, "open_rate": 0})
-        return jsonify(services.get_dashboard_stats(db))
-    except Exception as e:
-        return error_response("DASHBOARD_STATS", e)
+        return services.get_email_stats_chart(db, days=days)
     finally:
-        if db: db.close()
+        db.close()
 
-@app.route('/api/dashboard/email-stats')
-def email_stats():
-    log_request("/api/dashboard/email-stats")
-    db = get_safe_db()
+@app.get("/api/dashboard/recent-events")
+async def get_recent_events():
+    db = SessionLocal()
     try:
-        if not db: return jsonify({"emails_over_time": []})
-        return jsonify(services.get_email_stats_chart(db))
-    except Exception as e:
-        return error_response("EMAIL_STATS", e)
+        return services.recent_events(db)
     finally:
-        if db: db.close()
+        db.close()
 
-@app.route('/api/dashboard/recent-events')
-def recent_events():
-    log_request("/api/dashboard/recent-events")
-    db = get_safe_db()
+@app.get("/api/campaigns")
+async def get_campaigns():
+    db = SessionLocal()
     try:
-        if not db: return jsonify([])
-        return jsonify(services.recent_events(db) or [])
-    except Exception as e:
-        return error_response("RECENT_EVENTS", e)
+        return {"success": True, "data": services.get_campaigns(db) or []}
     finally:
-        if db: db.close()
+        db.close()
 
-@app.route('/api/test')
-def test_api():
-    return jsonify({
+@app.post("/api/campaigns")
+async def create_campaign(campaign: CampaignCreate):
+    db = SessionLocal()
+    try:
+        class MockBG:
+            def add_task(self, f, *args, **kwargs): f(*args, **kwargs)
+        return services.create_campaign(db, campaign, MockBG())
+    finally:
+        db.close()
+
+@app.get("/api/templates")
+async def get_templates():
+    db = SessionLocal()
+    try:
+        return {"success": True, "data": services.get_templates(db) or []}
+    finally:
+        db.close()
+
+@app.get("/api/contacts")
+async def get_contacts():
+    db = SessionLocal()
+    try:
+        return {"success": True, "data": services.get_contacts(db) or []}
+    finally:
+        db.close()
+
+@app.get("/api/activity")
+async def get_activity(limit: int = 50):
+    db = SessionLocal()
+    try:
+        return services.recent_events(db, limit=limit) or []
+    finally:
+        db.close()
+
+@app.get("/api/campaign-status")
+async def get_campaign_status():
+    db = SessionLocal()
+    try:
+        return services.get_campaign_status_summary(db) or []
+    finally:
+        db.close()
+
+@app.get("/api/test")
+async def test_endpoint():
+    return {
         "status": "ok",
-        "message": "Diagnostic API is LIVE",
+        "message": "FastAPI + Mangum Diagnostic API is LIVE",
         "db": db_available
-    })
+    }
 
-# --- Vercel Entry Point (Flask WSGI) ---
-def handler(request):
-    return app(request.environ, lambda status, headers: None)
+# --- Vercel Entry Point (ASGI Mangum) ---
+handler = Mangum(app)
