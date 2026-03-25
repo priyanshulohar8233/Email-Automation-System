@@ -8,7 +8,8 @@ import {
   BarChart3,
   Settings,
   LogOut,
-  Zap
+  Zap,
+  History
 } from "lucide-react";
 
 const sidebarItems = [
@@ -26,6 +27,7 @@ const sidebarItems = [
   { icon: Users, label: "Contacts", href: "/contacts" },
   { icon: BarChart3, label: "Analytics", href: "/analytics" },
   { icon: Settings, label: "Settings", href: "/settings" },
+  { icon: History, label: "Activity History", href: "/history" },
 ];
 
 export function Sidebar() {

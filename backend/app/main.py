@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import traceback
+import os
 from .database import engine, Base
 from .routes import router
 
@@ -24,25 +25,34 @@ async def startup_event():
     init_db()
     
     # PRO GRADE: Start background scheduler for campaigns
-    import asyncio
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.interval import IntervalTrigger
     from .database import SessionLocal
     from . import services
     
-    async def campaign_scheduler_loop():
-        # Wait a bit for DB to be ready
-        await asyncio.sleep(5)
-        while True:
-            try:
-                db = SessionLocal()
-                # We don't have background_tasks here, so we'll use immediate sending fallback
-                # which is fine for the worker.
-                services.check_due_campaigns(db)
-                db.close()
-            except Exception as e:
-                print(f"SCHEDULER_LOOP_ERROR: {str(e)}")
-            await asyncio.sleep(60) # Check every minute
-            
-    asyncio.create_task(campaign_scheduler_loop())
+    # Initialize scheduler
+    scheduler = BackgroundScheduler()
+    scheduler.start()
+
+    def cron_check_campaigns():
+        db = SessionLocal()
+        try:
+            # Check for due campaigns every minute
+            services.check_due_campaigns(db)
+        except Exception as e:
+            print(f"SCHEDULER_ERROR: {str(e)}")
+        finally:
+            db.close()
+
+    # Add the job to the scheduler
+    scheduler.add_job(
+        cron_check_campaigns,
+        trigger=IntervalTrigger(minutes=1),
+        id='check_due_campaigns',
+        name='Check for due email campaigns every minute',
+        replace_existing=True
+    )
+    print("SCHEDULER_START: Background campaign scheduler is running (interval: 1m)")
 
 app.add_middleware(
     CORSMiddleware,
@@ -50,7 +60,7 @@ app.add_middleware(
         "http://localhost:3000", 
         "http://localhost:3001", 
         "https://mailflow-frontend.vercel.app",
-        "https://*.vercel.app" # Allow Vercel previews
+        "https://*.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],

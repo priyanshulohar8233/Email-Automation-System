@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { format, parseISO, isValid } from "date-fns";
 import {
   Table,
   TableBody,
@@ -118,6 +119,7 @@ export default function Campaigns() {
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
       case 'running': return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
+      case 'queued':
       case 'scheduled': return 'text-blue-400 bg-blue-400/10 border-blue-400/20';
       case 'draft': return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
       case 'completed': 
@@ -336,6 +338,7 @@ export default function Campaigns() {
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground py-4">Campaign</TableHead>
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Company</TableHead>
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Status</TableHead>
+                    <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Schedule Time</TableHead>
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Sent</TableHead>
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Delivered</TableHead>
                     <TableHead className="text-xs font-black uppercase tracking-widest text-foreground">Bounced</TableHead>
@@ -366,8 +369,29 @@ export default function Campaigns() {
                           variant="outline" 
                           className={`rounded-full px-3 py-0.5 text-[10px] font-bold border ${getStatusColor(campaign.status)}`}
                         >
-                          {campaign.status}
+                          {campaign.status.toLowerCase() === 'running' && campaign.scheduled && campaign.scheduled !== "-"
+                            ? `Running at ${(() => {
+                                try {
+                                  const d = parseISO(campaign.scheduled);
+                                  return isValid(d) ? format(d, 'h:mm a') : '...';
+                                } catch { return '...'; }
+                              })()}` 
+                            : campaign.status}
                         </Badge>
+                      </TableCell>
+                      <TableCell className="text-[10px] font-bold text-muted-foreground whitespace-nowrap">
+                        {campaign.scheduled && campaign.scheduled !== "-" ? (
+                          (() => {
+                            try {
+                              const d = parseISO(campaign.scheduled);
+                              return isValid(d) ? format(d, 'dd/MM/yy (h:mm a)') : "-";
+                            } catch {
+                              return "-";
+                            }
+                          })()
+                        ) : (
+                          <span className="opacity-50">-</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-xs font-medium text-muted-foreground">
                         {campaign.sent}

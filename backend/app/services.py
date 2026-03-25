@@ -1004,7 +1004,7 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
                 "unread": format_rate(unread, sent),
                 "bounce": format_rate(failed, sent + failed),
                 "company": str(c.company or "MP Consultant LLC"),
-                "scheduled": c.scheduled_for or "Not scheduled",
+                "scheduled": c.scheduled_for.isoformat() if c.scheduled_for else None,
             })
         return results
     except Exception as e:
@@ -1038,7 +1038,7 @@ def check_due_campaigns(db: Session, background_tasks=None):
                 continue
                 
             if sched_time <= now:
-                debug.debug_log(f"SCHEDULER: Triggering campaign {camp.id} (Scheduled for {camp.scheduled_for})")
+                debug.debug_log(f"SCHEDULER: Triggering campaign {camp.id} (Name: {camp.name}) - Scheduled for {camp.scheduled_for}")
                 camp.status = CampaignStatus.RUNNING
                 db.commit()
                 

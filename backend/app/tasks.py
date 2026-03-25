@@ -31,6 +31,7 @@ def upsert_activity_log(db, email_id: int, campaign_id: int, recipient_email: st
     try:
         existing = db.query(ActivityLog).filter(ActivityLog.email_id == email_id).first()
         now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
         name = _extract_name_from_email(recipient_email)
 
         if existing:
@@ -40,9 +41,11 @@ def upsert_activity_log(db, email_id: int, campaign_id: int, recipient_email: st
             except Exception:
                 history = []
 
-            # Only append if not already in history
-            if new_status not in history:
-                history.append(new_status)
+            # For history, we now store: [{"status": "SENT", "time": "..."}]
+            # Only append if not already in history (by status string)
+            history_statuses = [h.get("status") if isinstance(h, dict) else str(h) for h in history]
+            if new_status not in history_statuses:
+                history.append({"status": new_status, "time": now_iso})
                 existing.status_history = json.dumps(history)
 
             # Upgrade status if the new one has higher priority
@@ -65,7 +68,7 @@ def upsert_activity_log(db, email_id: int, campaign_id: int, recipient_email: st
                 sender=sender,
                 company=company,
                 status=new_status,
-                status_history=json.dumps([new_status]),
+                status_history=json.dumps([{"status": new_status, "time": now_iso}]),
                 country=country or "Unknown",
                 timestamp=now,
             )

@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, Response
 from fastapi.responses import RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
@@ -595,46 +595,37 @@ def update_contact_company(req: ContactCompanyUpdate, db: Session = Depends(get_
         return services.update_contact_company(db, req.email, req.company)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@router.get("/api/contacts/company")
-def get_contact_company_info(email: str, db: Session = Depends(get_db)):
-    """Utility: return company details for a contact email."""
-    from .models import Contact
-    contact = db.query(Contact).filter(Contact.email == email).first()
-    return {"company": contact.company if contact else "Unknown"}
-
 @router.get("/activity")
 def get_activity(db: Session = Depends(get_db)):
     """
     Return grouped activity: one row per (email_id), ordered by latest event.
-    Falls back to legacy grouping for rows without email_id.
     """
     import json
     
     # Get latest 50 rows from DB ordered by timestamp desc
     rows = db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(50).all()
     
-    # Group by email_id (or recipient_email as fallback for legacy rows)
     seen = {}  # key -> row
     for row in rows:
-        # Use email_id as primary key if available, else fall back to recipient email
         key = row.email_id if row.email_id else f"legacy_{row.recipient_email}"
         if key not in seen:
             seen[key] = row
         else:
-            # For legacy rows, keep the most recent one (highest ID as proxy for latest)
             if row.id > seen[key].id:
                 seen[key] = row
     
     result = []
-    for row in list(seen.values())[:20]:  # Return at most 20 unique entries
+    for row in list(seen.values())[:20]:
         try:
-            history = json.loads(row.status_history or "[]")
+            history_raw = json.loads(row.status_history or "[]")
+            # History is now List[dict] like [{"status": "SENT", "time": "..."}]
+            # Extract just the status strings for the badge logic / basic sorting
+            history_statuses = [h.get("status") if isinstance(h, dict) else str(h) for h in history_raw]
         except Exception:
-            history = [row.status] if row.status else []
+            history_statuses = [row.status] if row.status else []
         
-        # Ensure history is ordered by priority (most advanced last, for display reversed)
         priority = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
-        history_sorted = sorted(set(history), key=lambda s: priority.get(s, 0))
+        history_sorted = sorted(set(history_statuses), key=lambda s: priority.get(s, 0))
         
         result.append({
             "id": row.id,
@@ -644,20 +635,124 @@ def get_activity(db: Session = Depends(get_db)):
             "sender": row.sender or "",
             "company": row.company or "",
             "status": row.status or "SENT",
-            "status_history": history_sorted,
+            "status_history": history_sorted, # Keep as List[str] for simple badge UI
             "country": row.country or "Unknown",
             "timestamp": row.timestamp.isoformat() if row.timestamp else "",
         })
     
     return result
 
-@router.get("/campaign-status", response_model=List[CampaignStatusResponse])
-def get_campaign_status(db: Session = Depends(get_db)):
-    from .models import ActivityLog
+@router.get("/campaigns/history")
+def get_campaigns_history(date: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Return all campaigns with aggregate activity stats.
+    Filter by date if provided (YYYY-MM-DD).
+    """
+    from .models import Campaign, ActivityLog
     from sqlalchemy import func
-    results = db.query(
-        ActivityLog.company, 
-        func.count(ActivityLog.id).label("total")
-    ).group_by(ActivityLog.company).all()
+    from datetime import datetime, time, timedelta
+
+    query = db.query(Campaign)
+
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+            start_dt = datetime.combine(target_date, time.min)
+            end_dt = datetime.combine(target_date, time.max)
+            query = query.filter(Campaign.created_at.between(start_dt, end_dt))
+        except ValueError:
+            pass
+
+    campaigns = query.order_by(Campaign.created_at.desc()).all()
     
-    return [{"company": r.company, "total": r.total} for r in results]
+    result = []
+    for c in campaigns:
+        # Calculate stats from ActivityLog for this campaign
+        logs = db.query(ActivityLog).filter(ActivityLog.campaign_id == c.id).all()
+        
+        sent = len(logs)
+        delivered = sum(1 for l in logs if l.status in ("DELIVERED", "OPENED", "CLICKED"))
+        opened = sum(1 for l in logs if l.status in ("OPENED", "CLICKED"))
+        clicked = sum(1 for l in logs if l.status == "CLICKED")
+        
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "date": c.created_at.isoformat() if c.created_at else "",
+            "sent": sent,
+            "delivered": delivered,
+            "opened": opened,
+            "clicked": clicked,
+            "status": c.status.value if hasattr(c.status, 'value') else str(c.status)
+        })
+    
+    return result
+
+@router.get("/search/email")
+def search_email_history(email: str, db: Session = Depends(get_db)):
+    """
+    Return full activity history for a specific email address.
+    """
+    import json
+    from .models import ActivityLog, Campaign
+    
+    logs = db.query(ActivityLog).filter(
+        ActivityLog.recipient_email.ilike(f"%{email}%")
+    ).order_by(ActivityLog.timestamp.desc()).all()
+    
+    result = []
+    for l in logs:
+        campaign_name = "Unknown"
+        if l.campaign_id:
+            c = db.query(Campaign).filter(Campaign.id == l.campaign_id).first()
+            if c: campaign_name = c.name
+            
+        try:
+            history = json.loads(l.status_history or "[]")
+        except:
+            history = []
+            
+        result.append({
+            "id": l.id,
+            "email_id": l.email_id,
+            "recipient_email": l.recipient_email,
+            "recipient_name": l.recipient_name or "",
+            "campaign_name": campaign_name, # Frontend expects campaign_name
+            "sender": l.sender or "",
+            "company": l.company or "",
+            "country": l.country or "Unknown",
+            "status": l.status or "SENT",
+            "status_history": history, # Full detailed history with timestamps
+            "timestamp": l.timestamp.isoformat() if l.timestamp else ""
+        })
+        
+    return result
+
+@router.get("/activity/{log_id}", response_model=ActivityLogResponse)
+def get_activity_detail(log_id: int, db: Session = Depends(get_db)):
+    """
+    Return detailed activity log entry by ID.
+    """
+    import json
+    from .models import ActivityLog
+    log = db.query(ActivityLog).filter(ActivityLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log entry not found")
+        
+    try:
+        history = json.loads(log.status_history or "[]")
+    except:
+        history = []
+        
+    return {
+        "id": log.id,
+        "email_id": log.email_id,
+        "recipient_email": log.recipient_email,
+        "recipient_name": log.recipient_name or "",
+        "sender": log.sender or "",
+        "company": log.company or "",
+        "country": log.country or "Unknown",
+        "status": log.status or "SENT",
+        "status_history": history,
+        "timestamp": log.timestamp.isoformat() if log.timestamp else ""
+    }

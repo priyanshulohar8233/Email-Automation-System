@@ -152,5 +152,24 @@ export const dashboardAPI = {
             throw new Error(`Error updating company: ${response.status} ${errorText}`);
         }
         return await response.json();
+    },
+    getCampaignHistory: async (date?: string, signal?: AbortSignal): Promise<any[]> => {
+        let url = `${API_URL}/api/campaigns/history`;
+        if (date) url += `?date=${date}`;
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        if (!response.ok) throw new Error("Error fetching campaign history");
+        return await response.json();
+    },
+    searchEmail: async (email: string, signal?: AbortSignal): Promise<any[]> => {
+        const url = `${API_URL}/api/search/email?email=${encodeURIComponent(email)}`;
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        if (!response.ok) throw new Error("Error searching email");
+        return await response.json();
+    },
+    getActivityDetail: async (logId: number, signal?: AbortSignal): Promise<any> => {
+        const url = `${API_URL}/api/activity/${logId}`;
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' }, 10000);
+        if (!response.ok) throw new Error("Error fetching activity detail");
+        return await response.json();
     }
 };

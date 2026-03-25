@@ -13,6 +13,7 @@ import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import AITemplates from "./pages/AITemplates";
+import CampaignHistory from "./pages/CampaignHistory";
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
           </Route>
           <Route path="contacts" element={<Contacts />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="history" element={<CampaignHistory />} />
           <Route path="settings" element={<Settings />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

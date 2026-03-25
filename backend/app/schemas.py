@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, AnyHttpUrl
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Any
 
 class AutomationStepSchema(BaseModel):
     id: Optional[int] = None
@@ -196,7 +196,7 @@ class ActivityLogResponse(BaseModel):
     sender: str
     company: str
     status: str
-    status_history: Optional[List[str]] = []
+    status_history: Optional[List[Any]] = []
     country: Optional[str] = "Unknown"
     timestamp: str  # ISO string
 
@@ -206,3 +206,13 @@ class ActivityLogResponse(BaseModel):
 class CampaignStatusResponse(BaseModel):
     company: str
     total: int
+
+class CampaignHistoryResponse(BaseModel):
+    id: int
+    name: str
+    date: str
+    sent: int
+    delivered: int
+    opened: int
+    clicked: int
+    status: str
