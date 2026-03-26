@@ -337,7 +337,7 @@ def tracking_pixel(email_id: int, request: Request, db: Session = Depends(get_db
             company_name = camp.company if camp else "Unknown"
             upsert_activity_log(
                 db, email_id, email_rec.campaign_id,
-                email_rec.recipient_email, settings.SMTP_USER, company_name,
+                email_rec.recipient_email, company_name, company_name,
                 "OPENED", country
             )
             db.commit()
@@ -372,7 +372,7 @@ def tracking_click(email_id: int, url: str, request: Request, db: Session = Depe
             company_name = camp.company if camp else "Unknown"
             upsert_activity_log(
                 db, email_id, email_rec.campaign_id,
-                email_rec.recipient_email, settings.SMTP_USER, company_name,
+                email_rec.recipient_email, company_name, company_name,
                 "CLICKED", country
             )
             db.commit()

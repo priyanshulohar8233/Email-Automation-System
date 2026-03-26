@@ -91,10 +91,10 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         if provider == "SENDGRID" and s and s.sendgrid_api_key:
             debug_log(f"DEBUG: Sending via SendGrid API to {to_addr}")
             # Use specific SendGrid sender if configured, else fallback
-            sender = s.from_email or s.smtp_username or "noreply@mailflow.com"
+            sender_val = s.from_email or s.smtp_username or "noreply@mailflow.com"
             res = send_email_sendgrid(
                 api_key=s.sendgrid_api_key,
-                from_email=sender,
+                from_email=sender_val,
                 to_email=to_addr,
                 subject=subject,
                 html_content=tracking_body
@@ -127,14 +127,15 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             camp = db.query(Campaign).get(campaign_id)
             company_name = camp.company if camp else "Unknown"
 
+            # SaaS Grade: Map SENDER to Company Name (Fix for Round 20)
             # First mark as SENT
             upsert_activity_log(db, email_id, campaign_id, to_addr,
-                                settings.SMTP_USER, company_name, "SENT")
+                                company_name, company_name, "SENT")
             db.flush()  # Ensure row exists before DELIVERED upsert below
 
             # Immediately upgrade to DELIVERED since SMTP send was successful
             upsert_activity_log(db, email_id, campaign_id, to_addr,
-                                settings.SMTP_USER, company_name, "DELIVERED")
+                                company_name, company_name, "DELIVERED")
         except Exception as log_ex:
             debug_log(f"WARNING: Activity logging failed: {log_ex}")
 
@@ -158,12 +159,12 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             if camp:
                 camp.failed_count = (camp.failed_count or 0) + 1
 
-                # Log BOUNCED (upsert)
+                # Log BOUNCED (upsert) - Also fix SENDER here
                 try:
+                    comp = camp.company or "Unknown"
                     upsert_activity_log(db, email_record.id, email_record.campaign_id,
                                         email_record.recipient_email,
-                                        settings.SMTP_USER,
-                                        camp.company or "Unknown",
+                                        comp, comp,
                                         "BOUNCED")
                 except Exception:
                     pass
