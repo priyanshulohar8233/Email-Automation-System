@@ -20,12 +20,9 @@ interface ActivityRow {
   sender: string;
   company: string;
   status: string;
+  status_history: { status: string; time: string }[];
   country: string;
   timestamp: string;
-  sent_at?: string;
-  delivered_at?: string;
-  opened_at?: string;
-  clicked_at?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -87,10 +84,11 @@ function getDotClass(status: string): string {
 }
 
 // ─── Status Dropdown ─────────────────────────────────────────────────────────
-function StatusDropdown({ row }: { row: ActivityRow }) {
+function StatusDropdown({ status, history }: { status: string; history: { status: string; time: string }[] }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
+  // Click outside to close
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -99,46 +97,33 @@ function StatusDropdown({ row }: { row: ActivityRow }) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const formatShortTime = (ts?: string) => {
-    if (!ts) return null;
-    return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
-  // Define events in priority order
-  const events = [
-    { label: "Clicked", status: "CLICKED", time: row.clicked_at },
-    { label: "Opened", status: "OPENED", time: row.opened_at },
-    { label: "Delivered", status: "DELIVERED", time: row.delivered_at },
-    { label: "Sent", status: "SENT", time: row.sent_at },
-  ].filter(e => !!e.time);
-
   return (
     <div ref={ref} className="relative inline-block">
       <button
         onClick={() => setOpen(v => !v)}
-        className={getBadgeClass(row.status)}
+        className={getBadgeClass(status)}
         title="Click to see full timeline"
       >
-        {row.status}
-        <ChevronDown className={`h-2.5 w-2.5 transition-transform ${open ? "rotate-180" : ""}`} />
+        {status}
+        {/* Dropdown arrow removed for cleaner UI as requested in Round 22 */}
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-2 w-52 bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 right-0">
+        <div className="absolute z-50 mt-2 w-56 bg-card border border-border rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 right-0">
           <div className="px-3 py-2 border-b border-border bg-muted/20">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Event Timeline</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground italic">Event Timeline</span>
           </div>
           <ul className="py-1">
-            {events.map((e, i) => (
-              <li key={e.status} className="flex items-center gap-2.5 px-3 py-2 hover:bg-muted/50 transition-colors">
-                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getDotClass(e.status)}`} />
-                <span className={`text-[11px] font-semibold flex-1 ${i === 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                  {e.label}
+            {history.map((h, i) => (
+              <li key={h.status} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 transition-colors border-b border-border/30 last:border-0">
+                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getDotClass(h.status)} shadow-[0_0_8px_rgba(0,0,0,0.2)]`} />
+                <span className={`text-[11px] font-bold flex-1 ${i === 0 ? "text-foreground" : "text-muted-foreground/80"}`}>
+                  {h.status.charAt(0).toUpperCase() + h.status.slice(1).toLowerCase()}
                 </span>
                 <div className="flex items-center gap-2">
                   <Check className={`h-3 w-3 flex-shrink-0 ${i === 0 ? "text-emerald-400" : "text-muted-foreground/40"}`} />
-                  <span className="text-[9px] font-bold tabular-nums text-muted-foreground/60">
-                    {formatShortTime(e.time)}
+                  <span className="text-[10px] tabular-nums font-bold text-muted-foreground/70">
+                    {formatTime(h.time)}
                   </span>
                 </div>
               </li>
@@ -212,8 +197,10 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
               {events.map((ev, index) => {
                 const displayName = extractName(ev.recipient_name, ev.recipient_email);
                 const displayCompany = extractCompany(ev.company, ev.recipient_email);
-                // Ensure status_history has at least the current status
-                const history = ev.status_history?.length ? ev.status_history : [ev.status];
+                // Ensure status_history has the current status object if backend returns empty history for legacy reasons
+                const history = ev.status_history?.length 
+                  ? ev.status_history 
+                  : [{ status: ev.status, time: ev.timestamp }];
 
                 return (
                   <TableRow key={ev.id} className="group hover:bg-muted/50 transition-colors duration-200 border-b border-border/50">
@@ -259,7 +246,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
 
                     {/* Status Dropdown */}
                     <TableCell className="text-center px-4 py-4 relative">
-                      <StatusDropdown row={ev} />
+                      <StatusDropdown status={ev.status} history={history} />
                     </TableCell>
 
                     {/* Smart Time */}

@@ -1164,12 +1164,34 @@ def get_activity(db: Session, limit: int = 20):
     for row in list(seen.values())[:limit]:
         try:
             history_raw = json.loads(row.status_history or "[]")
-            history_statuses = [h.get("status") if isinstance(h, dict) else str(h) for h in history_raw]
+            history_objs = []
+            for h in history_raw:
+                if isinstance(h, dict):
+                    status_name = h.get("status")
+                    event_time = h.get("time")
+                else:
+                    status_name = str(h)
+                    event_time = row.timestamp.isoformat() if row.timestamp else None
+                
+                if status_name:
+                    history_objs.append({"status": status_name, "time": event_time})
         except Exception:
-            history_statuses = [row.status] if row.status else []
+            history_objs = [{"status": row.status, "time": row.timestamp.isoformat() if row.timestamp else None}]
         
-        priority = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
-        history_sorted = sorted(set(history_statuses), key=lambda s: priority.get(s, 0))
+        # Priority for sorting timeline (Clicked > Opened > Delivered > Sent)
+        priority = {"CLICKED": 4, "OPENED": 3, "DELIVERED": 2, "SENT": 1, "BOUNCED": 0}
+        
+        # Unique by status, keeping the latest timestamp for each status
+        latest_per_status = {}
+        for obj in history_objs:
+            s_name = obj["status"].upper()
+            if s_name not in latest_per_status:
+                latest_per_status[s_name] = obj
+            else:
+                # Simple overwrite or time check if available
+                latest_per_status[s_name] = obj
+                
+        history_sorted = sorted(latest_per_status.values(), key=lambda x: priority.get(x["status"].upper(), 0), reverse=True)
         
         # Country Logic (Round 21)
         p_domains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com"]
@@ -1178,7 +1200,7 @@ def get_activity(db: Session, limit: int = 20):
         
         display_country = row.country or "Unknown"
         if domain in p_domains:
-            display_country = "Personal Email"
+            display_country = row.country
 
         result.append({
             "id": row.id,
