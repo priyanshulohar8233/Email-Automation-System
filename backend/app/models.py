@@ -204,5 +204,9 @@ class ActivityLog(Base):
     company = Column(String)
     status = Column(String)                                     # Current/latest status
     status_history = Column(String, default="[]")              # JSON: ["SENT","DELIVERED",...]
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    opened_at = Column(DateTime(timezone=True), nullable=True)
+    clicked_at = Column(DateTime(timezone=True), nullable=True)
     country = Column(String, nullable=True)
     timestamp = Column(DateTime(timezone=True), default=func.now())  # Latest event time
