@@ -34,17 +34,18 @@ def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: S
 @router.post("/campaigns/check-due")
 def trigger_due_campaigns(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
-    Manual or Cron-based trigger to process QUEUED campaigns that are now due.
-    Useful for serverless (Vercel Cron) or as a backup for the background loop.
+    SaaS Grade: Redis + Vercel Cron trigger.
+    Processes QUEUED campaigns that are now due using Redis ZSET.
     """
     cron_secret = os.getenv("CRON_SECRET")
     if cron_secret:
         auth_header = request.headers.get("authorization")
         if auth_header != f"Bearer {cron_secret}":
+            debug.debug_log(f"CRON_AUTH_FAILED: Expected {cron_secret}, got {auth_header}")
             raise HTTPException(status_code=401, detail="Unauthorized")
 
-    count = services.check_due_campaigns(db, background_tasks)
-    return {"status": "ok", "triggered": count}
+    result = services.process_scheduled_queue(db, background_tasks)
+    return result
 
 @router.get("/campaigns")
 def get_campaigns(search: str | None = None, status: str | None = None, db: Session = Depends(get_db)):

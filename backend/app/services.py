@@ -17,7 +17,20 @@ from email.mime.multipart import MIMEMultipart
 from email import encoders
 import requests
 import io
+import redis
 from . import debug
+from .config import settings
+
+# SaaS Grade: Redis Client for Serverless Scheduling
+try:
+    if settings.REDIS_URL:
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    else:
+        debug.debug_log("REDIS_URL not found in settings")
+        redis_client = None
+except Exception as e:
+    debug.debug_log(f"REDIS_CONNECTION_ERROR: {e}")
+    redis_client = None
 
 def check_and_complete_campaign(db: Session, campaign_id: int):
     from .models import Email, EmailStatus, Campaign, CampaignStatus
@@ -816,10 +829,7 @@ def get_emails_per_company(db: Session, days: int = 30):
         Campaign.name,
         func.count(Email.id).label("count")
     ).join(Email, Campaign.id == Email.campaign_id)\
-     .filter(
-         Email.sent_at >= limit_date,
-         Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
-     )\
+     .filter(Email.sent_at >= limit_date)\
      .group_by(Campaign.name).all()
     
     counts = {
@@ -917,40 +927,32 @@ def create_campaign(db: Session, data, background_tasks=None):
         data.company = "MP Consultant LLC" 
 
     try:
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
-        
-        # Check if scheduled for future
-        initial_status = CampaignStatus.RUNNING
-        scheduled_at_str = getattr(data, 'scheduled_at', None)
-        scheduled_dt = None
-        
-        if scheduled_at_str:
-            try:
-                if "Z" in scheduled_at_str or "+" in scheduled_at_str:
-                     scheduled_dt = datetime.fromisoformat(scheduled_at_str.replace("Z", "+00:00"))
-                else:
-                     scheduled_dt = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=timezone.utc)
-                
-                if scheduled_dt > now:
-                    initial_status = CampaignStatus.QUEUED
-            except Exception as parse_err:
-                debug.debug_log(f"SCHEDULING_PARSE_ERROR in create: {str(parse_err)}")
-
+        # 3. Fix DB insert query: status -> default "RUNNING"
         new_camp = Campaign(
             name=data.name,
             company=data.company,
             subject=data.subject,
             body=data.body,
-            status=initial_status,
+            status=CampaignStatus.RUNNING,
             sent_count=0,
             delivered_count=0,
             failed_count=0,
             opens_count=0,
             unread_count=0,
             bounce_count=0,
-            scheduled_for=scheduled_dt
+            scheduled_for=None
         )
+        
+        # Handle scheduling with timezone awareness
+        scheduled_at_str = getattr(data, 'scheduled_at', None)
+        if scheduled_at_str:
+            try:
+                if "Z" in scheduled_at_str or "+" in scheduled_at_str:
+                     new_camp.scheduled_for = datetime.fromisoformat(scheduled_at_str.replace("Z", "+00:00"))
+                else:
+                     new_camp.scheduled_for = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=timezone.utc)
+            except Exception as parse_err:
+                debug.debug_log(f"SCHEDULING_PARSE_ERROR: {str(parse_err)}")
         
         db.add(new_camp)
         db.commit()
@@ -977,12 +979,98 @@ def create_campaign(db: Session, data, background_tasks=None):
         if send_result:
             result["send_status"] = send_result
             
+        # SaaS Grade: Add to Redis scheduler if scheduled for future
+        if new_camp.status == CampaignStatus.QUEUED and redis_client:
+            try:
+                # new_camp.scheduled_for is a datetime object (naive or TZ aware)
+                # Ensure it's treated as UTC for the timestamp
+                eta = new_camp.scheduled_for
+                if eta.tzinfo is None:
+                    eta = eta.replace(tzinfo=timezone.utc)
+                timestamp = int(eta.timestamp())
+                redis_client.zadd("scheduled_campaigns", {str(new_camp.id): timestamp})
+                debug.debug_log(f"REDIS_SCHEDULER: Added campaign {new_camp.id} to queue (Unix: {timestamp})")
+            except Exception as re:
+                debug.debug_log(f"REDIS_SCHEDULER_ERROR: {str(re)}")
+
         return result
     except Exception as e:
         db.rollback()
         debug.debug_log(f"DB ERROR in create_campaign: {str(e)}")
         debug.debug_log(traceback.format_exc())
         raise Exception("Database error while creating campaign")
+
+def process_scheduled_queue(db: Session, background_tasks):
+    """
+    Step 4: Safe Scheduler Worker for Vercel.
+    Pulls due campaign IDs from Redis and starts them.
+    """
+    if not redis_client:
+        return {"status": "error", "message": "Redis not connected"}
+
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    
+    # Use a lock to prevent multi-trigger overlap in Vercel
+    lock_key = "scheduler_execution_lock"
+    is_locked = redis_client.set(lock_key, "locked", ex=50, nx=True)
+    if not is_locked:
+        return {"status": "skipped", "message": "Another scheduler is running"}
+
+    try:
+        # Get all campaigns where scheduled time <= now
+        due_ids = redis_client.zrangebyscore("scheduled_campaigns", 0, now_ts)
+        
+        if not due_ids:
+            return {"status": "ok", "processed": 0}
+
+        processed = 0
+        for camp_id in due_ids:
+            try:
+                # 1. Fetch campaign
+                camp = db.query(Campaign).filter(Campaign.id == int(camp_id)).first()
+                if not camp:
+                    redis_client.zrem("scheduled_campaigns", camp_id)
+                    continue
+
+                if camp.status != CampaignStatus.QUEUED:
+                    redis_client.zrem("scheduled_campaigns", camp_id)
+                    continue
+
+                # 2. Trigger execution logic (prepare_campaign_emails handles the loop)
+                # We need data to pass recipients, subject, body. 
+                # For a triggered job, we reconstruct the "data" object from the DB record
+                from pydantic import BaseModel
+                class DummyData(BaseModel):
+                    name: str
+                    subject: str
+                    body: str
+                    company: str
+                    recipients: list = []
+
+                # Fetch recipients (emails with current campaign_id)
+                recipients = [e.recipient_email for e in db.query(Email.recipient_email).filter(Email.campaign_id == camp.id).all()]
+                
+                data = DummyData(
+                    name=camp.name,
+                    subject=camp.subject,
+                    body=camp.body,
+                    company=camp.company,
+                    recipients=recipients
+                )
+
+                # Reset status to RUNNING via the service helper
+                send_result = prepare_campaign_emails(db, camp.id, data, background_tasks)
+                
+                # 3. Remove from Redis
+                redis_client.zrem("scheduled_campaigns", camp_id)
+                processed += 1
+                debug.debug_log(f"REDIS_SCHEDULER: Successfully triggered campaign {camp_id}")
+            except Exception as inner_e:
+                debug.debug_log(f"REDIS_SCHEDULER: Error processing ID {camp_id}: {inner_e}")
+
+        return {"status": "ok", "processed": processed}
+    finally:
+        redis_client.delete(lock_key)
 
 def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: str = "all", company_name: str | list = "all"):
     """
