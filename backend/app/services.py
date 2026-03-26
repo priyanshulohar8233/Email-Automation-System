@@ -1128,28 +1128,20 @@ def get_activity(db: Session, limit: int = 20):
     """
     import json
     try:
-        # Get latest 50 rows from DB ordered by timestamp desc
-        rows = db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(50).all()
+        # SaaS Grade: Join with Campaign table to filter only 'sent' campaigns (Round 24)
+        rows = db.query(ActivityLog)\
+            .join(Campaign, ActivityLog.campaign_id == Campaign.id)\
+            .filter(Campaign.status == "sent")\
+            .order_by(ActivityLog.timestamp.desc())\
+            .limit(100)\
+            .all()
     except Exception as e:
         debug.debug_log(f"DB ERROR in get_activity: {e}")
         rows = []
     
     if not rows:
-        # SaaS Grade Mock Data: Professional fallback
-        from datetime import datetime, timedelta, timezone
-        now = datetime.now(timezone.utc)
-        return [
-            {
-                "id": 8881, "email_id": 101, "recipient_email": "active.user@enterprise.com", "recipient_name": "Active User",
-                "sender": "noreply@mailflow.com", "company": "Enterprise Inc", "status": "CLICKED", "status_history": ["SENT", "DELIVERED", "OPENED", "CLICKED"],
-                "country": "USA", "timestamp": (now - timedelta(minutes=5)).isoformat()
-            },
-            {
-                "id": 8882, "email_id": 102, "recipient_email": "new.sub@startup.io", "recipient_name": "New Subscriber",
-                "sender": "hello@mailflow.com", "company": "Startup IO", "status": "SENT", "status_history": ["SENT"],
-                "country": "UK", "timestamp": (now - timedelta(hours=1)).isoformat()
-            }
-        ]
+        # Return real empty state if no sent campaigns exist
+        return []
 
     seen = {}
     for row in rows:
