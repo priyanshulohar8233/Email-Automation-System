@@ -188,6 +188,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
               <TableRow className="border-border hover:bg-transparent">
                 <TableHead className="w-[50px] h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-6 py-0">#</TableHead>
                 <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">Recipient</TableHead>
+                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">Sender</TableHead>
                 <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">Company</TableHead>
                 <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">Country</TableHead>
                 <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0 text-center">Status</TableHead>
@@ -218,6 +219,13 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
                           {ev.recipient_email}
                         </span>
                       </div>
+                    </TableCell>
+
+                    {/* Sender (Campaign Company) */}
+                    <TableCell className="px-4 py-4">
+                      <span className="text-[13px] font-bold text-indigo-400 dark:text-indigo-300">
+                        {ev.sender || "MP Consultant LLC"}
+                      </span>
                     </TableCell>
 
                     {/* Company (from domain or stored) */}
