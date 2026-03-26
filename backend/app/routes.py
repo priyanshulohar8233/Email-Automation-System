@@ -427,7 +427,7 @@ def test_sendgrid(db: Session = Depends(get_db)):
     return {"status": "success", "message": "Test email sent to verified sender"}
 
 @router.post("/webhook/sendgrid")
-def sendgrid_webhook(payload: List[dict], db: Session = Depends(get_db)):
+def sendgrid_webhook_v2(payload: List[dict], db: Session = Depends(get_db)):
     return services.process_sendgrid_webhook(db, payload)
 
 @router.post("/webhook/email-events")
@@ -435,15 +435,14 @@ def email_events_webhook(payload: dict, db: Session = Depends(get_db)):
     return services.process_webhook_event(db, payload)
 
 @router.get("/activity")
-def get_all_activity(limit: int = 100, db: Session = Depends(get_db)):
-    """Step 4: Safe Activity API"""
-    from sqlalchemy import text
+def get_activity_log(limit: int = 20, db: Session = Depends(get_db)):
+    """
+    Consolidated Activity API with Service-layer logic and Mock fallback.
+    """
     try:
-        # Use raw SQL if preferred or standard ORM
-        result = db.execute(text("SELECT * FROM activity_logs ORDER BY id DESC LIMIT :limit"), {"limit": limit})
-        return [dict(row) for row in result]
+        return services.get_activity(db, limit=limit)
     except Exception as e:
-        debug.debug_log(f"DB ERROR in activity: {e}")
+        debug.debug_log(f"ERROR in get_activity_log route: {str(e)}")
         return []
 
 @router.get("/templates")
@@ -627,52 +626,6 @@ def update_contact_company(req: ContactCompanyUpdate, db: Session = Depends(get_
         return services.update_contact_company(db, req.email, req.company)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-@router.get("/activity")
-def get_activity(db: Session = Depends(get_db)):
-    """
-    Return grouped activity: one row per (email_id), ordered by latest event.
-    """
-    import json
-    
-    # Get latest 50 rows from DB ordered by timestamp desc
-    rows = db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(50).all()
-    
-    seen = {}  # key -> row
-    for row in rows:
-        key = row.email_id if row.email_id else f"legacy_{row.recipient_email}"
-        if key not in seen:
-            seen[key] = row
-        else:
-            if row.id > seen[key].id:
-                seen[key] = row
-    
-    result = []
-    for row in list(seen.values())[:20]:
-        try:
-            history_raw = json.loads(row.status_history or "[]")
-            # History is now List[dict] like [{"status": "SENT", "time": "..."}]
-            # Extract just the status strings for the badge logic / basic sorting
-            history_statuses = [h.get("status") if isinstance(h, dict) else str(h) for h in history_raw]
-        except Exception:
-            history_statuses = [row.status] if row.status else []
-        
-        priority = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
-        history_sorted = sorted(set(history_statuses), key=lambda s: priority.get(s, 0))
-        
-        result.append({
-            "id": row.id,
-            "email_id": row.email_id,
-            "recipient_email": row.recipient_email,
-            "recipient_name": row.recipient_name or "",
-            "sender": row.sender or "",
-            "company": row.company or "",
-            "status": row.status or "SENT",
-            "status_history": history_sorted, # Keep as List[str] for simple badge UI
-            "country": row.country or "Unknown",
-            "timestamp": row.timestamp.isoformat() if row.timestamp else "",
-        })
-    
-    return result
 
 @router.get("/campaigns/history")
 def get_campaigns_history(date: Optional[str] = None, db: Session = Depends(get_db)):
