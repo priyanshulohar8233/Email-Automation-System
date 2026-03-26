@@ -816,7 +816,10 @@ def get_emails_per_company(db: Session, days: int = 30):
         Campaign.name,
         func.count(Email.id).label("count")
     ).join(Email, Campaign.id == Email.campaign_id)\
-     .filter(Email.sent_at >= limit_date)\
+     .filter(
+         Email.sent_at >= limit_date,
+         Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])
+     )\
      .group_by(Campaign.name).all()
     
     counts = {
@@ -914,32 +917,40 @@ def create_campaign(db: Session, data, background_tasks=None):
         data.company = "MP Consultant LLC" 
 
     try:
-        # 3. Fix DB insert query: status -> default "RUNNING"
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc)
+        
+        # Check if scheduled for future
+        initial_status = CampaignStatus.RUNNING
+        scheduled_at_str = getattr(data, 'scheduled_at', None)
+        scheduled_dt = None
+        
+        if scheduled_at_str:
+            try:
+                if "Z" in scheduled_at_str or "+" in scheduled_at_str:
+                     scheduled_dt = datetime.fromisoformat(scheduled_at_str.replace("Z", "+00:00"))
+                else:
+                     scheduled_dt = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=timezone.utc)
+                
+                if scheduled_dt > now:
+                    initial_status = CampaignStatus.QUEUED
+            except Exception as parse_err:
+                debug.debug_log(f"SCHEDULING_PARSE_ERROR in create: {str(parse_err)}")
+
         new_camp = Campaign(
             name=data.name,
             company=data.company,
             subject=data.subject,
             body=data.body,
-            status=CampaignStatus.RUNNING,
+            status=initial_status,
             sent_count=0,
             delivered_count=0,
             failed_count=0,
             opens_count=0,
             unread_count=0,
             bounce_count=0,
-            scheduled_for=None
+            scheduled_for=scheduled_dt
         )
-        
-        # Handle scheduling with timezone awareness
-        scheduled_at_str = getattr(data, 'scheduled_at', None)
-        if scheduled_at_str:
-            try:
-                if "Z" in scheduled_at_str or "+" in scheduled_at_str:
-                     new_camp.scheduled_for = datetime.fromisoformat(scheduled_at_str.replace("Z", "+00:00"))
-                else:
-                     new_camp.scheduled_for = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=timezone.utc)
-            except Exception as parse_err:
-                debug.debug_log(f"SCHEDULING_PARSE_ERROR: {str(parse_err)}")
         
         db.add(new_camp)
         db.commit()

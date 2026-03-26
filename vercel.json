@@ -27,5 +27,11 @@
             "src": "/(.*)",
             "dest": "frontend/index.html"
         }
+    ],
+    "crons": [
+        {
+            "path": "/api/campaigns/check-due",
+            "schedule": "* * * * *"
+        }
     ]
 }
