@@ -1162,38 +1162,35 @@ def get_activity(db: Session, limit: int = 20):
     
     result = []
     for row in list(seen.values())[:limit]:
-        # REQUIREMENT 4: Status Logic (Strict Priority)
-        # clicked > opened > delivered > sent
-        priority = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
-        
-        # REQUIREMENT 3: Time Column (Latest activity time)
-        # clicked_at > opened_at > delivered_at > sent_at
         try:
-            # We use the row fields if present (they should be since migration)
-            # Use row.timestamp as fallback if none of the specific fields are set
-            latest_time = row.clicked_at or row.opened_at or row.delivered_at or row.sent_at or row.timestamp
-            
-            # REQUIREMENT 5: Ensure history has actual timestamps for timeline popup
-            # (Handled by returning the individual *_at fields)
+            history_raw = json.loads(row.status_history or "[]")
+            history_statuses = [h.get("status") if isinstance(h, dict) else str(h) for h in history_raw]
         except Exception:
-            latest_time = row.timestamp
+            history_statuses = [row.status] if row.status else []
+        
+        priority = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
+        history_sorted = sorted(set(history_statuses), key=lambda s: priority.get(s, 0))
+        
+        # Country Logic (Round 21)
+        p_domains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com"]
+        r_email = row.recipient_email or ""
+        domain = r_email.split("@")[-1].lower() if "@" in r_email else ""
+        
+        display_country = row.country or "Unknown"
+        if domain in p_domains:
+            display_country = "Personal Email"
 
         result.append({
             "id": row.id,
             "email_id": row.email_id,
             "recipient_email": row.recipient_email,
             "recipient_name": row.recipient_name or "",
-            "sender": row.sender or row.company or "Unknown",
+            "sender": row.sender or "",
             "company": row.company or "",
             "status": row.status or "SENT",
-            "country": row.country or "Unknown",
-            "timestamp": latest_time.isoformat() if latest_time else "",
-            
-            # REQUIREMENT 6: Specific Timestamps for Timeline
-            "sent_at": row.sent_at.isoformat() if row.sent_at else None,
-            "delivered_at": row.delivered_at.isoformat() if row.delivered_at else None,
-            "opened_at": row.opened_at.isoformat() if row.opened_at else None,
-            "clicked_at": row.clicked_at.isoformat() if row.clicked_at else None,
+            "status_history": history_sorted,
+            "country": display_country,
+            "timestamp": row.timestamp.isoformat() if row.timestamp else "",
         })
     return result
 
