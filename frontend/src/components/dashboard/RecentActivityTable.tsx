@@ -65,11 +65,11 @@ function getStatusPriority(s: string) {
 /** Badge style per status */
 function getBadgeClass(status: string): string {
   const s = status.toUpperCase();
-  const base = "inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-tight border cursor-pointer hover:shadow-md transition-all select-none gap-1";
-  if (s === "OPENED")    return base + " bg-emerald-500/10 text-emerald-400 border-emerald-500/20 dark:bg-emerald-500/10";
-  if (s === "CLICKED")   return base + " bg-blue-500/10 text-blue-400 border-blue-500/20";
-  if (s === "DELIVERED") return base + " bg-teal-500/10 text-teal-400 border-teal-500/20";
-  if (s === "BOUNCED")   return base + " bg-rose-500/10 text-rose-400 border-rose-500/20";
+  const base = "inline-flex items-center px-4 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-tight border cursor-pointer hover:shadow-md transition-all select-none gap-2 hover:scale-[1.02] active:scale-[0.98]";
+  if (s === "OPENED")    return base + " bg-emerald-500/10 text-emerald-400 border-emerald-500/30 dark:bg-emerald-500/10";
+  if (s === "CLICKED")   return base + " bg-blue-500/10 text-blue-400 border-blue-500/30";
+  if (s === "DELIVERED") return base + " bg-teal-500/10 text-teal-400 border-teal-500/30";
+  if (s === "BOUNCED")   return base + " bg-rose-500/10 text-rose-400 border-rose-500/30";
   return base + " bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300";
 }
 
@@ -104,8 +104,8 @@ function StatusDropdown({ status, history }: { status: string; history: { status
         className={getBadgeClass(status)}
         title="Click to see full timeline"
       >
-        {status}
-        {/* Dropdown arrow removed for cleaner UI as requested in Round 22 */}
+        <span>{status}</span>
+        <ChevronDown className={`h-2.5 w-2.5 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
 
       {open && (
