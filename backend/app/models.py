@@ -62,7 +62,7 @@ class Email(Base):
     bounce_reason = Column(String, nullable=True)
     bounce_type = Column(Enum(BounceType), nullable=True)
     delivery_status = Column(String, nullable=True) # e.g., "delivered", "processed", "deferred"
-    sent_at = Column(DateTime(timezone=True), nullable=True, index=True)
+    sent_at = Column(DateTime(timezone=True), default=func.now(), index=True)
     opened_at = Column(DateTime(timezone=True), nullable=True)
     clicked_at = Column(DateTime(timezone=True), nullable=True)
 

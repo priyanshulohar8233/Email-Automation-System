@@ -263,7 +263,10 @@ def campaign_status(days: int = 30, db: Session = Depends(get_db)):
         return []
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
-def dashboard_stats(response: Response, days: int = 30, campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
+def dashboard_stats(response: Response, background_tasks: BackgroundTasks, days: int = 30, campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
+    # SaaS Grade: Proactive Scheduling Pulse
+    background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
+    
     print(f"API HIT: /dashboard/stats (days={days}, campaign={campaign}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
@@ -277,7 +280,10 @@ def dashboard_stats(response: Response, days: int = 30, campaign: str = "all", c
         }
 
 @router.get("/dashboard/email-stats")
-def get_email_stats(response: Response, days: int = 7, company: str | None = None, db: Session = Depends(get_db)):
+def get_email_stats(response: Response, background_tasks: BackgroundTasks, days: int = 7, company: str | None = None, db: Session = Depends(get_db)):
+    # SaaS Grade: Proactive Scheduling Pulse
+    background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
+
     print(f"API HIT: /dashboard/email-stats (days={days}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
@@ -436,10 +442,13 @@ def email_events_webhook(payload: dict, db: Session = Depends(get_db)):
     return services.process_webhook_event(db, payload)
 
 @router.get("/activity")
-def get_activity_log(limit: int = 20, db: Session = Depends(get_db)):
+def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, db: Session = Depends(get_db)):
     """
     Consolidated Activity API with Service-layer logic and Mock fallback.
     """
+    # SaaS Grade: Proactive Scheduling Pulse
+    background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
+    
     try:
         return services.get_activity(db, limit=limit)
     except Exception as e:
