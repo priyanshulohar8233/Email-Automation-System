@@ -7,12 +7,6 @@ from .models import ActivityLog
 
 STATUS_PRIORITY = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
 
-PERSONAL_DOMAINS = [
-    "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", 
-    "icloud.com", "aol.com", "protonmail.com", "proton.me", 
-    "zoho.com", "yandex.com", "mail.com", "gmx.com"
-]
-
 
 def _extract_name_from_email(email: str) -> str:
     """Extract a display name from email prefix, e.g. john.doe@x.com -> John Doe."""
@@ -40,21 +34,8 @@ def upsert_activity_log(
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
         name = _extract_name_from_email(recipient_email)
-        
-        # REQUIREMENT 2: Country Column Logic (Personal Email check)
-        final_country = country or "Unknown"
-        domain = recipient_email.split("@")[-1].lower() if "@" in recipient_email else ""
-        if domain in PERSONAL_DOMAINS:
-            final_country = "Personal Email"
 
         if existing:
-            # Update specific status timestamps
-            s = new_status.upper()
-            if s == "SENT" and not existing.sent_at: existing.sent_at = now
-            elif s == "DELIVERED" and not existing.delivered_at: existing.delivered_at = now
-            elif s == "OPENED" and not existing.opened_at: existing.opened_at = now
-            elif s == "CLICKED" and not existing.clicked_at: existing.clicked_at = now
-
             try:
                 history = json.loads(existing.status_history or "[]")
             except Exception:
@@ -70,13 +51,11 @@ def upsert_activity_log(
             if new_priority > cur_priority:
                 existing.status = new_status
 
-            # Update country if it's "Unknown" or if it matched personal domain
-            if final_country == "Personal Email" or (final_country != "Unknown" and (not existing.country or existing.country == "Unknown")):
-                existing.country = final_country
+            if country and country != "Unknown" and (not existing.country or existing.country == "Unknown"):
+                existing.country = country
 
             existing.timestamp = now
         else:
-            # Create new log
             log = ActivityLog(
                 email_id=email_id,
                 campaign_id=campaign_id,
@@ -86,18 +65,9 @@ def upsert_activity_log(
                 company=company,
                 status=new_status,
                 status_history=json.dumps([{"status": new_status, "time": now_iso}]),
-                country=final_country,
+                country=country or "Unknown",
                 timestamp=now,
             )
-            
-            # Set initial timestamp
-            s = new_status.upper()
-            if s == "SENT": log.sent_at = now
-            elif s == "DELIVERED": log.delivered_at = now
-            elif s == "OPENED": log.opened_at = now
-            elif s == "CLICKED": log.clicked_at = now
-            
             db.add(log)
-            
     except Exception as e:
         debug_log(f"WARNING: upsert_activity_log failed: {e}")
