@@ -15,29 +15,32 @@ import Auth from "./pages/Auth";
 import AITemplates from "./pages/AITemplates";
 import CampaignHistory from "./pages/CampaignHistory";
 import { DashboardProvider } from "./context/DashboardContext";
+import { ErrorBoundary } from "./components/common/ErrorBoundary";
 
 export default function App() {
   return (
-    <DashboardProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/" element={<Layout />}>
-            <Route index element={<Dashboard />} />
-            <Route path="campaigns" element={<Campaigns />} />
-            <Route path="templates">
-              <Route index element={<Navigate to="custom" replace />} />
-              <Route path="custom" element={<Templates />} />
-              <Route path="feature" element={<AITemplates />} />
+    <ErrorBoundary>
+      <DashboardProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/" element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="campaigns" element={<Campaigns />} />
+              <Route path="templates">
+                <Route index element={<Navigate to="custom" replace />} />
+                <Route path="custom" element={<Templates />} />
+                <Route path="feature" element={<AITemplates />} />
+              </Route>
+              <Route path="contacts" element={<Contacts />} />
+              <Route path="analytics" element={<Analytics />} />
+              <Route path="history" element={<CampaignHistory />} />
+              <Route path="settings" element={<Settings />} />
             </Route>
-            <Route path="contacts" element={<Contacts />} />
-            <Route path="analytics" element={<Analytics />} />
-            <Route path="history" element={<CampaignHistory />} />
-            <Route path="settings" element={<Settings />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </DashboardProvider>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </BrowserRouter>
+      </DashboardProvider>
+    </ErrorBoundary>
   );
 }

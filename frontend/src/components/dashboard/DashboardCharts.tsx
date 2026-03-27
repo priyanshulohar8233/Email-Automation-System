@@ -53,8 +53,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 const PieTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    if (data.name === "No Data") return null;
+    const data = payload[0]?.payload;
+    if (!data || data.name === "No Data") return null;
     return (
       <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 p-3 rounded-xl shadow-xl ring-1 ring-white/10">
         <p className="text-sm font-semibold text-white flex items-center gap-2 m-0">
@@ -233,6 +233,7 @@ export function DashboardCharts() {
                     animationDuration={1500}
                     animationEasing="ease-out"
                     activeBar={(props: any) => {
+                      if (!props) return <rect />;
                       const { x, y, width, height } = props;
                       return (
                         <rect

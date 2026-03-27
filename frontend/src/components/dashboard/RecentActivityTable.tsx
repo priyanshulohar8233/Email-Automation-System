@@ -32,7 +32,7 @@ interface ActivityRow {
 function extractName(name: string, email: string): string {
   if (name && name.trim()) return name.trim();
   const prefix = email.split("@")[0];
-  return prefix.replace(/[._-]/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  return prefix?.replace(/[._-]/g, " ").replace(/\b\w/g, c => c?.toUpperCase()) || "";
 }
 
 /** Company from email domain */
@@ -42,7 +42,7 @@ function extractCompany(company: string, email: string): string {
   const host = domain.split(".")[0];
   const personal = ["gmail", "yahoo", "hotmail", "outlook", "icloud", "aol", "proton"];
   if (personal.includes(host.toLowerCase())) return "Personal Email";
-  return host.charAt(0).toUpperCase() + host.slice(1);
+  return host?.charAt(0)?.toUpperCase() + host?.slice(1) || "";
 }
 
 /** Smart time: today → "10:00 PM", older → "24/03/26 (10:00 PM)" */
@@ -60,12 +60,12 @@ function formatTime(ts: string): string {
 const STATUS_ORDER = ["BOUNCED", "SENT", "DELIVERED", "OPENED", "CLICKED"];
 
 function getStatusPriority(s: string) {
-  return STATUS_ORDER.indexOf(s.toUpperCase());
+  return STATUS_ORDER.indexOf(s?.toUpperCase() || "");
 }
 
 /** Badge style per status */
 function getBadgeClass(status: string): string {
-  const s = status.toUpperCase();
+  const s = status?.toUpperCase() || "";
   const base = "inline-flex items-center px-4 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-tight border cursor-pointer hover:shadow-md transition-all select-none gap-2 hover:scale-[1.02] active:scale-[0.98]";
   if (s === "OPENED")    return base + " bg-emerald-500/10 text-emerald-400 border-emerald-500/30 dark:bg-emerald-500/10";
   if (s === "CLICKED")   return base + " bg-blue-500/10 text-blue-400 border-blue-500/30";
@@ -76,7 +76,7 @@ function getBadgeClass(status: string): string {
 
 /** Timeline dot color */
 function getDotClass(status: string): string {
-  const s = status.toUpperCase();
+  const s = status?.toUpperCase() || "";
   if (s === "OPENED")    return "bg-emerald-400";
   if (s === "CLICKED")   return "bg-blue-400";
   if (s === "DELIVERED") return "bg-teal-400";
@@ -119,7 +119,7 @@ function StatusDropdown({ status, history }: { status: string; history: { status
               <li key={h.status} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50 transition-colors border-b border-border/30 last:border-0">
                 <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getDotClass(h.status)} shadow-[0_0_8px_rgba(0,0,0,0.2)]`} />
                 <span className={`text-[11px] font-bold flex-1 ${i === 0 ? "text-foreground" : "text-muted-foreground/80"}`}>
-                  {h.status.charAt(0).toUpperCase() + h.status.slice(1).toLowerCase()}
+                  {h.status?.charAt(0)?.toUpperCase() + h.status?.slice(1)?.toLowerCase() || h.status}
                 </span>
                 <div className="flex items-center gap-2">
                   <Check className={`h-3 w-3 flex-shrink-0 ${i === 0 ? "text-emerald-400" : "text-muted-foreground/40"}`} />
