@@ -35,6 +35,19 @@ except Exception as e:
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+# SaaS Grade: Redis Client for Serverless Scheduling
+import redis
+from . import debug
+try:
+    if settings.REDIS_URL:
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    else:
+        debug.debug_log("REDIS_URL not found in settings")
+        redis_client = None
+except Exception as e:
+    debug.debug_log(f"REDIS_CONNECTION_ERROR: {e}")
+    redis_client = None
+
 
 def get_db():
     db = SessionLocal()

@@ -1,5 +1,10 @@
 import os
 from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+
+# SaaS Grade: Explicitly load .env from the project root
+# This ensures that variables like DATABASE_URL_NEW are available to os.getenv
+load_dotenv(os.path.join(os.getcwd(), ".env"))
 
 class Settings(BaseSettings):
     # Mandatory fields for Pydantic v2 validation

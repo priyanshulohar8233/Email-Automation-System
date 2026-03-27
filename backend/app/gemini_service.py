@@ -5,17 +5,20 @@ from .config import settings
 from . import debug
 
 # Configure Gemini
-if settings.GEMINI_API_KEY and settings.GEMINI_API_KEY != "YOUR_GEMINI_API_KEY_HERE":
+if settings.GEMINI_API_KEY and settings.GEMINI_API_KEY != "AIzaSyCAuTSfoKitt3nq59VYaDBzFPIT0u0A33o":
     genai.configure(api_key=settings.GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-1.5-flash')
 else:
     model = None
     debug.debug_log("GEMINI_API_KEY not configured or placeholder detected.")
 
-# SaaS Grade: Shared Redis Client from services
+# SaaS Grade: Shared Redis Client from database
 def get_redis():
-    from .services import redis_client
-    return redis_client
+    try:
+        from .database import redis_client
+        return redis_client
+    except:
+        return None
 
 async def enrich_activity_batch(activities: list):
     """
@@ -32,7 +35,10 @@ async def enrich_activity_batch(activities: list):
 
     # 1. Check Cache
     for act in activities:
-        cache_key = f"gemini_enrich:{act.get('recipient_email')}:{act.get('company', '')}"
+        email = act.get('recipient_email') or act.get('recipient')
+        if not email: continue
+        
+        cache_key = f"gemini_enrich:{email}:{act.get('company', '')}"
         if redis_cache:
             cached = redis_cache.get(cache_key)
             if cached:
@@ -55,7 +61,8 @@ async def enrich_activity_batch(activities: list):
     prompt += "Activities:\n"
     
     for act in to_enrich:
-        prompt += f"- Email: {act['recipient_email']}, Info: {act.get('sender', '')} / {act.get('company', '')}\n"
+        email = act.get('recipient_email') or act.get('recipient')
+        prompt += f"- Email: {email}, Info: {act.get('sender', '')} / {act.get('company', '')}\n"
 
     try:
         response = model.generate_content(prompt)
@@ -67,18 +74,18 @@ async def enrich_activity_batch(activities: list):
             
             # 3. Store in Cache and map back
             for item in ai_data:
-                email = item.get('email_key')
-                if not email: continue
+                item_email = item.get('email_key')
+                if not item_email: continue
                 
                 # Find matching activity to get the ID
-                original = next((a for a in to_enrich if a['recipient_email'] == email), None)
+                original = next((a for a in to_enrich if (a.get('recipient_email') or a.get('recipient')) == item_email), None)
                 if original:
                     item['id'] = original['id']
                     results.append(item)
                     
                     # Cache it (24h expiry)
                     if redis_cache:
-                        cache_key = f"gemini_enrich:{email}:{original.get('company', '')}"
+                        cache_key = f"gemini_enrich:{item_email}:{original.get('company', '')}"
                         cache_data = {k: v for k, v in item.items() if k != 'id'}
                         redis_cache.setex(cache_key, 86400, json.dumps(cache_data))
             

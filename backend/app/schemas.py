@@ -100,10 +100,12 @@ class ContactCreate(BaseModel):
 
 class EnrichmentItem(BaseModel):
     id: int
-    recipient_email: str
-    sender: Optional[str] = None
+    recipient: Optional[str] = None
+    recipient_email: Optional[str] = None
     company: Optional[str] = None
-    timestamp: str
+    sender: Optional[str] = None
+    timestamp: Optional[str] = None
+    latest_timestamp: Optional[str] = None
 
 class EnrichmentRequest(BaseModel):
     activities: List[EnrichmentItem]

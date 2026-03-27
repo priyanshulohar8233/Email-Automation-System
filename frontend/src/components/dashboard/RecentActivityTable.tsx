@@ -16,24 +16,27 @@ import { useDashboard } from "@/context/DashboardContext";
 interface ActivityRow {
   id: number;
   email_id?: number;
-  recipient_email: string;
+  recipient: string;        // Backend returns 'recipient'
+  recipient_email?: string; // Fallback
   recipient_name: string;
   sender: string;
   company: string;
-  status: string;
-  status_history: { status: string; time: string }[];
+  status?: string;          // Legacy
+  latest_type: string;      // Backend returns 'latest_type'
+  events: { type: string; timestamp: string }[]; // Grouped events
   country: string;
-  timestamp: string;
+  latest_timestamp: string; // Backend returns 'latest_timestamp'
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Extract display name from email if recipient_name is blank */
 function extractName(name: string, email: string): string {
-  if (name && name.trim()) return name.trim();
+  if (name && name !== "Unknown" && name.trim()) return name.trim();
   const prefix = email.split("@")[0];
   return prefix?.replace(/[._-]/g, " ").replace(/\b\w/g, c => c?.toUpperCase()) || "";
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ... (formatTime and other helpers remain same)
 
 /** Company from email domain */
 function extractCompany(company: string, email: string): string {
@@ -249,13 +252,18 @@ export function RecentActivityTable() {
             <TableBody>
               {events.map((ev, index) => {
                 const enriched = enrichedData[ev.id] || {};
-                const displayName = enriched.name || extractName(ev.recipient_name, ev.recipient_email);
-                const displayCompany = enriched.company || extractCompany(ev.company, ev.recipient_email);
+                const recipientEmail = ev.recipient || ev.recipient_email || "";
+                const displayName = enriched.name || extractName(ev.recipient_name, recipientEmail);
+                const displayCompany = enriched.company || extractCompany(ev.company, recipientEmail);
                 const displayCountry = enriched.country || (ev.country && ev.country !== "Unknown" ? ev.country : "Unknown");
 
-                const history = ev.status_history?.length 
-                  ? ev.status_history 
-                  : [{ status: ev.status, time: ev.timestamp }];
+                // Use the grouped events for history
+                const history = ev.events?.length 
+                  ? ev.events.map(e => ({ status: e.type, time: e.timestamp }))
+                  : [{ status: ev.latest_type || (ev as any).status || "SENT", time: ev.latest_timestamp || (ev as any).timestamp }];
+
+                const currentStatus = ev.latest_type || (ev as any).status || "SENT";
+                const currentTime = ev.latest_timestamp || (ev as any).timestamp;
 
                 return (
                   <TableRow key={ev.id} className="group hover:bg-slate-800/40 transition-colors duration-200 border-b border-white/5 last:border-0">
@@ -271,7 +279,7 @@ export function RecentActivityTable() {
                           {displayName}
                         </span>
                         <span className="text-[11px] text-slate-400/80 font-medium">
-                          {ev.recipient_email}
+                          {recipientEmail}
                         </span>
                       </div>
                     </TableCell>
@@ -299,12 +307,12 @@ export function RecentActivityTable() {
 
                     {/* Status */}
                     <TableCell className="text-center px-4 py-4">
-                      <StatusDropdown status={ev.status} history={history} />
+                      <StatusDropdown status={currentStatus} history={history} />
                     </TableCell>
 
                     {/* Time */}
                     <TableCell className="text-right text-slate-400 text-xs px-6 py-4 tabular-nums font-medium whitespace-nowrap">
-                      {formatTime(ev.timestamp)}
+                      {formatTime(currentTime)}
                     </TableCell>
                   </TableRow>
                 );
