@@ -194,58 +194,59 @@ export default function Dashboard() {
       </PageHeader>
 
       {/* KPI Cards */}
-      {loading ? (
-        <div className="flex h-32 items-center justify-center rounded-2xl border border-dashed border-border bg-card shadow-sm transition-colors duration-300">
-          <RefreshCcw className="h-5 w-5 animate-spin text-indigo-500" />
-          <span className="ml-3 text-sm font-semibold text-muted-foreground">Loading metrics...</span>
-        </div>
-      ) : error ? (
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <KPICard
+          label="Total Emails Sent"
+          value={stats?.totalEmails.toLocaleString() || "0"}
+          growth={stats?.totalEmailsGrowth ?? 0}
+          icon={Send}
+          loading={loading && !stats}
+        />
+        <KPICard
+          label="Open Rate"
+          value={stats ? `${stats.openRate}%` : "0%"}
+          growth={stats?.openRateGrowth ?? 0}
+          icon={Mail}
+          loading={loading && !stats}
+        />
+        <KPICard
+          label="Click Rate"
+          value={stats ? `${stats.clickRate}%` : "0%"}
+          growth={stats?.clickRateGrowth ?? 0}
+          icon={MousePointerClick}
+          loading={loading && !stats}
+        />
+        <KPICard
+          label="Unread"
+          value={stats?.unread.toLocaleString() || "0"}
+          growth={stats?.unreadGrowth ?? 0}
+          icon={EyeOff}
+          loading={loading && !stats}
+        />
+        <KPICard
+          label="Bounce Rate"
+          value={stats ? `${stats.bounceRate}%` : "0%"}
+          growth={stats?.bounceRateGrowth ?? 0}
+          icon={XCircle}
+          loading={loading && !stats}
+        />
+        <KPICard
+          label="Active Campaigns"
+          value={stats?.activeCampaigns.toString() || "0"}
+          growth={stats?.activeCampaignsGrowth ?? 0}
+          icon={Activity}
+          loading={loading && !stats}
+        />
+      </div>
+
+      {error && !stats && (
         <div className="flex h-32 flex-col items-center justify-center rounded-2xl border border-destructive/20 bg-destructive/5 p-4 text-center transition-colors duration-300">
           <p className="text-sm font-semibold text-destructive mb-3">{error}</p>
-          <Button variant="outline" size="sm" onClick={fetchStats} className="rounded-xl h-9 border-border hover:bg-muted font-semibold text-xs">
+          <Button variant="outline" size="sm" onClick={() => fetchStats()} className="rounded-xl h-9 border-border hover:bg-muted font-semibold text-xs">
             <RefreshCcw className="mr-2 h-3.5 w-3.5" /> Try Again
           </Button>
         </div>
-      ) : stats ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-          <KPICard
-            label="Total Emails Sent"
-            value={stats.totalEmails.toLocaleString()}
-            growth={stats.totalEmailsGrowth ?? 0}
-            icon={Send}
-          />
-          <KPICard
-            label="Open Rate"
-            value={`${stats.openRate}%`}
-            growth={stats.openRateGrowth ?? 0}
-            icon={Mail}
-          />
-          <KPICard
-            label="Click Rate"
-            value={`${stats.clickRate}%`}
-            growth={stats.clickRateGrowth ?? 0}
-            icon={MousePointerClick}
-          />
-          <KPICard
-            label="Unread"
-            value={stats.unread.toLocaleString()}
-            growth={stats.unreadGrowth ?? 0}
-            icon={EyeOff}
-          />
-          <KPICard
-            label="Bounce Rate"
-            value={`${stats.bounceRate}%`}
-            growth={stats.bounceRateGrowth ?? 0}
-            icon={XCircle}
-          />
-          <KPICard
-            label="Active Campaigns"
-            value={stats.activeCampaigns.toString()}
-            growth={stats.activeCampaignsGrowth ?? 0}
-            icon={Activity}
-          />
-        </div>
-      ) : null}
+      )}
 
       {/* Charts Section */}
       <DashboardCharts days={days} company={company} />

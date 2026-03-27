@@ -336,16 +336,19 @@ def process_webhook_event(db: Session, payload: dict):
         return log_event(db, int(email_id), event_type, url=url)
     return False
 
-def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all"):
+def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all", start_date: datetime = None, end_date: datetime = None):
     """
     SaaS Grade Single Source of Truth for all metrics.
     Ensures calculations are identical across Dashboard and Analytics.
     """
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from sqlalchemy import func, distinct, case
     
     now = datetime.now(timezone.utc)
-    limit_date = now - timedelta(days=days)
+    if not start_date:
+        start_date = now - timedelta(days=days)
+    if not end_date:
+        end_date = now
     
     # 1. Base Query Filter
     query_emails = db.query(
@@ -353,12 +356,12 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
         func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("delivered"),
         func.count(case((Email.status == EmailStatus.BOUNCED, Email.id))).label("bounces"),
         func.count(case((Email.status == EmailStatus.SPAM, Email.id))).label("spam")
-    ).filter(Email.sent_at >= limit_date)
+    ).filter(Email.sent_at >= start_date, Email.sent_at < end_date)
     
     query_events = db.query(
         func.count(distinct(case(((EmailEvent.event_type == EventType.OPENED), EmailEvent.email_id), else_=None))).label("opens"),
         func.count(distinct(case(((EmailEvent.event_type == EventType.CLICKED), EmailEvent.email_id), else_=None))).label("clicks")
-    ).filter(EmailEvent.timestamp >= limit_date)
+    ).filter(EmailEvent.timestamp >= start_date, EmailEvent.timestamp < end_date)
     
     if campaign_name != "all":
         campaign_filter = db.query(Campaign.id).filter(Campaign.name == campaign_name).scalar_subquery()
@@ -476,18 +479,40 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
 
 def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all"):
     # Unified Source of Truth
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    
+    # 1. Current Period Metrics
     m = get_unified_metrics(db, days=days, campaign_name=campaign_name, company_name=company_name)
     
+    # 2. Previous Period Metrics for Growth
+    prev_start = now - timedelta(days=days * 2)
+    prev_end = now - timedelta(days=days)
+    p = get_unified_metrics(db, campaign_name=campaign_name, company_name=company_name, start_date=prev_start, end_date=prev_end)
+    
+    # helper for growth
+    def calc_growth(cur, prev):
+        if prev == 0: return 100.0 if cur > 0 else 0.0
+        return round(((cur - prev) / prev) * 100, 1)
+
     # Active Campaigns
     active_camps = db.query(func.count(Campaign.id)).filter(
         Campaign.status == CampaignStatus.RUNNING
     ).scalar() or 0
+    
+    # Active Campaigns Growth (approximation vs 7 days ago if 30 days is too much)
+    # But for consistency, use the same 'days' period
+    prev_active_camps = db.query(func.count(Campaign.id)).filter(
+        Campaign.status == CampaignStatus.RUNNING,
+        Campaign.created_at < prev_end
+    ).scalar() or 0
 
-    if m["totalSent"] == 0:
+    if m["totalSent"] == 0 and m["opens"] == 0:
         # SaaS Grade: Mock stats if DB is empty
         return {
             "totalEmails": 1248, "openRate": 42.5, "clickRate": 12.8, "bounceRate": 0.5, 
             "unread": 85, "activeCampaigns": 3, "totalEmailsGrowth": 12.5, "openRateGrowth": 5.2,
+            "clickRateGrowth": 2.1, "bounceRateGrowth": -0.8, "activeCampaignsGrowth": 1.0,
             "raw": {"bounced": 6, "opened": 530, "delivered": 1240, "unread": 85}
         }
     
@@ -498,10 +523,12 @@ def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", compa
         "bounceRate": m["bounceRate"],
         "unread": m["unreadCount"],
         "activeCampaigns": int(active_camps),
-        "totalEmailsGrowth": 0.0,
-        "openRateGrowth": 0.0,
-        "clickRateGrowth": 0.0,
-        "activeCampaignsGrowth": 0.0,
+        "totalEmailsGrowth": calc_growth(m["totalSent"], p["totalSent"]),
+        "openRateGrowth": calc_growth(m["openRate"], p["openRate"]),
+        "clickRateGrowth": calc_growth(m["clickRate"], p["clickRate"]),
+        "bounceRateGrowth": calc_growth(m["bounceRate"], p["bounceRate"]),
+        "unreadGrowth": calc_growth(m["unreadCount"], p["unreadCount"]),
+        "activeCampaignsGrowth": calc_growth(int(active_camps), int(prev_active_camps)),
         "raw": {"bounced": m["bounces"], "opened": m["opens"], "delivered": m["delivered"], "unread": m["unreadCount"]}
     }
 
