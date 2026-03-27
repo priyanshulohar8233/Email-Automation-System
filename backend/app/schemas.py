@@ -98,27 +98,6 @@ class ContactCreate(BaseModel):
     tags: Optional[List[str]] = None
     status: Optional[str] = "active"
 
-class EnrichmentItem(BaseModel):
-    id: int
-    recipient: Optional[str] = None
-    recipient_email: Optional[str] = None
-    company: Optional[str] = None
-    sender: Optional[str] = None
-    timestamp: Optional[str] = None
-    latest_timestamp: Optional[str] = None
-
-class EnrichmentRequest(BaseModel):
-    activities: List[EnrichmentItem]
-
-class EnrichmentResult(BaseModel):
-    id: int
-    name: Optional[str] = None
-    company: Optional[str] = None
-    country: Optional[str] = None
-
-class EnrichmentResponse(BaseModel):
-    results: List[EnrichmentResult]
-
 class BulkContactsRequest(BaseModel):
     contacts: List[ContactCreate]
 

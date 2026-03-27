@@ -11,10 +11,26 @@ from .models import (
 
 # low-level mail sender
 
-from .database import engine, Base, SessionLocal, redis_client
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email import encoders
+import requests
+import io
 import redis
 from . import debug
 from .config import settings
+
+# SaaS Grade: Redis Client for Serverless Scheduling
+try:
+    if settings.REDIS_URL:
+        redis_client = redis.from_url(settings.REDIS_URL, decode_responses=True)
+    else:
+        debug.debug_log("REDIS_URL not found in settings")
+        redis_client = None
+except Exception as e:
+    debug.debug_log(f"REDIS_CONNECTION_ERROR: {e}")
+    redis_client = None
 
 def check_and_complete_campaign(db: Session, campaign_id: int):
     from .models import Email, EmailStatus, Campaign, CampaignStatus
@@ -1469,14 +1485,6 @@ def update_contact_company(db: Session, email: str, company: str):
     db.commit()
     db.refresh(contact)
     return contact
-
-# SaaS Grade: Shared Redis Client from database
-def get_redis():
-    try:
-        from .database import redis_client
-        return redis_client
-    except:
-        return None
 
 def get_segments(db: Session):
     from .models import Segment

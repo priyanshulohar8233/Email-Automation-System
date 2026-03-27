@@ -181,20 +181,5 @@ export const dashboardAPI = {
         const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching activity detail");
         return await response.json();
-    },
-    enrichActivity: async (activities: any[]): Promise<any> => {
-        const url = `${API_URL}/api/dashboard/enrich-activity`;
-        const response = await fetchWithTimeout(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ activities }),
-        });
-        if (!response.ok) {
-            console.error("Enrichment API Error:", await response.text());
-            return { results: [] };
-        }
-        return await response.json();
     }
 };

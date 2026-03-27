@@ -1,10 +1,5 @@
 import os
 from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
-
-# SaaS Grade: Explicitly load .env from the project root
-# This ensures that variables like DATABASE_URL_NEW are available to os.getenv
-load_dotenv(os.path.join(os.getcwd(), ".env"))
 
 class Settings(BaseSettings):
     # Mandatory fields for Pydantic v2 validation
@@ -18,7 +13,6 @@ class Settings(BaseSettings):
     SENDGRID_API_KEY: str = os.getenv("SENDGRID_API_KEY", "")
     
     # Optional fields
-    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     SENDGRID_VERIFIED_SENDER: str = os.getenv("SENDGRID_VERIFIED_SENDER", "")
 

@@ -16,27 +16,24 @@ import { useDashboard } from "@/context/DashboardContext";
 interface ActivityRow {
   id: number;
   email_id?: number;
-  recipient: string;        // Backend returns 'recipient'
-  recipient_email?: string; // Fallback
+  recipient_email: string;
   recipient_name: string;
   sender: string;
   company: string;
-  status?: string;          // Legacy
-  latest_type: string;      // Backend returns 'latest_type'
-  events: { type: string; timestamp: string }[]; // Grouped events
+  status: string;
+  status_history: { status: string; time: string }[];
   country: string;
-  latest_timestamp: string; // Backend returns 'latest_timestamp'
-}
-
-/** Extract display name from email if recipient_name is blank */
-function extractName(name: string, email: string): string {
-  if (name && name !== "Unknown" && name.trim()) return name.trim();
-  const prefix = email.split("@")[0];
-  return prefix?.replace(/[._-]/g, " ").replace(/\b\w/g, c => c?.toUpperCase()) || "";
+  timestamp: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-// ... (formatTime and other helpers remain same)
+
+/** Extract display name from email if recipient_name is blank */
+function extractName(name: string, email: string): string {
+  if (name && name.trim()) return name.trim();
+  const prefix = email.split("@")[0];
+  return prefix?.replace(/[._-]/g, " ").replace(/\b\w/g, c => c?.toUpperCase()) || "";
+}
 
 /** Company from email domain */
 function extractCompany(company: string, email: string): string {
@@ -143,9 +140,7 @@ function StatusDropdown({ status, history }: { status: string; history: { status
 export function RecentActivityTable() {
   const { days, companyString: company } = useDashboard();
   const [events, setEvents] = useState<ActivityRow[]>([]);
-  const [enrichedData, setEnrichedData] = useState<Record<number, { name?: string; company?: string; country?: string }>>({});
   const [loading, setLoading] = useState(true);
-  const [enriching, setEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchEvents = async (signal?: AbortSignal, silently = false) => {
@@ -162,69 +157,24 @@ export function RecentActivityTable() {
     }
   };
 
-  const enrichData = async (activities: ActivityRow[]) => {
-    if (activities.length === 0) return;
-    setEnriching(true);
-    try {
-      const resp = await dashboardAPI.enrichActivity(activities);
-      if (resp && resp.results) {
-        const newData = { ...enrichedData };
-        resp.results.forEach((res: any) => {
-          newData[res.id] = {
-            name: res.name,
-            company: res.company,
-            country: res.country
-          };
-        });
-        setEnrichedData(newData);
-      }
-    } catch (err) {
-      console.error("Enrichment failed:", err);
-    } finally {
-      setEnriching(false);
-    }
-  };
-
   useEffect(() => {
     const controller = new AbortController();
     fetchEvents(controller.signal);
-    
-    // Auto-refresh every 45 seconds as requested (30-60s range)
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
         fetchEvents(controller.signal, true);
       }
-    }, 45000);
-    
+    }, 10000);
     return () => { controller.abort(); clearInterval(interval); };
   }, [days, company]);
-
-  // Trigger enrichment when events change
-  useEffect(() => {
-    if (events.length > 0) {
-      // Only enrich rows we don't have data for yet
-      const toEnrich = events.filter(ev => !enrichedData[ev.id]);
-      if (toEnrich.length > 0) {
-        enrichData(toEnrich);
-      }
-    }
-  }, [events]);
 
   return (
     <Card className="border-white/5 bg-[#1e293b] shadow-2xl transition-all duration-300 overflow-hidden ring-1 ring-white/5">
       <CardHeader className="pb-4 border-b border-white/5 bg-white/[0.02]">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-slate-100 text-lg font-bold flex items-center gap-2.5">
-            <Activity className="h-5 w-5 text-indigo-500" />
-            Recent Activity
-          </CardTitle>
-          {enriching && (
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/10 rounded-full border border-indigo-500/20">
-              <RefreshCcw className="h-2.5 w-2.5 animate-spin text-indigo-400" />
-              <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight">AI Enriching...</span>
-            </div>
-          )}
-        </div>
+        <CardTitle className="text-slate-100 text-lg font-bold flex items-center gap-2.5">
+          <Activity className="h-5 w-5 text-indigo-500" />
+          Recent Activity
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         {loading ? (
@@ -251,19 +201,12 @@ export function RecentActivityTable() {
             </TableHeader>
             <TableBody>
               {events.map((ev, index) => {
-                const enriched = enrichedData[ev.id] || {};
-                const recipientEmail = ev.recipient || ev.recipient_email || "";
-                const displayName = enriched.name || extractName(ev.recipient_name, recipientEmail);
-                const displayCompany = enriched.company || extractCompany(ev.company, recipientEmail);
-                const displayCountry = enriched.country || (ev.country && ev.country !== "Unknown" ? ev.country : "Unknown");
-
-                // Use the grouped events for history
-                const history = ev.events?.length 
-                  ? ev.events.map(e => ({ status: e.type, time: e.timestamp }))
-                  : [{ status: ev.latest_type || (ev as any).status || "SENT", time: ev.latest_timestamp || (ev as any).timestamp }];
-
-                const currentStatus = ev.latest_type || (ev as any).status || "SENT";
-                const currentTime = ev.latest_timestamp || (ev as any).timestamp;
+                const displayName = extractName(ev.recipient_name, ev.recipient_email);
+                const displayCompany = extractCompany(ev.company, ev.recipient_email);
+                // Ensure status_history has the current status object if backend returns empty history for legacy reasons
+                const history = ev.status_history?.length 
+                  ? ev.status_history 
+                  : [{ status: ev.status, time: ev.timestamp }];
 
                 return (
                   <TableRow key={ev.id} className="group hover:bg-slate-800/40 transition-colors duration-200 border-b border-white/5 last:border-0">
@@ -279,7 +222,7 @@ export function RecentActivityTable() {
                           {displayName}
                         </span>
                         <span className="text-[11px] text-slate-400/80 font-medium">
-                          {recipientEmail}
+                          {ev.recipient_email}
                         </span>
                       </div>
                     </TableCell>
@@ -301,18 +244,18 @@ export function RecentActivityTable() {
                     {/* Country */}
                     <TableCell className="px-4 py-4 text-[13px]">
                       <span className="font-medium text-slate-400">
-                        {displayCountry}
+                        {ev.country && ev.country !== "Unknown" ? ev.country : "Unknown"}
                       </span>
                     </TableCell>
 
                     {/* Status */}
                     <TableCell className="text-center px-4 py-4">
-                      <StatusDropdown status={currentStatus} history={history} />
+                      <StatusDropdown status={ev.status} history={history} />
                     </TableCell>
 
                     {/* Time */}
                     <TableCell className="text-right text-slate-400 text-xs px-6 py-4 tabular-nums font-medium whitespace-nowrap">
-                      {formatTime(currentTime)}
+                      {formatTime(ev.timestamp)}
                     </TableCell>
                   </TableRow>
                 );
