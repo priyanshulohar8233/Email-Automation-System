@@ -245,6 +245,29 @@ def get_realtime_analytics(response: Response, campaign: str = "all", limit: int
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return services.recent_events(db, days=30, limit=limit, campaign_name=campaign)
 
+from . import gemini_service
+from .schemas import EnrichmentRequest, EnrichmentResponse, EnrichmentResult
+
+@router.post("/dashboard/enrich-activity", response_model=EnrichmentResponse)
+async def enrich_activity(req: EnrichmentRequest):
+    """
+    SaaS Grade AI: Batched Gemini enrichment for activity rows.
+    """
+    try:
+        # 1. Convert Pydantic list to dict list for service
+        activities = [a.dict() for a in req.activities]
+        
+        # 2. Call Gemini
+        enriched = await gemini_service.enrich_activity_batch(activities)
+        
+        # 3. Map back to Response schema
+        results = [EnrichmentResult(**item) for item in enriched]
+        return EnrichmentResponse(results=results)
+    except Exception as e:
+        debug.debug_log(f"ENRICH_ROUTE_ERROR: {e}")
+        # Fail safe: return empty results
+        return EnrichmentResponse(results=[])
+
 @router.get("/analytics/system-health")
 def get_system_health(db: Session = Depends(get_db)):
     return services.get_system_health(db)

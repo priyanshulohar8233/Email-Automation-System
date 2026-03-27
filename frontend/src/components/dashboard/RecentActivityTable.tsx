@@ -140,7 +140,9 @@ function StatusDropdown({ status, history }: { status: string; history: { status
 export function RecentActivityTable() {
   const { days, companyString: company } = useDashboard();
   const [events, setEvents] = useState<ActivityRow[]>([]);
+  const [enrichedData, setEnrichedData] = useState<Record<number, { name?: string; company?: string; country?: string }>>({});
   const [loading, setLoading] = useState(true);
+  const [enriching, setEnriching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchEvents = async (signal?: AbortSignal, silently = false) => {
@@ -157,24 +159,69 @@ export function RecentActivityTable() {
     }
   };
 
+  const enrichData = async (activities: ActivityRow[]) => {
+    if (activities.length === 0) return;
+    setEnriching(true);
+    try {
+      const resp = await dashboardAPI.enrichActivity(activities);
+      if (resp && resp.results) {
+        const newData = { ...enrichedData };
+        resp.results.forEach((res: any) => {
+          newData[res.id] = {
+            name: res.name,
+            company: res.company,
+            country: res.country
+          };
+        });
+        setEnrichedData(newData);
+      }
+    } catch (err) {
+      console.error("Enrichment failed:", err);
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   useEffect(() => {
     const controller = new AbortController();
     fetchEvents(controller.signal);
+    
+    // Auto-refresh every 45 seconds as requested (30-60s range)
     const interval = setInterval(() => {
       if (document.visibilityState === "visible") {
         fetchEvents(controller.signal, true);
       }
-    }, 10000);
+    }, 45000);
+    
     return () => { controller.abort(); clearInterval(interval); };
   }, [days, company]);
+
+  // Trigger enrichment when events change
+  useEffect(() => {
+    if (events.length > 0) {
+      // Only enrich rows we don't have data for yet
+      const toEnrich = events.filter(ev => !enrichedData[ev.id]);
+      if (toEnrich.length > 0) {
+        enrichData(toEnrich);
+      }
+    }
+  }, [events]);
 
   return (
     <Card className="border-white/5 bg-[#1e293b] shadow-2xl transition-all duration-300 overflow-hidden ring-1 ring-white/5">
       <CardHeader className="pb-4 border-b border-white/5 bg-white/[0.02]">
-        <CardTitle className="text-slate-100 text-lg font-bold flex items-center gap-2.5">
-          <Activity className="h-5 w-5 text-indigo-500" />
-          Recent Activity
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-slate-100 text-lg font-bold flex items-center gap-2.5">
+            <Activity className="h-5 w-5 text-indigo-500" />
+            Recent Activity
+          </CardTitle>
+          {enriching && (
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-500/10 rounded-full border border-indigo-500/20">
+              <RefreshCcw className="h-2.5 w-2.5 animate-spin text-indigo-400" />
+              <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-tight">AI Enriching...</span>
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         {loading ? (
@@ -201,9 +248,11 @@ export function RecentActivityTable() {
             </TableHeader>
             <TableBody>
               {events.map((ev, index) => {
-                const displayName = extractName(ev.recipient_name, ev.recipient_email);
-                const displayCompany = extractCompany(ev.company, ev.recipient_email);
-                // Ensure status_history has the current status object if backend returns empty history for legacy reasons
+                const enriched = enrichedData[ev.id] || {};
+                const displayName = enriched.name || extractName(ev.recipient_name, ev.recipient_email);
+                const displayCompany = enriched.company || extractCompany(ev.company, ev.recipient_email);
+                const displayCountry = enriched.country || (ev.country && ev.country !== "Unknown" ? ev.country : "Unknown");
+
                 const history = ev.status_history?.length 
                   ? ev.status_history 
                   : [{ status: ev.status, time: ev.timestamp }];
@@ -244,7 +293,7 @@ export function RecentActivityTable() {
                     {/* Country */}
                     <TableCell className="px-4 py-4 text-[13px]">
                       <span className="font-medium text-slate-400">
-                        {ev.country && ev.country !== "Unknown" ? ev.country : "Unknown"}
+                        {displayCountry}
                       </span>
                     </TableCell>
 

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     SENDGRID_API_KEY: str = os.getenv("SENDGRID_API_KEY", "")
     
     # Optional fields
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     SENDGRID_VERIFIED_SENDER: str = os.getenv("SENDGRID_VERIFIED_SENDER", "")
 
