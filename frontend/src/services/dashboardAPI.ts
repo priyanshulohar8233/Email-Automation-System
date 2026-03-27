@@ -54,9 +54,9 @@ const BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API
 const API_URL = BASE_URL.endsWith("/") ? BASE_URL.slice(0, -1) : BASE_URL;
 
 export const dashboardAPI = {
-    getStats: async (days?: number, campaign: string = "all", company?: string, signal?: AbortSignal): Promise<DashboardStats> => {
+    getStats: async (days?: number, campaign: string = "all", company?: string, signal?: AbortSignal, range: string = "month"): Promise<DashboardStats> => {
         try {
-            let url = `${API_URL}/api/dashboard/stats?campaign=${encodeURIComponent(campaign)}`;
+            let url = `${API_URL}/api/dashboard/stats?campaign=${encodeURIComponent(campaign)}&range=${range}`;
             if (days) url += `&days=${days}`;
             if (company && company !== "all") url += `&company=${encodeURIComponent(company)}`;
             
@@ -80,10 +80,11 @@ export const dashboardAPI = {
             throw error;
         }
     },
-    getEmailStats: async (days?: number, company?: string, signal?: AbortSignal): Promise<any> => {
-        let url = days ? `${API_URL}/api/dashboard/email-stats?days=${days}` : `${API_URL}/api/dashboard/email-stats`;
+    getEmailStats: async (days?: number, company?: string, signal?: AbortSignal, range: string = "month"): Promise<any> => {
+        let url = `${API_URL}/api/dashboard/email-stats?range=${range}`;
+        if (days) url += `&days=${days}`;
         if (company && company !== "all") {
-            url += (url.includes('?') ? '&' : '?') + `company=${encodeURIComponent(company)}`;
+            url += `&company=${encodeURIComponent(company)}`;
         }
         const response = await fetchWithTimeout(url, { 
             signal,
@@ -96,10 +97,11 @@ export const dashboardAPI = {
         }
         return await response.json();
     },
-    getRecentEvents: async (days?: number, company?: string, signal?: AbortSignal): Promise<any[]> => {
-        let url = days ? `${API_URL}/api/dashboard/recent-events?days=${days}` : `${API_URL}/api/dashboard/recent-events`;
+    getRecentEvents: async (days?: number, company?: string, signal?: AbortSignal, range: string = "month"): Promise<any[]> => {
+        let url = `${API_URL}/api/dashboard/recent-events?range=${range}`;
+        if (days) url += `&days=${days}`;
         if (company && company !== "all") {
-            url += (url.includes('?') ? '&' : '?') + `company=${encodeURIComponent(company)}`;
+            url += `&company=${encodeURIComponent(company)}`;
         }
         const response = await fetchWithTimeout(url, { 
             signal,
@@ -130,15 +132,8 @@ export const dashboardAPI = {
             return []; // Fallback to empty array to show "No Data" gracefully
         }
     },
-    getActivity: async (days?: number, company?: string, signal?: AbortSignal): Promise<any[]> => {
-        let url = `${API_URL}/api/activity`;
-        const params = new URLSearchParams();
-        if (days) params.append("days", days.toString());
-        if (company && company !== "all") params.append("company", company);
-        
-        const queryString = params.toString();
-        if (queryString) url += `?${queryString}`;
-        
+    getActivity: async (signal?: AbortSignal): Promise<any[]> => {
+        const url = `${API_URL}/api/activity`;
         const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching activity");
         return await response.json();

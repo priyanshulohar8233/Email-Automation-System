@@ -42,7 +42,7 @@ function TimelineItem({ event, isLast }: { event: StatusEvent; isLast: boolean; 
         <Check className="h-3 w-3" />
       </div>
       <div className="flex flex-col gap-1 pt-0.5">
-        <span className="text-sm font-bold text-foreground capitalize">{event.status?.toLowerCase() || ""}</span>
+        <span className="text-sm font-bold text-foreground capitalize">{event.status.toLowerCase()}</span>
         <span className="text-xs text-muted-foreground font-medium">
           {format(date, "MMM dd, yyyy • hh:mm:ss a")}
         </span>
@@ -138,7 +138,7 @@ export function EmailSearch() {
                 <div className="flex-1 overflow-hidden">
                   <div className="flex items-center gap-3">
                     <span className="truncate text-sm font-bold text-foreground">
-                      {res.recipient_name || res.recipient_email?.split('@')[0] || "Unknown"}
+                      {res.recipient_name || res.recipient_email.split('@')[0]}
                     </span>
                     <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-muted text-muted-foreground uppercase tracking-tight">
                       {res.campaign}
@@ -180,7 +180,7 @@ export function EmailSearch() {
               <div className="space-y-4">
                 <div className="flex items-center gap-4">
                   <div className="h-16 w-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center font-bold text-2xl text-indigo-500 border border-indigo-500/20">
-                    {(selectedResult.recipient_name || selectedResult.recipient_email || " ")[0]?.toUpperCase() || "U"}
+                    {(selectedResult.recipient_name || selectedResult.recipient_email)[0].toUpperCase()}
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-foreground">

@@ -6,13 +6,13 @@ interface KPICardProps {
   label: string;
   value: string;
   growth: number;
+  range: string;
   icon: LucideIcon;
   className?: string;
   loading?: boolean;
-  periodLabel?: string;
 }
 
-export function KPICard({ label, value, growth, icon: Icon, className, loading, periodLabel = "month" }: KPICardProps) {
+export function KPICard({ label, value, growth, range, icon: Icon, className, loading }: KPICardProps) {
   const isPositive = growth >= 0;
 
   if (loading) {
@@ -58,7 +58,7 @@ export function KPICard({ label, value, growth, icon: Icon, className, loading, 
             >
               {Math.abs(growth)}%
             </span>
-            <span className="text-[10px] font-bold text-slate-400 ml-0.5 uppercase tracking-tighter">vs last {periodLabel}</span>
+            <span className="text-[10px] font-medium text-slate-400 ml-0.5 uppercase tracking-tighter">vs last {range}</span>
           </div>
         </div>
       </CardContent>

@@ -91,7 +91,7 @@ export default function CampaignHistory() {
   }, [dateFilter]);
 
   const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase() || "") {
+    switch (status.toLowerCase()) {
       case 'running': return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
       case 'completed': 
       case 'complete': return 'text-purple-400 bg-purple-400/10 border-purple-400/20';
@@ -240,7 +240,7 @@ export default function CampaignHistory() {
                   <TableRow key={campaign.id} className="border-border hover:bg-muted/30 transition-all group">
                     <TableCell className="py-4 pl-6">
                       <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-500 font-bold text-xs group-hover:scale-110 transition-transform border border-indigo-500/20">
-                        {campaign.name?.charAt(0)?.toUpperCase() || "C"}
+                        {campaign.name.charAt(0).toUpperCase()}
                       </div>
                     </TableCell>
                     <TableCell className="font-bold text-sm text-foreground py-4">

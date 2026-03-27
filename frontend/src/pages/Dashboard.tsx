@@ -8,15 +8,21 @@ import { useNavigate } from "react-router-dom";
 import { CreateCampaignModal } from "@/components/dashboard/CreateCampaignModal";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { dashboardAPI, DashboardStats } from "@/services/dashboardAPI";
-import { useDashboard } from "@/context/DashboardContext";
 
 export default function Dashboard() {
-  const { days, setDays, selectedCompanies, setSelectedCompanies, periodLabel, companyString } = useDashboard();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDateMenu, setShowDateMenu] = useState(false);
+  const [range, setRange] = useState<string>(() => {
+    const saved = localStorage.getItem("dashboard_range");
+    return saved || "month";
+  });
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
+  const company = useMemo(() => {
+    return selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all";
+  }, [selectedCompanies]);
 
   const COMPANIES = [
     "A Making Company",
@@ -29,13 +35,11 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    localStorage.setItem("dashboard_days", days.toString());
-  }, [days]);
+    localStorage.setItem("dashboard_range", range);
+  }, [range]);
 
   const dateMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-
-
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -53,13 +57,13 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
       }
-      const data = await dashboardAPI.getStats(days, "all", companyString, signal);
+      // Step 3: Pass range in all API calls
+      const data = await dashboardAPI.getStats(undefined, "all", company, signal, range);
       setStats(data);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
       console.error("Dashboard error:", err);
       if (!silently) {
-        // Step 6: Fail Safe - default to empty stats
         setStats({
           totalEmails: 0, openRate: 0, clickRate: 0, bounceRate: 0,
           unread: 0, activeCampaigns: 0, totalEmailsGrowth: 0, openRateGrowth: 0,
@@ -84,8 +88,7 @@ export default function Dashboard() {
       controller.abort();
       clearInterval(interval);
     };
-    // Step 7: Clean dependencies
-  }, [days, companyString]);
+  }, [range, company]);
 
   return (
     <div className="space-y-8">
@@ -103,8 +106,8 @@ export default function Dashboard() {
               className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
             >
               <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="text-foreground transition-colors duration-300">
-                {days === 7 ? "Week" : days === 30 ? "Month" : days === 90 ? "Quarter" : "Year"}
+              <span className="text-foreground transition-colors duration-300 capitalize">
+                {range}
               </span>
               <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
             </div>
@@ -115,21 +118,21 @@ export default function Dashboard() {
                 className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
               >
                 {[
-                  { val: 7, label: "Week" },
-                  { val: 30, label: "Month" },
-                  { val: 90, label: "Quarter" },
-                  { val: 365, label: "Year" }
+                  { val: "week", label: "Week" },
+                  { val: "month", label: "Month" },
+                  { val: "quarter", label: "Quarter" },
+                  { val: "year", label: "Year" }
                 ].map((opt) => (
                   <div
                     key={opt.val}
                     onClick={() => {
-                      setDays(opt.val);
+                      setRange(opt.val);
                       setShowDateMenu(false);
                     }}
-                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${days === opt.val ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
+                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${range === opt.val ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
                   >
                     {opt.label}
-                    {days === opt.val && <Activity className="h-3.5 w-3.5" />}
+                    {range === opt.val && <Activity className="h-3.5 w-3.5" />}
                   </div>
                 ))}
               </div>
@@ -193,49 +196,49 @@ export default function Dashboard() {
           label="Total Emails Sent"
           value={stats?.totalEmails.toLocaleString() || "0"}
           growth={stats?.totalEmailsGrowth ?? 0}
+          range={range}
           icon={Send}
           loading={loading && !stats}
-          periodLabel={periodLabel}
         />
         <KPICard
           label="Open Rate"
           value={stats ? `${stats.openRate}%` : "0%"}
           growth={stats?.openRateGrowth ?? 0}
+          range={range}
           icon={Mail}
           loading={loading && !stats}
-          periodLabel={periodLabel}
         />
         <KPICard
           label="Click Rate"
           value={stats ? `${stats.clickRate}%` : "0%"}
           growth={stats?.clickRateGrowth ?? 0}
+          range={range}
           icon={MousePointerClick}
           loading={loading && !stats}
-          periodLabel={periodLabel}
         />
         <KPICard
           label="Unread"
           value={stats?.unread.toLocaleString() || "0"}
           growth={stats?.unreadGrowth ?? 0}
+          range={range}
           icon={EyeOff}
           loading={loading && !stats}
-          periodLabel={periodLabel}
         />
         <KPICard
           label="Bounce Rate"
           value={stats ? `${stats.bounceRate}%` : "0%"}
           growth={stats?.bounceRateGrowth ?? 0}
+          range={range}
           icon={XCircle}
           loading={loading && !stats}
-          periodLabel={periodLabel}
         />
         <KPICard
           label="Active Campaigns"
           value={stats?.activeCampaigns.toString() || "0"}
           growth={stats?.activeCampaignsGrowth ?? 0}
+          range={range}
           icon={Activity}
           loading={loading && !stats}
-          periodLabel={periodLabel}
         />
       </div>
 
@@ -249,11 +252,11 @@ export default function Dashboard() {
       )}
 
       {/* Charts Section */}
-      <DashboardCharts days={days} company={companyString} />
+      <DashboardCharts range={range} company={company} />
 
       {/* Recent Activity */}
       <div className="grid gap-4">
-        <RecentActivityTable days={days} company={companyString} />
+        <RecentActivityTable range={range} company={company} />
       </div>
     </div>
   );

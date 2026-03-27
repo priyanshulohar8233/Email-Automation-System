@@ -117,7 +117,7 @@ export default function Campaigns() {
   }, [searchTerm, statusFilter]);
 
   const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase() || "") {
+    switch (status.toLowerCase()) {
       case 'running': return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
       case 'queued':
       case 'scheduled': return 'text-blue-400 bg-blue-400/10 border-blue-400/20';
@@ -140,7 +140,7 @@ export default function Campaigns() {
   // PRO GRADE: Real-time Polling for active campaigns
   useEffect(() => {
     const hasActive = campaignsData.some(c => 
-      ['running', 'queued', 'scheduled'].includes(c.status?.toLowerCase() || "")
+      ['running', 'queued', 'scheduled'].includes(c.status.toLowerCase())
     );
 
     if (hasActive) {
@@ -259,7 +259,7 @@ export default function Campaigns() {
                 >
                   <Filter className="h-3.5 w-3.5 text-muted-foreground" />
                   <span className="text-foreground flex-1 truncate">
-                    {statusFilter === "all" ? "All Status" : statusFilter?.charAt(0)?.toUpperCase() + statusFilter?.slice(1)}
+                    {statusFilter === "all" ? "All Status" : statusFilter.charAt(0).toUpperCase() + statusFilter.slice(1)}
                   </span>
                   <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${showStatusMenu ? 'rotate-180' : 'rotate-0'}`} />
                 </div>
@@ -350,7 +350,7 @@ export default function Campaigns() {
                     <TableRow key={campaign.id} className="border-border hover:bg-muted/30 transition-colors group">
                       <TableCell className="py-4">
                         <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500 font-bold text-xs group-hover:bg-indigo-500 group-hover:text-white transition-all duration-300">
-                          {campaign.name?.charAt(0)?.toUpperCase() || "C"}
+                          {campaign.name.charAt(0).toUpperCase()}
                         </div>
                       </TableCell>
                       <TableCell className="font-bold text-foreground py-4">
@@ -369,7 +369,7 @@ export default function Campaigns() {
                           variant="outline" 
                           className={`rounded-full px-3 py-0.5 text-[10px] font-bold border ${getStatusColor(campaign.status)}`}
                         >
-                          {campaign.status?.toLowerCase() === 'running' && campaign.scheduled && campaign.scheduled !== "-"
+                          {campaign.status.toLowerCase() === 'running' && campaign.scheduled && campaign.scheduled !== "-"
                             ? `Running at ${(() => {
                                 try {
                                   const d = parseISO(campaign.scheduled);
@@ -407,9 +407,9 @@ export default function Campaigns() {
                           <button
                             onClick={() => handleToggleCampaign(campaign.id)}
                             className="p-2 text-muted-foreground hover:text-indigo-400 hover:bg-indigo-500/10 rounded-lg transition-all"
-                            title={campaign.status?.toLowerCase() === 'running' ? 'Pause' : 'Start'}
+                            title={campaign.status.toLowerCase() === 'running' ? 'Pause' : 'Start'}
                           >
-                            {campaign.status?.toLowerCase() === 'running' ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                            {campaign.status.toLowerCase() === 'running' ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
                           </button>
                           <button
                             onClick={() => handleEditCampaign(campaign)}

@@ -18,7 +18,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
-import { useDashboard } from "@/context/DashboardContext";
 
 const COMPANY_COLORS: Record<string, string> = {
   "MP Consultant LLC": "#FFC107", // Yellow
@@ -53,8 +52,8 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 const PieTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
-    const data = payload[0]?.payload;
-    if (!data || data.name === "No Data") return null;
+    const data = payload[0].payload;
+    if (data.name === "No Data") return null;
     return (
       <div className="bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 p-3 rounded-xl shadow-xl ring-1 ring-white/10">
         <p className="text-sm font-semibold text-white flex items-center gap-2 m-0">
@@ -88,8 +87,7 @@ const renderActiveShape = (props: any) => {
   );
 };
 
-export function DashboardCharts() {
-  const { days, companyString: company } = useDashboard();
+export function DashboardCharts({ range = "month", days, company = "all" }: { range?: string, days?: number, company?: string }) {
   const [lineData, setLineData] = useState<{ day: string; emails: number }[]>([]);
   const [pieData, setPieData] = useState<{ name: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,8 +111,8 @@ export function DashboardCharts() {
 
     // Fetch both stats and email stats in parallel
     Promise.all([
-      dashboardAPI.getEmailStats(days, company),
-      dashboardAPI.getStats(days, "all", company),
+      dashboardAPI.getEmailStats(days, company, undefined, range),
+      dashboardAPI.getStats(days, "all", company, undefined, range),
       dashboardAPI.getCampaignStatus()
     ])
       .then(([emailStats, stats, companyStatus]) => {
@@ -155,7 +153,7 @@ export function DashboardCharts() {
         setLineData([]);
         setPieData([]);
       });
-  }, [days, company]); // Step 7: Clean dependencies
+  }, [range, days, company]); // Step 7: Clean dependencies
 
   const onPieEnter = (_: any, index: number) => {
     setActiveIndex(index);
@@ -229,11 +227,10 @@ export function DashboardCharts() {
                     dataKey="emails"
                     fill="url(#barGradient)"
                     radius={[8, 8, 2, 2]}
-                    barSize={days === 365 ? 20 : days === 90 ? 30 : 40}
+                    barSize={range === "year" ? 20 : range === "quarter" ? 30 : 40}
                     animationDuration={1500}
                     animationEasing="ease-out"
                     activeBar={(props: any) => {
-                      if (!props) return <rect />;
                       const { x, y, width, height } = props;
                       return (
                         <rect
