@@ -18,6 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
+import { useDashboard } from "@/context/DashboardContext";
 
 const COMPANY_COLORS: Record<string, string> = {
   "MP Consultant LLC": "#FFC107", // Yellow
@@ -87,7 +88,8 @@ const renderActiveShape = (props: any) => {
   );
 };
 
-export function DashboardCharts({ days = 30, company = "all" }: { days?: number, company?: string }) {
+export function DashboardCharts() {
+  const { days, companyString: company } = useDashboard();
   const [lineData, setLineData] = useState<{ day: string; emails: number }[]>([]);
   const [pieData, setPieData] = useState<{ name: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);

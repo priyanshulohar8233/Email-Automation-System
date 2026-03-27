@@ -10,6 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw, Activity, ChevronDown, Check } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
+import { useDashboard } from "@/context/DashboardContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface ActivityRow {
@@ -136,7 +137,8 @@ function StatusDropdown({ status, history }: { status: string; history: { status
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function RecentActivityTable({ days = 30, company = "all" }: { days?: number; company?: string }) {
+export function RecentActivityTable() {
+  const { days, companyString: company } = useDashboard();
   const [events, setEvents] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,7 +146,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
   const fetchEvents = async (signal?: AbortSignal, silently = false) => {
     if (!silently) { setLoading(true); setError(null); }
     try {
-      const data = await dashboardAPI.getActivity(signal);
+      const data = await dashboardAPI.getActivity(days, company, signal);
       setEvents(data as ActivityRow[]);
     } catch (err: any) {
       if (err.name !== "AbortError") {
@@ -164,7 +166,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
       }
     }, 10000);
     return () => { controller.abort(); clearInterval(interval); };
-  }, []);
+  }, [days, company]);
 
   return (
     <Card className="border-border bg-card shadow-sm transition-colors duration-300 overflow-hidden">

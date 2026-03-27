@@ -1,0 +1,2 @@
+DATABASE_URL="postgres://0d14b2e7538b6c9c1fd83c03fa4c6d20ce035644ce7ba12ff6c3ddb132ae22b7:sk_0JmPhCXvgVAxCX9LfsuEd@db.prisma.io:5432/postgres?sslmode=require"
+REDIS_URL="redis://default:FGe36Svt1bPANN2LsPVtcXORqOTKDmHx@redis-10126.crce283.ap-south-1-2.ec2.cloud.redislabs.com:10126"

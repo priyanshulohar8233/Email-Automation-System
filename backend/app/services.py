@@ -690,7 +690,8 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
         EmailEvent, 
         Contact.name.label("contact_name"), 
         Contact.company.label("contact_company"),
-        Campaign.name.label("campaign_name")
+        Campaign.name.label("campaign_name"),
+        Campaign.company.label("sender_company")
     ).join(Email, EmailEvent.email_id == Email.id)\
      .outerjoin(Contact, Email.recipient_email == Contact.email)\
      .outerjoin(Campaign, Email.campaign_id == Campaign.id)
@@ -713,8 +714,8 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
         contact_name = ev_data[1]
         
         # Determine Sender (Multi-Company Sync)
-        sender_company = ev_data[0].email.campaign.company if ev_data[0].email.campaign else "MP Consultant LLC"
-        if not sender_company:
+        sender_company = ev_data[4] or "MP Consultant LLC"
+        if not sender_company or sender_company == "Unknown":
             # Fallback to legacy string matching if company record is empty
             camp_name = (ev_data[3] or "").lower()
             if "making" in camp_name: sender_company = "A Making Company"
@@ -1099,54 +1100,7 @@ def process_scheduled_queue(db: Session, background_tasks):
     finally:
         redis_client.delete(lock_key)
 
-def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: str = "all", company_name: str | list = "all"):
-    """
-    Returns latest email events (sent, opened, clicked) for dashboard charts/activity feeds.
-    Includes mock fallback for WoW.
-    """
-    from .models import EmailEvent, Email, Campaign, EventType
-    from datetime import datetime, timedelta, timezone
-    now = datetime.now(timezone.utc)
-    limit_date = now - timedelta(days=days)
-    
-    query = db.query(EmailEvent).join(Email).join(Campaign).filter(EmailEvent.timestamp >= limit_date)
-    
-    if campaign_name != "all":
-        query = query.filter(Campaign.name == campaign_name)
-    if company_name != "all":
-        companies = [company_name] if isinstance(company_name, str) else company_name
-        query = query.filter(Campaign.company.in_(companies))
-        
-    events = query.order_by(EmailEvent.timestamp.desc()).limit(limit).all()
-    
-    if not events:
-        # Mock fallback
-        import random
-        mock_types = [EventType.SENT, EventType.OPENED, EventType.CLICKED]
-        mock_companies = ["MP Consultant LLC", "MP Lumina", "A Making Company"]
-        
-        mock_events = []
-        for i in range(limit):
-            t = (now - timedelta(minutes=random.randint(5, 500)))
-            event_type = random.choice(mock_types)
-            msg = "Campaign sent to new list"
-            if event_type == EventType.OPENED: msg = "Email opened by recipient"
-            elif event_type == EventType.CLICKED: msg = "Link clicked in newsletter"
-            
-            mock_events.append({
-                "type": event_type.value if hasattr(event_type, 'value') else str(event_type),
-                "message": msg,
-                "timestamp": t.isoformat(),
-                "company": random.choice(mock_companies)
-            })
-        return mock_events
-
-    return [{
-        "type": e.event_type.value if hasattr(e.event_type, 'value') else str(e.event_type),
-        "message": f"Event {e.event_type.value} recorded for {e.email.recipient_email}",
-        "timestamp": e.timestamp.isoformat(),
-        "company": e.email.campaign.company
-    } for e in events]
+# Consolidated recent_events logic moved to line 683
 
 def get_activity(db: Session, limit: int = 20):
     """

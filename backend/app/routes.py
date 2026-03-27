@@ -442,7 +442,7 @@ def email_events_webhook(payload: dict, db: Session = Depends(get_db)):
     return services.process_webhook_event(db, payload)
 
 @router.get("/activity")
-def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, db: Session = Depends(get_db)):
+def get_activity_log(background_tasks: BackgroundTasks, days: int = 30, company: str = "all", limit: int = 20, db: Session = Depends(get_db)):
     """
     Consolidated Activity API with Service-layer logic and Mock fallback.
     """
@@ -450,7 +450,7 @@ def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, db: Ses
     background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
     
     try:
-        return services.get_activity(db, limit=limit)
+        return services.recent_events(db, days=days, limit=limit, company_name=company)
     except Exception as e:
         debug.debug_log(f"ERROR in get_activity_log route: {str(e)}")
         return []

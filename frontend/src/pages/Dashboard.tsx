@@ -8,21 +8,15 @@ import { useNavigate } from "react-router-dom";
 import { CreateCampaignModal } from "@/components/dashboard/CreateCampaignModal";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { dashboardAPI, DashboardStats } from "@/services/dashboardAPI";
+import { useDashboard } from "@/context/DashboardContext";
 
 export default function Dashboard() {
+  const { days, setDays, selectedCompanies, setSelectedCompanies, periodLabel, companyString } = useDashboard();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDateMenu, setShowDateMenu] = useState(false);
-  const [days, setDays] = useState<number>(() => {
-    const saved = localStorage.getItem("dashboard_days");
-    return saved ? parseInt(saved) : 30;
-  });
-  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
-  const company = useMemo(() => {
-    return selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all";
-  }, [selectedCompanies]);
 
   const COMPANIES = [
     "A Making Company",
@@ -59,7 +53,7 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
       }
-      const data = await dashboardAPI.getStats(days, "all", company, signal);
+      const data = await dashboardAPI.getStats(days, "all", companyString, signal);
       setStats(data);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -91,7 +85,7 @@ export default function Dashboard() {
       clearInterval(interval);
     };
     // Step 7: Clean dependencies
-  }, [days, company]);
+  }, [days, companyString]);
 
   return (
     <div className="space-y-8">
@@ -201,6 +195,7 @@ export default function Dashboard() {
           growth={stats?.totalEmailsGrowth ?? 0}
           icon={Send}
           loading={loading && !stats}
+          periodLabel={periodLabel}
         />
         <KPICard
           label="Open Rate"
@@ -208,6 +203,7 @@ export default function Dashboard() {
           growth={stats?.openRateGrowth ?? 0}
           icon={Mail}
           loading={loading && !stats}
+          periodLabel={periodLabel}
         />
         <KPICard
           label="Click Rate"
@@ -215,6 +211,7 @@ export default function Dashboard() {
           growth={stats?.clickRateGrowth ?? 0}
           icon={MousePointerClick}
           loading={loading && !stats}
+          periodLabel={periodLabel}
         />
         <KPICard
           label="Unread"
@@ -222,6 +219,7 @@ export default function Dashboard() {
           growth={stats?.unreadGrowth ?? 0}
           icon={EyeOff}
           loading={loading && !stats}
+          periodLabel={periodLabel}
         />
         <KPICard
           label="Bounce Rate"
@@ -229,6 +227,7 @@ export default function Dashboard() {
           growth={stats?.bounceRateGrowth ?? 0}
           icon={XCircle}
           loading={loading && !stats}
+          periodLabel={periodLabel}
         />
         <KPICard
           label="Active Campaigns"
@@ -236,6 +235,7 @@ export default function Dashboard() {
           growth={stats?.activeCampaignsGrowth ?? 0}
           icon={Activity}
           loading={loading && !stats}
+          periodLabel={periodLabel}
         />
       </div>
 
@@ -249,11 +249,11 @@ export default function Dashboard() {
       )}
 
       {/* Charts Section */}
-      <DashboardCharts days={days} company={company} />
+      <DashboardCharts days={days} company={companyString} />
 
       {/* Recent Activity */}
       <div className="grid gap-4">
-        <RecentActivityTable days={days} company={company} />
+        <RecentActivityTable days={days} company={companyString} />
       </div>
     </div>
   );

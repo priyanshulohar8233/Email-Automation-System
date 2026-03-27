@@ -130,8 +130,15 @@ export const dashboardAPI = {
             return []; // Fallback to empty array to show "No Data" gracefully
         }
     },
-    getActivity: async (signal?: AbortSignal): Promise<any[]> => {
-        const url = `${API_URL}/api/activity`;
+    getActivity: async (days?: number, company?: string, signal?: AbortSignal): Promise<any[]> => {
+        let url = `${API_URL}/api/activity`;
+        const params = new URLSearchParams();
+        if (days) params.append("days", days.toString());
+        if (company && company !== "all") params.append("company", company);
+        
+        const queryString = params.toString();
+        if (queryString) url += `?${queryString}`;
+        
         const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching activity");
         return await response.json();
