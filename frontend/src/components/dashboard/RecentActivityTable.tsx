@@ -66,12 +66,12 @@ function getStatusPriority(s: string) {
 /** Badge style per status */
 function getBadgeClass(status: string): string {
   const s = status?.toUpperCase() || "";
-  const base = "inline-flex items-center px-4 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-tight border cursor-pointer hover:shadow-md transition-all select-none gap-2 hover:scale-[1.02] active:scale-[0.98]";
-  if (s === "OPENED")    return base + " bg-emerald-500/10 text-emerald-400 border-emerald-500/30 dark:bg-emerald-500/10";
-  if (s === "CLICKED")   return base + " bg-blue-500/10 text-blue-400 border-blue-500/30";
-  if (s === "DELIVERED") return base + " bg-teal-500/10 text-teal-400 border-teal-500/30";
-  if (s === "BOUNCED")   return base + " bg-rose-500/10 text-rose-400 border-rose-500/30";
-  return base + " bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300";
+  const base = "inline-flex items-center px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border transition-all select-none gap-1.5 hover:bg-opacity-20";
+  if (s === "OPENED")    return base + " bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
+  if (s === "CLICKED")   return base + " bg-blue-500/10 text-blue-400 border-blue-500/20";
+  if (s === "DELIVERED") return base + " bg-cyan-500/10 text-cyan-400 border-cyan-500/20";
+  if (s === "BOUNCED")   return base + " bg-rose-500/10 text-rose-400 border-rose-500/20";
+  return base + " bg-slate-500/10 border-slate-500/20 text-slate-400";
 }
 
 /** Timeline dot color */
@@ -169,10 +169,10 @@ export function RecentActivityTable() {
   }, [days, company]);
 
   return (
-    <Card className="border-border bg-card shadow-sm transition-colors duration-300 overflow-hidden">
-      <CardHeader className="pb-3 border-b border-border">
-        <CardTitle className="text-foreground text-lg flex items-center gap-2">
-          <Activity className="h-4 w-4 text-indigo-500" />
+    <Card className="border-white/5 bg-[#1e293b] shadow-2xl transition-all duration-300 overflow-hidden ring-1 ring-white/5">
+      <CardHeader className="pb-4 border-b border-white/5 bg-white/[0.02]">
+        <CardTitle className="text-slate-100 text-lg font-bold flex items-center gap-2.5">
+          <Activity className="h-5 w-5 text-indigo-500" />
           Recent Activity
         </CardTitle>
       </CardHeader>
@@ -188,15 +188,15 @@ export function RecentActivityTable() {
           </div>
         ) : (
           <Table>
-            <TableHeader className="bg-muted/30">
-              <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-[50px] h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-6 py-0">#</TableHead>
-                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">Recipient</TableHead>
-                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">Sender</TableHead>
-                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">Company</TableHead>
-                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0">Country</TableHead>
-                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-4 py-0 text-center">Status</TableHead>
-                <TableHead className="h-10 text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-6 py-0 text-right">Time</TableHead>
+            <TableHeader>
+              <TableRow className="border-border/50 hover:bg-transparent">
+                <TableHead className="w-[60px] h-12 text-[11px] font-bold uppercase tracking-wider text-slate-400 px-6">#</TableHead>
+                <TableHead className="h-12 text-[11px] font-bold uppercase tracking-wider text-slate-400 px-4">Recipient</TableHead>
+                <TableHead className="h-12 text-[11px] font-bold uppercase tracking-wider text-slate-400 px-4">Sender</TableHead>
+                <TableHead className="h-12 text-[11px] font-bold uppercase tracking-wider text-slate-400 px-4">Company</TableHead>
+                <TableHead className="h-12 text-[11px] font-bold uppercase tracking-wider text-slate-400 px-4">Country</TableHead>
+                <TableHead className="h-12 text-[11px] font-bold uppercase tracking-wider text-slate-400 px-4 text-center">Status</TableHead>
+                <TableHead className="h-12 text-[11px] font-bold uppercase tracking-wider text-slate-400 px-6 text-right">Time</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -209,54 +209,52 @@ export function RecentActivityTable() {
                   : [{ status: ev.status, time: ev.timestamp }];
 
                 return (
-                  <TableRow key={ev.id} className="group hover:bg-muted/50 transition-colors duration-200 border-b border-border/50">
+                  <TableRow key={ev.id} className="group hover:bg-slate-800/40 transition-colors duration-200 border-b border-white/5 last:border-0">
                     {/* # */}
-                    <TableCell className="text-muted-foreground/60 font-medium px-6 py-4 text-sm">
+                    <TableCell className="text-slate-500 font-medium px-6 py-4 text-sm">
                       {index + 1}
                     </TableCell>
 
                     {/* Recipient: Name + Email */}
-                    <TableCell className="px-4 py-4">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[13px] font-semibold text-foreground leading-none">
+                    <TableCell className="px-4 py-4 text-[13px]">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-slate-100 mb-0.5">
                           {displayName}
                         </span>
-                        <span className="text-[11px] text-muted-foreground/70 font-medium">
+                        <span className="text-[11px] text-slate-400/80 font-medium">
                           {ev.recipient_email}
                         </span>
                       </div>
                     </TableCell>
 
-                    {/* Sender (Campaign Company) */}
-                    <TableCell className="px-4 py-4">
-                      <span className="text-[13px] font-bold text-indigo-400 dark:text-indigo-300">
+                    {/* Sender */}
+                    <TableCell className="px-4 py-4 text-[13px]">
+                      <span className="font-bold text-indigo-400">
                         {ev.sender || "MP Consultant LLC"}
                       </span>
                     </TableCell>
 
-                    {/* Company (from domain or stored) */}
-                    <TableCell className="px-4 py-4">
-                      <span className="text-[13px] font-semibold text-foreground">
+                    {/* Company */}
+                    <TableCell className="px-4 py-4 text-[13px]">
+                      <span className="font-semibold text-slate-200">
                         {displayCompany}
                       </span>
                     </TableCell>
 
                     {/* Country */}
-                    <TableCell className="px-4 py-4">
-                      <span className="text-[13px] font-medium text-slate-500 dark:text-slate-400">
-                        {ev.country && ev.country !== "Unknown" ? ev.country : (
-                          <span className="text-muted-foreground/40 italic text-[11px]">Unknown</span>
-                        )}
+                    <TableCell className="px-4 py-4 text-[13px]">
+                      <span className="font-medium text-slate-400">
+                        {ev.country && ev.country !== "Unknown" ? ev.country : "Unknown"}
                       </span>
                     </TableCell>
 
-                    {/* Status Dropdown */}
-                    <TableCell className="text-center px-4 py-4 relative">
+                    {/* Status */}
+                    <TableCell className="text-center px-4 py-4">
                       <StatusDropdown status={ev.status} history={history} />
                     </TableCell>
 
-                    {/* Smart Time */}
-                    <TableCell className="text-right text-muted-foreground text-xs px-6 py-4 tabular-nums font-medium whitespace-nowrap">
+                    {/* Time */}
+                    <TableCell className="text-right text-slate-400 text-xs px-6 py-4 tabular-nums font-medium whitespace-nowrap">
                       {formatTime(ev.timestamp)}
                     </TableCell>
                   </TableRow>
