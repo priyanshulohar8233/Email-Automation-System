@@ -158,7 +158,11 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
   useEffect(() => {
     const controller = new AbortController();
     fetchEvents(controller.signal);
-    const interval = setInterval(() => fetchEvents(controller.signal, true), 10000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchEvents(controller.signal, true);
+      }
+    }, 10000);
     return () => { controller.abort(); clearInterval(interval); };
   }, []);
 
