@@ -855,11 +855,11 @@ def get_emails_per_company(db: Session, days: int = 30):
     limit_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     results = db.query(
-        Campaign.name,
+        Campaign.company,
         func.count(Email.id).label("count")
     ).join(Email, Campaign.id == Email.campaign_id)\
      .filter(Email.sent_at >= limit_date)\
-     .group_by(Campaign.name).all()
+     .group_by(Campaign.company).all()
     
     counts = {
         "MP Consultant LLC": 0,
@@ -868,14 +868,14 @@ def get_emails_per_company(db: Session, days: int = 30):
     }
     
     for row in results:
-        company = db.query(Campaign.company).filter(Campaign.name == row[0]).scalar()
+        company = row[0]
         if company in counts:
             counts[company] += row[1]
         else:
-            # Fallback legacy logic
-            camp_name = (row[0] or "").lower()
-            if "making" in camp_name: counts["A Making Company"] += row[1]
-            elif "lumina" in camp_name: counts["MP Lumina"] += row[1]
+            # Fallback legacy logic for fuzzy matching if company record has different casing/naming
+            comp_lower = (company or "").lower()
+            if "making" in comp_lower: counts["A Making Company"] += row[1]
+            elif "lumina" in comp_lower: counts["MP Lumina"] += row[1]
             else: counts["MP Consultant LLC"] += row[1]
             
     total_found = sum(counts.values())

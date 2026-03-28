@@ -19,7 +19,8 @@ class Settings(BaseSettings):
     class Config:
         case_sensitive = True
         extra = "allow"
-        env_file = ".env"
+        _env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+        env_file = _env_path
 
 settings = Settings()
 

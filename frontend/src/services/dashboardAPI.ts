@@ -137,8 +137,8 @@ export const dashboardAPI = {
         if (!response.ok) throw new Error("Error fetching activity");
         return await response.json();
     },
-    getCampaignStatus: async (signal?: AbortSignal): Promise<any[]> => {
-        const url = `${API_URL}/api/campaign-status`;
+    getCampaignStatus: async (days?: number, signal?: AbortSignal): Promise<any[]> => {
+        const url = days ? `${API_URL}/api/campaign-status?days=${days}` : `${API_URL}/api/campaign-status`;
         const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching campaign status");
         return await response.json();

@@ -113,7 +113,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
     Promise.all([
       dashboardAPI.getEmailStats(days, company),
       dashboardAPI.getStats(days, "all", company),
-      dashboardAPI.getCampaignStatus()
+      dashboardAPI.getCampaignStatus(days)
     ])
       .then(([emailStats, stats, companyStatus]) => {
         // Process email stats for line chart
