@@ -87,7 +87,7 @@ const renderActiveShape = (props: any) => {
   );
 };
 
-export function DashboardCharts({ range = "month", days, company = "all" }: { range?: string, days?: number, company?: string }) {
+export function DashboardCharts({ days = 30, company = "all" }: { days?: number, company?: string }) {
   const [lineData, setLineData] = useState<{ day: string; emails: number }[]>([]);
   const [pieData, setPieData] = useState<{ name: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,8 +111,8 @@ export function DashboardCharts({ range = "month", days, company = "all" }: { ra
 
     // Fetch both stats and email stats in parallel
     Promise.all([
-      dashboardAPI.getEmailStats(days, company, undefined, range),
-      dashboardAPI.getStats(days, "all", company, undefined, range),
+      dashboardAPI.getEmailStats(days, company),
+      dashboardAPI.getStats(days, "all", company),
       dashboardAPI.getCampaignStatus()
     ])
       .then(([emailStats, stats, companyStatus]) => {
@@ -153,7 +153,7 @@ export function DashboardCharts({ range = "month", days, company = "all" }: { ra
         setLineData([]);
         setPieData([]);
       });
-  }, [range, days, company]); // Step 7: Clean dependencies
+  }, [days, company]); // Step 7: Clean dependencies
 
   const onPieEnter = (_: any, index: number) => {
     setActiveIndex(index);
@@ -227,7 +227,7 @@ export function DashboardCharts({ range = "month", days, company = "all" }: { ra
                     dataKey="emails"
                     fill="url(#barGradient)"
                     radius={[8, 8, 2, 2]}
-                    barSize={range === "year" ? 20 : range === "quarter" ? 30 : 40}
+                    barSize={days === 365 ? 20 : days === 90 ? 30 : 40}
                     animationDuration={1500}
                     animationEasing="ease-out"
                     activeBar={(props: any) => {

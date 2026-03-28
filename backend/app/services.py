@@ -477,23 +477,10 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
     }
 
 
-def range_to_days(range_type: str) -> int:
-    """Helper to map frontend range strings to day counts."""
-    mapping = {
-        "week": 7,
-        "month": 30,
-        "quarter": 90,
-        "year": 365
-    }
-    return mapping.get(range_type.lower(), 30)
-
-def compute_stats(db: Session, days: int = None, range: str = "month", campaign_name: str = "all", company_name: str | list = "all"):
+def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all", vs_label: str = "vs last month"):
     # Unified Source of Truth
     from datetime import datetime, timedelta, timezone
     now = datetime.now(timezone.utc)
-    
-    if days is None:
-        days = range_to_days(range)
     
     # 1. Current Period Metrics
     m = get_unified_metrics(db, days=days, campaign_name=campaign_name, company_name=company_name)
@@ -526,6 +513,7 @@ def compute_stats(db: Session, days: int = None, range: str = "month", campaign_
             "totalEmails": 1248, "openRate": 42.5, "clickRate": 12.8, "bounceRate": 0.5, 
             "unread": 85, "activeCampaigns": 3, "totalEmailsGrowth": 12.5, "openRateGrowth": 5.2,
             "clickRateGrowth": 2.1, "bounceRateGrowth": -0.8, "activeCampaignsGrowth": 1.0,
+            "vsLabel": vs_label,
             "raw": {"bounced": 6, "opened": 530, "delivered": 1240, "unread": 85}
         }
     
@@ -542,25 +530,23 @@ def compute_stats(db: Session, days: int = None, range: str = "month", campaign_
         "bounceRateGrowth": calc_growth(m["bounceRate"], p["bounceRate"]),
         "unreadGrowth": calc_growth(m["unreadCount"], p["unreadCount"]),
         "activeCampaignsGrowth": calc_growth(int(active_camps), int(prev_active_camps)),
+        "vsLabel": vs_label,
         "raw": {"bounced": m["bounces"], "opened": m["opens"], "delivered": m["delivered"], "unread": m["unreadCount"]}
     }
 
-def get_dashboard_stats(days: int = None, range: str = "month", campaign_name: str = "all", company_name: str | list = "all"):
+def get_dashboard_stats(days: int = 30, campaign_name: str = "all", company_name: str | list = "all"):
     from .database import SessionLocal
     db = SessionLocal()
     try:
-        return compute_stats(db, days=days, range=range, campaign_name=campaign_name, company_name=company_name)
+        return compute_stats(db, days, campaign_name, company_name)
     finally:
         db.close()
 
 
-def emails_over_time(db: Session, days: int = None, range: str = "month", company_name: str | list = "all"):
+def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all"):
     from datetime import datetime, timedelta, date, timezone
     import calendar
     from sqlalchemy import cast, Date, func
-    
-    if days is None:
-        days = range_to_days(range)
     
     now = datetime.now(timezone.utc)
     
@@ -696,13 +682,9 @@ def emails_over_time(db: Session, days: int = None, range: str = "month", compan
 
 
 
-def recent_events(db: Session, days: int = None, range: str = "month", limit: int = 20, campaign_name: str = "all", company_name: str | list = "all"):
+def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: str = "all", company_name: str | list = "all"):
     from datetime import datetime, timedelta, timezone
     from .models import Contact
-    
-    if days is None:
-        days = range_to_days(range)
-        
     limit_date = datetime.now(timezone.utc) - timedelta(days=days)
     
     # Outer join with Contact and Campaign to get name, company, and campaign details

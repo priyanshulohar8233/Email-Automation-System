@@ -2,22 +2,20 @@ import { KPICard } from "@/components/dashboard/KPICard";
 import { DashboardCharts } from "@/components/dashboard/DashboardCharts";
 import { RecentActivityTable } from "@/components/dashboard/RecentActivityTable";
 import { Button } from "@/components/ui/button";
-import { Calendar, Mail, EyeOff, Send, XCircle, Activity, MousePointerClick, ChevronRight, RefreshCcw, Sun, Moon, Layers, Check } from "lucide-react";
+import { Calendar, Mail, EyeOff, Send, XCircle, Activity, MousePointerClick, ChevronRight, RefreshCcw, Layers, Check } from "lucide-react";
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { CreateCampaignModal } from "@/components/dashboard/CreateCampaignModal";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { dashboardAPI, DashboardStats } from "@/services/dashboardAPI";
+import { DashboardProvider, useDashboard } from "@/context/DashboardContext";
 
-export default function Dashboard() {
+function DashboardContent() {
+  const { timeRange, days, updateRange } = useDashboard();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDateMenu, setShowDateMenu] = useState(false);
-  const [range, setRange] = useState<string>(() => {
-    const saved = localStorage.getItem("dashboard_range");
-    return saved || "month";
-  });
+  
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
   const company = useMemo(() => {
@@ -33,10 +31,6 @@ export default function Dashboard() {
   const formatCompanyName = (name: string) => {
     return name;
   };
-
-  useEffect(() => {
-    localStorage.setItem("dashboard_range", range);
-  }, [range]);
 
   const dateMenuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -57,8 +51,7 @@ export default function Dashboard() {
         setLoading(true);
         setError(null);
       }
-      // Step 3: Pass range in all API calls
-      const data = await dashboardAPI.getStats(undefined, "all", company, signal, range);
+      const data = await dashboardAPI.getStats(days, "all", company, signal, timeRange);
       setStats(data);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -67,6 +60,8 @@ export default function Dashboard() {
         setStats({
           totalEmails: 0, openRate: 0, clickRate: 0, bounceRate: 0,
           unread: 0, activeCampaigns: 0, totalEmailsGrowth: 0, openRateGrowth: 0,
+          clickRateGrowth: 0, bounceRateGrowth: 0, unreadGrowth: 0, activeCampaignsGrowth: 0,
+          vsLabel: "vs last month",
           raw: { bounced: 0, opened: 0, delivered: 0, unread: 0 }
         });
         setError("Dashboard metrics currently unavailable.");
@@ -88,7 +83,7 @@ export default function Dashboard() {
       controller.abort();
       clearInterval(interval);
     };
-  }, [range, company]);
+  }, [days, company, timeRange]);
 
   return (
     <div className="space-y-8">
@@ -107,7 +102,7 @@ export default function Dashboard() {
             >
               <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <span className="text-foreground transition-colors duration-300 capitalize">
-                {range}
+                {timeRange}
               </span>
               <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
             </div>
@@ -117,22 +112,17 @@ export default function Dashboard() {
                 style={{ borderRadius: "14px" }}
                 className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
               >
-                {[
-                  { val: "week", label: "Week" },
-                  { val: "month", label: "Month" },
-                  { val: "quarter", label: "Quarter" },
-                  { val: "year", label: "Year" }
-                ].map((opt) => (
+                {(['week', 'month', 'quarter', 'year'] as const).map((r) => (
                   <div
-                    key={opt.val}
+                    key={r}
                     onClick={() => {
-                      setRange(opt.val);
+                      updateRange(r);
                       setShowDateMenu(false);
                     }}
-                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between ${range === opt.val ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
+                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between capitalize ${timeRange === r ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
                   >
-                    {opt.label}
-                    {range === opt.val && <Activity className="h-3.5 w-3.5" />}
+                    {r}
+                    {timeRange === r && <Activity className="h-3.5 w-3.5" />}
                   </div>
                 ))}
               </div>
@@ -196,49 +186,49 @@ export default function Dashboard() {
           label="Total Emails Sent"
           value={stats?.totalEmails.toLocaleString() || "0"}
           growth={stats?.totalEmailsGrowth ?? 0}
-          range={range}
           icon={Send}
           loading={loading && !stats}
+          vsLabel={stats?.vsLabel}
         />
         <KPICard
           label="Open Rate"
           value={stats ? `${stats.openRate}%` : "0%"}
           growth={stats?.openRateGrowth ?? 0}
-          range={range}
           icon={Mail}
           loading={loading && !stats}
+          vsLabel={stats?.vsLabel}
         />
         <KPICard
           label="Click Rate"
           value={stats ? `${stats.clickRate}%` : "0%"}
           growth={stats?.clickRateGrowth ?? 0}
-          range={range}
           icon={MousePointerClick}
           loading={loading && !stats}
+          vsLabel={stats?.vsLabel}
         />
         <KPICard
           label="Unread"
           value={stats?.unread.toLocaleString() || "0"}
           growth={stats?.unreadGrowth ?? 0}
-          range={range}
           icon={EyeOff}
           loading={loading && !stats}
+          vsLabel={stats?.vsLabel}
         />
         <KPICard
           label="Bounce Rate"
           value={stats ? `${stats.bounceRate}%` : "0%"}
           growth={stats?.bounceRateGrowth ?? 0}
-          range={range}
           icon={XCircle}
           loading={loading && !stats}
+          vsLabel={stats?.vsLabel}
         />
         <KPICard
           label="Active Campaigns"
           value={stats?.activeCampaigns.toString() || "0"}
           growth={stats?.activeCampaignsGrowth ?? 0}
-          range={range}
           icon={Activity}
           loading={loading && !stats}
+          vsLabel={stats?.vsLabel}
         />
       </div>
 
@@ -252,12 +242,20 @@ export default function Dashboard() {
       )}
 
       {/* Charts Section */}
-      <DashboardCharts range={range} company={company} />
+      <DashboardCharts days={days} company={company} />
 
-      {/* Recent Activity */}
+      {/* Recent Activity - Kept stationary at 30 days as per requirements */}
       <div className="grid gap-4">
-        <RecentActivityTable range={range} company={company} />
+        <RecentActivityTable days={30} company={company} />
       </div>
     </div>
+  );
+}
+
+export default function Dashboard() {
+  return (
+    <DashboardProvider>
+      <DashboardContent />
+    </DashboardProvider>
   );
 }

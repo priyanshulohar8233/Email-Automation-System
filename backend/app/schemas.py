@@ -62,6 +62,7 @@ class DashboardStats(BaseModel):
     bounceRateGrowth: Optional[float] = 0.0
     unreadGrowth: Optional[float] = 0.0
     activeCampaignsGrowth: Optional[float] = 0.0
+    vsLabel: Optional[str] = "vs last month"
 
 class DayStat(BaseModel):
     day: str

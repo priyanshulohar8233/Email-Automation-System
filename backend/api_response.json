@@ -1,0 +1,15 @@
+﻿{
+    "totalEmails":  0,
+    "openRate":  0.0,
+    "clickRate":  0.0,
+    "bounceRate":  0.0,
+    "unread":  0.0,
+    "activeCampaigns":  0,
+    "totalEmailsGrowth":  0.0,
+    "openRateGrowth":  0.0,
+    "clickRateGrowth":  0.0,
+    "bounceRateGrowth":  0.0,
+    "unreadGrowth":  0.0,
+    "activeCampaignsGrowth":  0.0,
+    "vsLabel":  "vs last month"
+}

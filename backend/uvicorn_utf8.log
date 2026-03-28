@@ -1,0 +1,246 @@
+﻿python : INFO:     
+Will watch for changes 
+in these directories: [
+'D:\\Email-Automation-S
+ystem_2.0\\backend']
+At line:1 char:59
++ ... 0\backend"; 
+python -m uvicorn 
+app.main:app --port 
+8000 --reload > uvi ...
++                 ~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (INFO:     Wil   
+ l ..._2.0\\backend    
+']:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+INFO:     Uvicorn 
+running on 
+http://127.0.0.1:8000 
+(Press CTRL+C to quit)
+INFO:     Started 
+reloader process 
+[18896] using 
+WatchFiles
+CRITICAL: DATABASE_URL_NEW is NOT set!
+DEBUG: DATABASE_URL_NEW is None
+ENGINE_CREATION_ERROR: Could not parse SQLAlchemy URL from given URL string
+DEBUG_LOG: REDIS_URL not found in settings
+INFO:     Started 
+server process [31088]
+INFO:     Waiting for 
+application startup.
+INFO:     Application 
+startup complete.
+Run time of job "Check 
+for due email 
+campaigns every minute 
+(trigger: 
+interval[0:01:00], 
+next run at: 
+2026-03-27 16:45:59 
+IST)" was missed by 
+0:00:16.210561
+APP_INIT: FastAPI application initialized successfully.
+SERVER_STARTUP: Initializing services...
+DATABASE_INIT: Initializing DB...
+DATABASE_INIT: Skipped (No Engine)
+SCHEDULER_START: Background campaign scheduler is running (interval: 1m)
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:60473 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:52686 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:60452 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:63639 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:61511 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:65383 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:63567 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:63614 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:50167 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:57915 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:52261 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:63936 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:49156 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:50409 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:55252 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:50588 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:50474 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:61669 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:58931 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:56940 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:65141 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:49940 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:54210 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:56512 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:62820 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:49997 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:53329 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:53332 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:52631 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:63598 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:63604 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK
+DEBUG: range=week, lower=week, vs_label=vs last week
+API HIT: /dashboard/stats (range=week, days=7, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:53000 - "GET /api/dashboard/stats?campaign=all&range=week&days=7 HTTP/1.1" 200 OK
+SCHEDULER_ERROR: Could not locate a bind configured on mapper Mapper[Campaign(campaigns)], SQL expression or this Session.
+DEBUG: range=month, lower=month, vs_label=vs last month
+API HIT: /dashboard/stats (range=month, days=30, campaign=all, company=None)
+DEBUG_LOG: DB ERROR in dashboard_stats: Could not locate a bind configured on mapper Mapper[Email(emails)], SQL expression or this Session.
+INFO:     127.0.0.1:65442 - "GET /api/dashboard/stats?time_range=week HTTP/1.1" 200 OK

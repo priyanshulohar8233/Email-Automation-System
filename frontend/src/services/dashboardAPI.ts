@@ -18,6 +18,7 @@ export interface DashboardStats {
         delivered: number;
         unread: number;
     };
+    vsLabel?: string;
 }
 
 // Helper function to add timeout to fetch calls
@@ -56,7 +57,7 @@ const API_URL = BASE_URL.endsWith("/") ? BASE_URL.slice(0, -1) : BASE_URL;
 export const dashboardAPI = {
     getStats: async (days?: number, campaign: string = "all", company?: string, signal?: AbortSignal, range: string = "month"): Promise<DashboardStats> => {
         try {
-            let url = `${API_URL}/api/dashboard/stats?campaign=${encodeURIComponent(campaign)}&range=${range}`;
+            let url = `${API_URL}/api/dashboard/stats?campaign=${encodeURIComponent(campaign)}&time_range=${range}`;
             if (days) url += `&days=${days}`;
             if (company && company !== "all") url += `&company=${encodeURIComponent(company)}`;
             
@@ -80,11 +81,10 @@ export const dashboardAPI = {
             throw error;
         }
     },
-    getEmailStats: async (days?: number, company?: string, signal?: AbortSignal, range: string = "month"): Promise<any> => {
-        let url = `${API_URL}/api/dashboard/email-stats?range=${range}`;
-        if (days) url += `&days=${days}`;
+    getEmailStats: async (days?: number, company?: string, signal?: AbortSignal): Promise<any> => {
+        let url = days ? `${API_URL}/api/dashboard/email-stats?days=${days}` : `${API_URL}/api/dashboard/email-stats`;
         if (company && company !== "all") {
-            url += `&company=${encodeURIComponent(company)}`;
+            url += (url.includes('?') ? '&' : '?') + `company=${encodeURIComponent(company)}`;
         }
         const response = await fetchWithTimeout(url, { 
             signal,
@@ -97,11 +97,10 @@ export const dashboardAPI = {
         }
         return await response.json();
     },
-    getRecentEvents: async (days?: number, company?: string, signal?: AbortSignal, range: string = "month"): Promise<any[]> => {
-        let url = `${API_URL}/api/dashboard/recent-events?range=${range}`;
-        if (days) url += `&days=${days}`;
+    getRecentEvents: async (days?: number, company?: string, signal?: AbortSignal): Promise<any[]> => {
+        let url = days ? `${API_URL}/api/dashboard/recent-events?days=${days}` : `${API_URL}/api/dashboard/recent-events`;
         if (company && company !== "all") {
-            url += `&company=${encodeURIComponent(company)}`;
+            url += (url.includes('?') ? '&' : '?') + `company=${encodeURIComponent(company)}`;
         }
         const response = await fetchWithTimeout(url, { 
             signal,

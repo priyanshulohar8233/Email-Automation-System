@@ -136,7 +136,7 @@ function StatusDropdown({ status, history }: { status: string; history: { status
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function RecentActivityTable({ range = "month", company = "all" }: { range?: string; company?: string }) {
+export function RecentActivityTable({ days = 30, company = "all" }: { days?: number; company?: string }) {
   const [events, setEvents] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,8 +144,7 @@ export function RecentActivityTable({ range = "month", company = "all" }: { rang
   const fetchEvents = async (signal?: AbortSignal, silently = false) => {
     if (!silently) { setLoading(true); setError(null); }
     try {
-      // Step 3: Pass range in all API calls
-      const data = await dashboardAPI.getRecentEvents(undefined, company, signal, range);
+      const data = await dashboardAPI.getActivity(signal);
       setEvents(data as ActivityRow[]);
     } catch (err: any) {
       if (err.name !== "AbortError") {
@@ -165,7 +164,7 @@ export function RecentActivityTable({ range = "month", company = "all" }: { rang
       }
     }, 10000);
     return () => { controller.abort(); clearInterval(interval); };
-  }, [range, company]);
+  }, []);
 
   return (
     <Card className="border-border bg-card shadow-sm transition-colors duration-300 overflow-hidden">

@@ -1,12 +1,22 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
+# Force-load .env before anything else so DATABASE_URL_NEW is always set
+import os, pathlib
+_env_file = pathlib.Path(__file__).parent.parent / ".env"
+if _env_file.exists():
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=str(_env_file), override=True)
+    print(f"DATABASE_ENV_LOADED: {_env_file}")
+else:
+    print(f"DATABASE_ENV_MISSING: {_env_file}")
+
 from .config import settings
 
 from sqlalchemy.pool import StaticPool
 
 # Strict connection for Neon PostgreSQL
-db_url = settings.DATABASE_URL_NEW
+db_url = settings.DATABASE_URL_NEW or os.getenv("DATABASE_URL_NEW", "")
 
 # Diagnostic print as requested by user
 if not db_url:
