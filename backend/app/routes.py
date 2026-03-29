@@ -303,7 +303,12 @@ def get_email_stats(response: Response, background_tasks: BackgroundTasks, days:
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
-        return services.emails_over_time(db, days, company_name=company_list)
+        # Always return a structured dictionary to match frontend expectations
+        return {
+            "emails_over_time": services.emails_over_time(db, days, company_name=company_list),
+            "campaign_status": services.get_emails_per_company(db, days),
+            "recent_activity": services.recent_events(db, days=days, limit=10)
+        }
     except Exception as e:
         debug.debug_log(f"DB ERROR in email-stats: {e}")
         return {
