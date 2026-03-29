@@ -22,13 +22,36 @@ from . import debug
 router = APIRouter(prefix="/api")
 
 @router.get("/health")
-def health_check():
+def health_check(db: Session = Depends(get_db)):
+    """Professional health check with DB connectivity reporting."""
     from .models import get_now_utc
-    return {"status": "ok", "timestamp": str(get_now_utc())}
+    from sqlalchemy import text
+    try:
+        # Quick ping to verify DB
+        db.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"disconnected: {str(e)}"
+        debug.debug_log(f"HEALTH_CHECK_DB_ERROR: {e}")
+
+    return {
+        "status": "ok", 
+        "db": db_status,
+        "timestamp": str(get_now_utc()),
+        "environment": os.getenv("VERCEL_ENV", "local")
+    }
 
 @router.post("/send-campaign")
 def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    return services.prepare_campaign_emails(db, req.campaign_id, req, background_tasks)
+    try:
+        debug.debug_log(f"API_HIT: /send-campaign (campaign_id={req.campaign_id})")
+        return services.prepare_campaign_emails(db, req.campaign_id, req, background_tasks)
+    except Exception as e:
+        debug.debug_log(f"ROUTE_ERROR in send-campaign: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"status": "error", "message": "Failed to initialize campaign execution.", "detail": str(e)}
+        )
 
 @router.get("/campaigns/check-due")
 @router.post("/campaigns/check-due")

@@ -419,127 +419,121 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
 def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import func
+    from .models import Email, EmailEvent, EventType, Campaign
     
-    now = get_now_utc()
-    
-    # Current Metrics
-    metrics = get_unified_metrics(db, days=days, campaign_name=campaign_name)
-    
-    # Simple Growth Calculation (Total vs Today approximation for MVP diff)
-    prev_metrics = get_unified_metrics(db, days=days*2, campaign_name=campaign_name)
-    
-    def calc_growth(cur, total_2x):
-        prev = total_2x - cur
-        if prev <= 0: return 100.0 if cur > 0 else 0.0
-        return round(((cur - prev) / prev) * 100, 1)
-
-    # 3. Time Series Data (Optimized Single Query)
-    performance = []
-    seven_days_ago = now - timedelta(days=6)
-    d_start_7 = seven_days_ago.replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Single query to get counts grouped by day
-    # Note: date_trunc is Postgres-specific (Neon)
-    daily_stats = db.query(
-        func.date_trunc('day', EmailEvent.timestamp).label('day'),
-        func.count(distinct(case(((EmailEvent.event_type == EventType.OPENED), EmailEvent.email_id), else_=None))).label('opens'),
-        func.count(distinct(case(((EmailEvent.event_type == EventType.CLICKED), EmailEvent.email_id), else_=None))).label('clicks')
-    ).filter(
-        EmailEvent.timestamp >= d_start_7
-    )
-    
-    if campaign_name != "all":
-        daily_stats = daily_stats.join(Email).join(Campaign).filter(Campaign.name == campaign_name)
+    try:
+        now = get_now_utc()
         
-    results = daily_stats.group_by(func.date_trunc('day', EmailEvent.timestamp)).all()
-    
-    # Map results to index for easy lookup
-    stats_map = {r.day.date(): {"opens": r.opens, "clicks": r.clicks} for r in results}
-    
-    for i in range(7):
-        d = now - timedelta(days=6-i)
-        d_date = d.date()
-        day_stats = stats_map.get(d_date, {"opens": 0, "clicks": 0})
-        performance.append({
-            "time": d.strftime('%a'), 
-            "opens": day_stats["opens"], 
-            "clicks": day_stats["clicks"]
-        })
+        # Current Metrics
+        metrics = get_unified_metrics(db, days=days, campaign_name=campaign_name)
+        
+        # Simple Growth Calculation (Total vs Today approximation for MVP diff)
+        prev_metrics = get_unified_metrics(db, days=days*2, campaign_name=campaign_name)
+        
+        def calc_growth(cur, total_2x):
+            prev = total_2x - cur
+            if prev <= 0: return 100.0 if cur > 0 else 0.0
+            return round(((cur - prev) / prev) * 100, 1)
 
-    return {
-        "deliveredEmails": metrics["delivered"],
-        "openRate": metrics["openRate"],
-        "clickRate": metrics["clickRate"],
-        "spamRate": metrics["spamRate"],
-        "bounceRate": metrics["bounceRate"],
-        "unread": metrics["unreadCount"],
-        "deliveredEmailsGrowth": calc_growth(metrics["delivered"], prev_metrics["delivered"]),
-        "openRateGrowth": calc_growth(metrics["openRate"], prev_metrics["openRate"]),
-        "clickRateGrowth": 0.0,
-        "performanceData": performance,
-        "deviceData": [{"name": "Desktop", "value": 75}, {"name": "Mobile", "value": 25}],
-        "locationsData": [],
-        "linkData": get_link_performance(db, campaign_name),
-        "recentActivity": recent_events(db, days=days, campaign_name=campaign_name, limit=10)
-    }
+        # 3. Time Series Data (Optimized Single Query)
+        performance = []
+        seven_days_ago = now - timedelta(days=6)
+        d_start_7 = seven_days_ago.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Note: date_trunc is Postgres-specific (Neon)
+        daily_stats = db.query(
+            func.date_trunc('day', EmailEvent.timestamp).label('day'),
+            func.count(distinct(case(((EmailEvent.event_type == EventType.OPENED), EmailEvent.email_id), else_=None))).label('opens'),
+            func.count(distinct(case(((EmailEvent.event_type == EventType.CLICKED), EmailEvent.email_id), else_=None))).label('clicks')
+        ).filter(EmailEvent.timestamp >= d_start_7)
+        
+        if campaign_name != "all":
+            daily_stats = daily_stats.join(Email).join(Campaign).filter(Campaign.name == campaign_name)
+            
+        results = daily_stats.group_by(func.date_trunc('day', EmailEvent.timestamp)).all()
+        
+        # Map results to index for easy lookup
+        stats_map = {getattr(r, "day", now).date(): {"opens": getattr(r, "opens", 0), "clicks": getattr(r, "clicks", 0)} for r in results}
+        
+        for i in range(7):
+            d = now - timedelta(days=6-i)
+            d_date = d.date()
+            day_stats = stats_map.get(d_date, {"opens": 0, "clicks": 0})
+            performance.append({
+                "time": d.strftime('%a'), 
+                "opens": int(day_stats["opens"]), 
+                "clicks": int(day_stats["clicks"])
+            })
+
+        return {
+            "deliveredEmails": int(metrics["delivered"]),
+            "openRate": metrics["openRate"],
+            "clickRate": metrics["clickRate"],
+            "spamRate": metrics["spamRate"],
+            "bounceRate": metrics["bounceRate"],
+            "unread": metrics["unreadCount"],
+            "deliveredEmailsGrowth": calc_growth(metrics["delivered"], prev_metrics["delivered"]),
+            "openRateGrowth": calc_growth(metrics["openRate"], prev_metrics["openRate"]),
+            "clickRateGrowth": 0.0,
+            "performanceData": performance,
+            "deviceData": [{"name": "Desktop", "value": 75}, {"name": "Mobile", "value": 25}],
+            "locationsData": [],
+            "linkData": get_link_performance(db, campaign_name),
+            "recentActivity": recent_events(db, days=days, campaign_name=campaign_name, limit=10)
+        }
+    except Exception as e:
+        debug.debug_log(f"SERVICES_ERROR in get_analytics: {e}")
+        # Critical Fallback: Returning standard empty structure to prevent 500
+        return {
+            "deliveredEmails": 0, "openRate": 0, "clickRate": 0, "spamRate": 0, "bounceRate": 0, "unread": 0,
+            "deliveredEmailsGrowth": 0, "openRateGrowth": 0, "clickRateGrowth": 0,
+            "performanceData": [{"time": "N/A", "opens": 0, "clicks": 0}],
+            "deviceData": [], "locationsData": [], "linkData": [], "recentActivity": []
+        }
 
 
 def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all", vs_label: str = "vs last month"):
-    # Unified Source of Truth
     from datetime import datetime, timedelta, timezone
-    now = get_now_utc()
+    from .models import Campaign, CampaignStatus
     
-    # 1. Current Period Metrics
-    m = get_unified_metrics(db, days=days, campaign_name=campaign_name, company_name=company_name)
-    
-    # 2. Previous Period Metrics for Growth
-    prev_start = now - timedelta(days=days * 2)
-    prev_end = now - timedelta(days=days)
-    p = get_unified_metrics(db, campaign_name=campaign_name, company_name=company_name, start_date=prev_start, end_date=prev_end)
-    
-    # helper for growth
-    def calc_growth(cur, prev):
-        if prev == 0: return 100.0 if cur > 0 else 0.0
-        return round(((cur - prev) / prev) * 100, 1)
+    try:
+        now = get_now_utc()
+        m = get_unified_metrics(db, days=days, campaign_name=campaign_name, company_name=company_name)
+        
+        prev_start = now - timedelta(days=days * 2)
+        prev_end = now - timedelta(days=days)
+        p = get_unified_metrics(db, campaign_name=campaign_name, company_name=company_name, start_date=prev_start, end_date=prev_end)
+        
+        def calc_growth(cur, prev):
+            if prev == 0: return 100.0 if cur > 0 else 0.0
+            return round(((cur - prev) / prev) * 100, 1)
 
-    # Active Campaigns
-    active_camps = db.query(func.count(Campaign.id)).filter(
-        Campaign.status == CampaignStatus.RUNNING
-    ).scalar() or 0
-    
-    # Active Campaigns Growth (approximation vs 7 days ago if 30 days is too much)
-    # But for consistency, use the same 'days' period
-    prev_active_camps = db.query(func.count(Campaign.id)).filter(
-        Campaign.status == CampaignStatus.RUNNING,
-        Campaign.created_at < prev_end
-    ).scalar() or 0
+        active_camps = db.query(func.count(Campaign.id)).filter(Campaign.status == CampaignStatus.RUNNING).scalar() or 0
+        prev_active_camps = db.query(func.count(Campaign.id)).filter(Campaign.status == CampaignStatus.RUNNING, Campaign.created_at < prev_end).scalar() or 0
 
-    if m["totalSent"] == 0 and m["opens"] == 0:
-        # SaaS Grade: Mock stats if DB is empty
         return {
-            "totalEmails": 1248, "openRate": 42.5, "clickRate": 12.8, "bounceRate": 0.5, 
-            "unread": 85, "activeCampaigns": 3, "totalEmailsGrowth": 12.5, "openRateGrowth": 5.2,
-            "clickRateGrowth": 2.1, "bounceRateGrowth": -0.8, "activeCampaignsGrowth": 1.0,
+            "totalEmails": int(m["totalSent"]),
+            "openRate": m["openRate"],
+            "clickRate": m["clickRate"],
+            "bounceRate": m["bounceRate"],
+            "unread": int(m["unreadCount"]),
+            "activeCampaigns": int(active_camps),
+            "totalEmailsGrowth": calc_growth(m["totalSent"], p["totalSent"]),
+            "openRateGrowth": calc_growth(m["openRate"], p["openRate"]),
+            "clickRateGrowth": calc_growth(m["clickRate"], p["clickRate"]),
+            "bounceRateGrowth": calc_growth(m["bounceRate"], p["bounceRate"]),
+            "unreadGrowth": calc_growth(m["unreadCount"], p["unreadCount"]),
+            "activeCampaignsGrowth": calc_growth(int(active_camps), int(prev_active_camps)),
             "vsLabel": vs_label,
-            "raw": {"bounced": 6, "opened": 530, "delivered": 1240, "unread": 85}
+            "raw": {"bounced": m["bounces"], "opened": m["opens"], "delivered": m["delivered"], "unread": m["unreadCount"]}
         }
-    
-    return {
-        "totalEmails": m["totalSent"],
-        "openRate": m["openRate"],
-        "clickRate": m["clickRate"],
-        "bounceRate": m["bounceRate"],
-        "unread": m["unreadCount"],
-        "activeCampaigns": int(active_camps),
-        "totalEmailsGrowth": calc_growth(m["totalSent"], p["totalSent"]),
-        "openRateGrowth": calc_growth(m["openRate"], p["openRate"]),
-        "clickRateGrowth": calc_growth(m["clickRate"], p["clickRate"]),
-        "bounceRateGrowth": calc_growth(m["bounceRate"], p["bounceRate"]),
-        "unreadGrowth": calc_growth(m["unreadCount"], p["unreadCount"]),
-        "activeCampaignsGrowth": calc_growth(int(active_camps), int(prev_active_camps)),
-        "vsLabel": vs_label,
-        "raw": {"bounced": m["bounces"], "opened": m["opens"], "delivered": m["delivered"], "unread": m["unreadCount"]}
-    }
+    except Exception as e:
+        debug.debug_log(f"SERVICES_ERROR in compute_stats: {e}")
+        return {
+            "totalEmails": 0, "openRate": 0, "clickRate": 0, "bounceRate": 0, "unread": 0, "activeCampaigns": 0,
+            "totalEmailsGrowth": 0, "openRateGrowth": 0, "clickRateGrowth": 0, "bounceRateGrowth": 0, "unreadGrowth": 0,
+            "activeCampaignsGrowth": 0, "vsLabel": vs_label, "raw": {"bounced": 0, "opened": 0, "delivered": 0, "unread": 0}
+        }
 
 def get_dashboard_stats(days: int = 30, campaign_name: str = "all", company_name: str | list = "all"):
     from .database import SessionLocal
