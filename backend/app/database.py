@@ -11,6 +11,9 @@ if _env_file.exists():
 else:
     print(f"DATABASE_ENV_MISSING: {_env_file}")
 
+import pytz
+IST = pytz.timezone('Asia/Kolkata')
+
 from .config import settings
 
 from sqlalchemy.pool import StaticPool
