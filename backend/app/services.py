@@ -1,6 +1,9 @@
 from typing import List
 import smtplib
 from datetime import datetime, timedelta, timezone
+import pytz
+
+IST = pytz.timezone('Asia/Kolkata')
 from sqlalchemy import func, distinct, case, select, and_, cast, Date
 from sqlalchemy.orm import Session
 from .models import (
@@ -927,16 +930,17 @@ def prepare_campaign_emails(db: Session, campaign_id: int, data, background_task
         records.append(e)
     
     # Update campaign status
-    if eta and eta > datetime.now(timezone.utc):
+    now_ist = datetime.now(IST)
+    if eta and eta > now_ist:
         camp.status = CampaignStatus.QUEUED
-        camp.scheduled_for = eta.isoformat()
+        camp.scheduled_for = eta
     else:
         camp.status = CampaignStatus.RUNNING
     
     db.commit()
     
     # Trigger background tasks for immediate sends
-    if not (eta and eta > datetime.now(timezone.utc)):
+    if not (eta and eta > now_ist):
         for e in records:
             background_tasks.add_task(send_email_fn, e.id, data.subject, data.body)
             
@@ -972,14 +976,19 @@ def create_campaign(db: Session, data, background_tasks=None):
             scheduled_for=None
         )
         
-        # Handle scheduling with timezone awareness
+        # Handle scheduling with IST timezone awareness
         scheduled_at_str = getattr(data, 'scheduled_at', None)
         if scheduled_at_str:
             try:
-                if "Z" in scheduled_at_str or "+" in scheduled_at_str:
-                     new_camp.scheduled_for = datetime.fromisoformat(scheduled_at_str.replace("Z", "+00:00"))
+                # If it has a timezone already (like ISO from frontend), parse it and convert to IST
+                # If it's a naive string, assume it's IST as requested
+                parsed_dt = datetime.fromisoformat(scheduled_at_str.replace("Z", "+00:00"))
+                if parsed_dt.tzinfo is None:
+                    new_camp.scheduled_for = IST.localize(parsed_dt)
                 else:
-                     new_camp.scheduled_for = datetime.fromisoformat(scheduled_at_str).replace(tzinfo=timezone.utc)
+                    new_camp.scheduled_for = parsed_dt.astimezone(IST)
+                    
+                debug.debug_log(f"SCHEDULING: Standardized to IST: {new_camp.scheduled_for}")
             except Exception as parse_err:
                 debug.debug_log(f"SCHEDULING_PARSE_ERROR: {str(parse_err)}")
         
@@ -1346,11 +1355,13 @@ def check_due_campaigns(db: Session, background_tasks=None):
     from .models import Campaign, CampaignStatus
     from datetime import datetime
     
-    now = datetime.now(timezone.utc)
+    now_ist = datetime.now(IST)
+    debug.debug_log(f"SCHEDULER_HEARTBEAT: Current IST Time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
+
     # 1. Selection with primitive lock check
     due_campaigns = db.query(Campaign).filter(
         Campaign.status.in_([CampaignStatus.QUEUED, CampaignStatus.SCHEDULED]),
-        Campaign.scheduled_for <= now,
+        Campaign.scheduled_for <= now_ist,
         Campaign.is_processing == False
     ).all()
     
@@ -1412,7 +1423,7 @@ def execute_campaign_sync(db: Session, campaign_id: int):
     else:
         camp.status = CampaignStatus.COMPLETED
     
-    camp.completed_at = datetime.now(timezone.utc)
+    camp.completed_at = datetime.now(IST)
     db.commit()
     debug.debug_log(f"SCHEDULER_COMPLETE: Campaign {camp.id} finished with {errors} errors.")
 

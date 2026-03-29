@@ -1,3 +1,10 @@
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+
 import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -100,7 +107,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                         subject: subject.trim(),
                         body: body.trim(),
                         recipients: finalRecipients,
-                        scheduled_at: isScheduled && scheduledAt ? new Date(scheduledAt).toISOString() : null
+                        scheduled_at: isScheduled && scheduledAt ? dayjs.tz(scheduledAt, "Asia/Kolkata").toISOString() : null
                     }),
                 });
                 if (!sendRes.ok) {
