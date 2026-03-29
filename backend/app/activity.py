@@ -1,9 +1,4 @@
-import json
-from .models import ActivityLog, get_now_ist
-from .debug import debug_log
-
-
-STATUS_PRIORITY = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
+from .models import ActivityLog, get_now_utc
 
 
 def _extract_name_from_email(email: str) -> str:
@@ -29,7 +24,7 @@ def upsert_activity_log(
     """
     try:
         existing = db.query(ActivityLog).filter(ActivityLog.email_id == email_id).first()
-        now = get_now_ist()
+        now = get_now_utc()
         now_iso = now.isoformat()
         name = _extract_name_from_email(recipient_email)
 
