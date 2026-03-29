@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from .database import Base, IST
 from .models import (
     Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, 
-    Settings, Suppression, SuppressionReason, BounceType, ActivityLog
+    Settings, Suppression, SuppressionReason, BounceType, ActivityLog, get_now_ist
 )
 
 
@@ -65,7 +65,7 @@ def check_and_complete_campaign(db: Session, campaign_id: int):
     # Trigger completion if everything is processed AND nothing is pending
     if processed_emails >= total_emails and pending_count == 0:
         camp.status = CampaignStatus.COMPLETED
-        camp.completed_at = datetime.now(IST)
+        camp.completed_at = get_now_ist()
         db.commit()
         debug.debug_log(f"CAMPAIGN_COMPLETE: Campaign {campaign_id} (Done at {camp.completed_at})")
 
@@ -172,7 +172,7 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
         recent_open = db.query(EmailEvent).filter(
             EmailEvent.email_id == email_id,
             EmailEvent.event_type == EventType.OPENED,
-            EmailEvent.timestamp >= datetime.now(IST) - timedelta(seconds=60)
+            EmailEvent.timestamp >= get_now_ist() - timedelta(seconds=60)
         ).first()
         if recent_open:
             debug.debug_log(f"TRACKING_FLOW: Blocked duplicate open for email {email_id} (within 60s)")
@@ -208,7 +208,7 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
             os=os,
             device=device,
             country=country,
-            timestamp=datetime.now(IST)
+            timestamp=get_now_ist()
         )
         if url: ev.url = url
         
@@ -229,10 +229,10 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
                     add_to_suppression(db, email.recipient_email, SuppressionReason.BOUNCE, metadata={"reason": email.bounce_reason})
             elif event_type == EventType.OPENED:
                 if not email.opened_at:
-                    email.opened_at = datetime.now(IST)
+                    email.opened_at = get_now_ist()
             elif event_type == EventType.CLICKED:
                 if not email.clicked_at:
-                    email.clicked_at = datetime.now(IST)
+                    email.clicked_at = get_now_ist()
             elif event_type == EventType.SPAM_REPORT:
                 email.status = EmailStatus.SPAM
                 add_to_suppression(db, email.recipient_email, SuppressionReason.SPAM)
@@ -348,7 +348,7 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import func, distinct, case
     
-    now = datetime.now(IST)
+    now = get_now_ist()
     if not start_date:
         start_date = now - timedelta(days=days)
     if not end_date:
@@ -417,7 +417,7 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import func
     
-    now = datetime.now(IST)
+    now = get_now_ist()
     
     # Current Metrics
     metrics = get_unified_metrics(db, days=days, campaign_name=campaign_name)
@@ -484,7 +484,7 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
 def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all", vs_label: str = "vs last month"):
     # Unified Source of Truth
     from datetime import datetime, timedelta, timezone
-    now = datetime.now(IST)
+    now = get_now_ist()
     
     # 1. Current Period Metrics
     m = get_unified_metrics(db, days=days, campaign_name=campaign_name, company_name=company_name)
@@ -552,7 +552,7 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
     import calendar
     from sqlalchemy import cast, Date, func
     
-    now = datetime.now(IST)
+    now = get_now_ist()
     
     # Define buckets and range based on 'days' parameter
     buckets = []
@@ -689,7 +689,7 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
 def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: str = "all", company_name: str | list = "all"):
     from datetime import datetime, timedelta, timezone
     from .models import Contact
-    limit_date = datetime.now(IST) - timedelta(days=days)
+    limit_date = get_now_ist() - timedelta(days=days)
     
     # Outer join with Contact and Campaign to get name, company, and campaign details
     query = db.query(
@@ -832,7 +832,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
     if not final_grouped:
         # SaaS Grade: Provide mock data if DB is empty to prevent "No Data" during initial setup
         from datetime import datetime, timedelta, timezone
-        now = datetime.now(IST)
+        now = get_now_ist()
         return [
             {
                 "id": 9991, "email_id": 101, "recipient": "john.doe@techcorp.com", "recipient_name": "John Doe",
@@ -856,7 +856,7 @@ def get_emails_per_company(db: Session, days: int = 30):
     from .models import Campaign, Email
     from datetime import datetime, timedelta
     from sqlalchemy import func
-    limit_date = datetime.now(IST) - timedelta(days=days)
+    limit_date = get_now_ist() - timedelta(days=days)
     
     results = db.query(
         Campaign.company,
@@ -931,7 +931,7 @@ def prepare_campaign_emails(db: Session, campaign_id: int, data, background_task
         records.append(e)
     
     # Update campaign status
-    now_ist = datetime.now(IST)
+    now_ist = get_now_ist()
     if eta and eta > now_ist:
         camp.status = CampaignStatus.QUEUED
         camp.scheduled_for = eta
@@ -1047,7 +1047,7 @@ def process_scheduled_queue(db: Session, background_tasks):
     if not redis_client:
         return {"status": "error", "message": "Redis not connected"}
 
-    now_ts = int(datetime.now(IST).timestamp())
+    now_ts = int(get_now_ist().timestamp())
     
     # Use a lock to prevent multi-trigger overlap in Vercel
     lock_key = "scheduler_execution_lock"
@@ -1118,7 +1118,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: s
     """
     from .models import EmailEvent, Email, Campaign, EventType
     from datetime import datetime, timedelta, timezone
-    now = datetime.now(IST)
+    now = get_now_ist()
     limit_date = now - timedelta(days=days)
     
     query = db.query(EmailEvent).join(Email).join(Campaign).filter(EmailEvent.timestamp >= limit_date)
@@ -1176,7 +1176,7 @@ def get_activity(db: Session, limit: int = 20):
     if not rows:
         # SaaS Grade Mock Data: Professional fallback
         from datetime import datetime, timedelta, timezone
-        now = datetime.now(IST)
+        now = get_now_ist()
         return [
             {
                 "id": 8881, "email_id": 101, "recipient_email": "active.user@enterprise.com", "recipient_name": "Active User",
@@ -1356,7 +1356,7 @@ def check_due_campaigns(db: Session, background_tasks=None):
     from .models import Campaign, CampaignStatus
     from datetime import datetime
     
-    now_ist = datetime.now(IST)
+    now_ist = get_now_ist()
     debug.debug_log(f"SCHEDULER_HEARTBEAT: Current IST Time: {now_ist.strftime('%Y-%m-%d %H:%M:%S')}")
 
     # 1. Selection with primitive lock check
@@ -1424,7 +1424,7 @@ def execute_campaign_sync(db: Session, campaign_id: int):
     else:
         camp.status = CampaignStatus.COMPLETED
     
-    camp.completed_at = datetime.now(IST)
+    camp.completed_at = get_now_ist()
     db.commit()
     debug.debug_log(f"SCHEDULER_COMPLETE: Campaign {camp.id} finished with {errors} errors.")
 
@@ -1672,7 +1672,7 @@ def get_settings(db: Session):
         db.commit()
     
     # Count emails sent this calendar month
-    now = datetime.now(IST)
+    now = get_now_ist()
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     monthly_sent = db.query(Email).filter(
         Email.status == EmailStatus.SENT,
@@ -2074,7 +2074,7 @@ def get_system_health(db: Session) -> dict:
         reputation = "Warning"
 
     # 3. Delivery Velocity (Last Hour)
-    hour_ago = datetime.now(IST) - timedelta(hours=1)
+    hour_ago = get_now_ist() - timedelta(hours=1)
     vel_sent = db.query(Email).filter(Email.sent_at >= hour_ago, Email.status == EmailStatus.SENT).count()
     vel_delivered = db.query(Email).filter(Email.sent_at >= hour_ago, Email.status == EmailStatus.DELIVERED).count()
 
@@ -2089,7 +2089,7 @@ def get_system_health(db: Session) -> dict:
             "sent_last_hour": vel_sent,
             "delivered_last_hour": vel_delivered
         },
-        "timestamp": datetime.now(IST).isoformat()
+        "timestamp": get_now_ist().isoformat()
     }
 
 def check_reputation_guard(db: Session):

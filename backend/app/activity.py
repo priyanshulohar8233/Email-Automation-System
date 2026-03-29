@@ -1,9 +1,6 @@
 import json
-from datetime import datetime
-from .database import IST
-
+from .models import ActivityLog, get_now_ist
 from .debug import debug_log
-from .models import ActivityLog
 
 
 STATUS_PRIORITY = {"SENT": 1, "DELIVERED": 2, "OPENED": 3, "CLICKED": 4, "BOUNCED": 0}
@@ -32,7 +29,7 @@ def upsert_activity_log(
     """
     try:
         existing = db.query(ActivityLog).filter(ActivityLog.email_id == email_id).first()
-        now = datetime.now(IST)
+        now = get_now_ist()
         now_iso = now.isoformat()
         name = _extract_name_from_email(recipient_email)
 
