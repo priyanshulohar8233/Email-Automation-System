@@ -1340,62 +1340,97 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
 
 def check_due_campaigns(db: Session, background_tasks=None):
     """
-    Finds QUEUED/SCHEDULED campaigns whose time has come and triggers them.
-    Can be used in a background loop or via a Cron endpoint.
+    SaaS Grade Scheduler: Finds QUEUED/SCHEDULED campaigns whose time has come.
+    Implements is_processing locking to prevent duplicate execution across workers.
     """
     from .models import Campaign, CampaignStatus
     from datetime import datetime
     
     now = datetime.now(timezone.utc)
-    # Find due campaigns
+    # 1. Selection with primitive lock check
     due_campaigns = db.query(Campaign).filter(
         Campaign.status.in_([CampaignStatus.QUEUED, CampaignStatus.SCHEDULED]),
-        Campaign.scheduled_for != None
+        Campaign.scheduled_for <= now,
+        Campaign.is_processing == False
     ).all()
     
+    if not due_campaigns:
+        return 0
+        
+    debug.debug_log(f"SCHEDULER: Found {len(due_campaigns)} due campaigns.")
     triggered_count = 0
+    
     for camp in due_campaigns:
         try:
-            # Since scheduled_for is now a DateTime(timezone=True) column, 
-            # it comes back from SQLAlchemy as a timezone-aware datetime object (UTC).
-            sched_time = camp.scheduled_for
-            if not sched_time:
-                continue
-                
-            if sched_time <= now:
-                debug.debug_log(f"SCHEDULER: Triggering campaign {camp.id} (Name: {camp.name}) - Scheduled for {camp.scheduled_for}")
-                camp.status = CampaignStatus.RUNNING
-                db.commit()
-                
-                # Trigger emails
-                if background_tasks:
-                    trigger_campaign_emails(db, camp.id, background_tasks)
-                else:
-                    # If we don't have FastAPI background_tasks (e.g. from a loop), 
-                    # we use a manual trigger or wait for next heartbeat.
-                    # For now, we'll assume we pass it or use a fallback.
-                    from .tasks import send_email_fn
-                    from .models import Email, EmailStatus
-                    pending = db.query(Email).filter(Email.campaign_id == camp.id, Email.status == EmailStatus.PENDING).all()
-                    for e in pending:
-                        send_email_fn(e.id, e.subject, e.body)
-                
-                triggered_count += 1
+            # 2. Atomic Lock (Best effort for MVP)
+            camp.is_processing = True
+            camp.status = CampaignStatus.RUNNING
+            db.commit()
+            
+            debug.debug_log(f"SCHEDULER: Locked & Starting campaign {camp.id} ({camp.name})")
+            
+            # 3. Trigger Execution
+            if background_tasks:
+                trigger_campaign_emails(db, camp.id, background_tasks)
+            else:
+                # Synchronous execution for worker/loop safety
+                execute_campaign_sync(db, camp.id)
+            
+            triggered_count += 1
+            
         except Exception as e:
-            debug.debug_log(f"SCHEDULER_ERROR for campaign {camp.id}: {str(e)}")
-            db.rollback()
+            debug.debug_log(f"SCHEDULER_CRITICAL: Failed to trigger campaign {camp.id}: {str(e)}")
+            camp.is_processing = False
+            camp.status = CampaignStatus.FAILED
+            db.commit()
             
     return triggered_count
 
+def execute_campaign_sync(db: Session, campaign_id: int):
+    """Executes a campaign synchronously within the scheduler context."""
+    from .models import Email, EmailStatus, CampaignStatus, Campaign
+    from .tasks import send_email_fn
+    
+    camp = db.query(Campaign).get(campaign_id)
+    if not camp: return
+    
+    pending = db.query(Email).filter(Email.campaign_id == campaign_id, Email.status == EmailStatus.PENDING).all()
+    debug.debug_log(f"SCHEDULER_EXEC: Sending {len(pending)} pending emails for {camp.name}")
+    
+    errors = 0
+    for e in pending:
+        try:
+            send_email_fn(e.id, e.subject, e.body)
+        except Exception as err:
+            debug.debug_log(f"SCHEDULER_SEND_ERROR for email {e.id}: {err}")
+            errors += 1
+    
+    # Final check and status update
+    camp.is_processing = False
+    if errors > 0:
+        camp.status = CampaignStatus.COMPLETED_WITH_ERRORS
+    else:
+        camp.status = CampaignStatus.COMPLETED
+    
+    camp.completed_at = datetime.now(timezone.utc)
+    db.commit()
+    debug.debug_log(f"SCHEDULER_COMPLETE: Campaign {camp.id} finished with {errors} errors.")
+
 def trigger_campaign_emails(db: Session, campaign_id: int, background_tasks):
+    """Legacy/FastAPI compatible trigger (BackgroundTasks version)"""
     from .models import Email, EmailStatus, Campaign
     from .tasks import send_email_fn
     
-    # Fetch all PENDING emails for this campaign
     pending_emails = db.query(Email).filter(
         Email.campaign_id == campaign_id,
         Email.status == EmailStatus.PENDING
     ).all()
+    
+    for e in pending_emails:
+        background_tasks.add_task(send_email_fn, e.id, e.subject, e.body)
+    
+    # Note: Completion for background_tasks is handled by check_and_complete_campaign
+    # called within log_event/send_email outcomes.
     
     if not pending_emails:
         return 0

@@ -1,6 +1,6 @@
 import enum
 import datetime
-from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, func, Boolean
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -11,6 +11,8 @@ class CampaignStatus(str, enum.Enum):
     QUEUED = "QUEUED"
     RUNNING = "RUNNING"
     COMPLETED = "COMPLETED"
+    COMPLETED_WITH_ERRORS = "COMPLETED_WITH_ERRORS"
+    FAILED = "FAILED"
 
 class Campaign(Base):
     __tablename__ = "campaigns"
@@ -29,6 +31,7 @@ class Campaign(Base):
     scheduled_for = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
+    is_processing = Column(Boolean, default=False)
 
 class EmailStatus(str, enum.Enum):
     PENDING = "PENDING"
