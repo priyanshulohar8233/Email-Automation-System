@@ -11,12 +11,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw, Activity, ChevronDown, Check } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
-import timezone from "dayjs/plugin/timezone";
-
-// SaaS Grade: Ensure IST formatting for Activity Table
-dayjs.extend(utc);
-dayjs.extend(timezone);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface ActivityRow {
@@ -51,21 +45,16 @@ function extractCompany(company: string, email: string): string {
   return host.charAt(0).toUpperCase() + host.slice(1);
 }
 
-/** Smart time: today → "10:00 AM", older → "24/03/26 (10:00 AM)" */
+/** Smart time: today → "10:00 PM", older → "24/03/26 (10:00 PM)" */
 function formatTime(ts: string): string {
   if (!ts) return "—";
-  const date = dayjs(ts).tz("Asia/Kolkata");
-  if (!date.isValid()) return "—";
+  const date = dayjs(ts);
+  const now = dayjs();
   
-  const now = dayjs().tz("Asia/Kolkata");
   const timeStr = date.format("hh:mm A");
+  if (date.isSame(now, 'day')) return timeStr;
   
-  if (date.isSame(now, 'day')) {
-    return timeStr;
-  }
-  
-  const dateStr = date.format("DD/MM/YY");
-  return `${dateStr} (${timeStr})`;
+  return `${date.format("DD/MM/YY")} (${timeStr})`;
 }
 
 /** Priority order for statuses */
