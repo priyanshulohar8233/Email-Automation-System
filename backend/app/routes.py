@@ -255,10 +255,32 @@ def get_emails_per_company(days: int = 30, db: Session = Depends(get_db)):
 
 @router.get("/campaign-status")
 def campaign_status(days: int = 30, db: Session = Depends(get_db)):
-    """Step 5: Safe Campaign Status API"""
+    """Step 5: Safe Campaign Status API - Fixed to return actual campaign statuses"""
     try:
-        return services.get_emails_per_company(db, days)
+        from datetime import datetime, timezone, timedelta
+        from .models import Campaign, CampaignStatus
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        
+        campaigns = db.query(Campaign).filter(Campaign.created_at >= cutoff).all()
+        
+        def get_status_str(status_obj):
+            if not status_obj: return ""
+            if type(status_obj) is str: return status_obj
+            if hasattr(status_obj, 'value'): return status_obj.value
+            return str(status_obj).split('.')[-1]
+
+        running = len([c for c in campaigns if get_status_str(c.status) == "RUNNING"])
+        completed = len([c for c in campaigns if get_status_str(c.status) == "COMPLETED"])
+        failed = len([c for c in campaigns if get_status_str(c.status) in ["COMPLETED_WITH_ERRORS", "FAILED"]])
+        
+        res = []
+        if running > 0: res.append({"status": "Running", "count": running})
+        if completed > 0: res.append({"status": "Complete", "count": completed})
+        if failed > 0: res.append({"status": "Failed", "count": failed})
+        
+        return res
     except Exception as e:
+        from . import debug
         debug.debug_log(f"DB ERROR in campaign-status: {e}")
         return []
 

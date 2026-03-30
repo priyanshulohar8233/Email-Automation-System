@@ -19,10 +19,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 
-const COMPANY_COLORS: Record<string, string> = {
-  "MP Consultant LLC": "#FFC107", // Yellow
-  "MP Lumina": "#7B61FF",         // Purple
-  "A Making Company": "#FF4D4F",  // Red
+const STATUS_COLORS: Record<string, string> = {
+  "Running": "#3B82F6",         // Blue
+  "Complete": "#10B981",        // Emerald
+  "Failed": "#EF4444",          // Red
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -59,7 +59,7 @@ const PieTooltip = ({ active, payload }: any) => {
         <p className="text-sm font-semibold text-white flex items-center gap-2 m-0">
           <span
             className="w-2.5 h-2.5 rounded-full"
-            style={{ backgroundColor: COMPANY_COLORS[data.name] || "#6366F1" }}
+            style={{ backgroundColor: STATUS_COLORS[data.name] || "#6366F1" }}
           />
           {data.name} - {data.value} Emails
         </p>
@@ -126,12 +126,15 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
           setLineData([]);
         }
 
-        // Use emails per company (new endpoint) for the donut chart
+        // Use campaign status for the donut chart
         if (Array.isArray(companyStatus) && companyStatus.length > 0) {
-          const formattedStats = companyStatus.map((stat: any) => ({
-            name: stat.company,
-            value: stat.total
-          }));
+          const formattedStats = companyStatus
+            .map((stat: any) => ({
+              name: stat.status,
+              value: stat.count
+            }))
+            .filter((stat: any) => stat.value > 0); // Exclude statuses with 0 counts
+
           setPieData(formattedStats);
         } else if (stats && stats.raw) {
           // Fallback to old status data if no company data yet
@@ -288,7 +291,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                     onMouseLeave={onPieLeave}
                   >
                     {chartData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.name === "No Data" ? "#E2E8F0" : (COMPANY_COLORS[entry.name] || "#6366F1")} />
+                      <Cell key={`cell-${index}`} fill={entry.name === "No Data" || !entry.name ? "#E2E8F0" : (STATUS_COLORS[entry.name] || "#6366F1")} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -305,9 +308,9 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
                       return (
                         <div className="flex flex-wrap justify-center gap-x-6 gap-y-2">
                           {payload?.map((entry: any, index: number) => {
-                            const name = entry.value;
+                            const name = entry.value || "Unknown";
                             const value = entry.payload.value;
-                            const color = name === "No Data" ? "#E2E8F0" : (COMPANY_COLORS[name] || "#6366F1");
+                            const color = name === "No Data" ? "#E2E8F0" : (STATUS_COLORS[name] || "#6366F1");
                             return (
                               <div key={`item-${index}`} className="flex items-center gap-2">
                                 <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />

@@ -1032,74 +1032,69 @@ def create_campaign(db: Session, data, background_tasks=None):
 def process_scheduled_queue(db: Session, background_tasks):
     """
     Step 4: Safe Scheduler Worker for Vercel.
-    Pulls due campaign IDs from Redis and starts them.
+    Pulls due campaigns directly from the Database and starts them.
     """
-    if not redis_client:
-        return {"status": "error", "message": "Redis not connected"}
-
-    now_ts = int(datetime.now(timezone.utc).timestamp())
+    # 1. Redis Lock to prevent concurrent execution on Vercel
+    if redis_client:
+        lock_key = "scheduler_execution_lock_v2"
+        is_locked = redis_client.set(lock_key, "locked", ex=50, nx=True)
+        if not is_locked:
+             return {"status": "skipped", "message": "Another scheduler is running"}
     
-    # Use a lock to prevent multi-trigger overlap in Vercel
-    lock_key = "scheduler_execution_lock"
-    is_locked = redis_client.set(lock_key, "locked", ex=50, nx=True)
-    if not is_locked:
-        return {"status": "skipped", "message": "Another scheduler is running"}
-
     try:
-        # Get all campaigns where scheduled time <= now
-        due_ids = redis_client.zrangebyscore("scheduled_campaigns", 0, now_ts)
+        now = datetime.now(timezone.utc)
         
-        if not due_ids:
+        # 2. PRO GRADE: Query database directly for due campaigns
+        due_campaigns = db.query(Campaign).filter(
+            Campaign.status == CampaignStatus.QUEUED,
+            Campaign.scheduled_for <= now
+        ).all()
+        
+        if not due_campaigns:
             return {"status": "ok", "processed": 0}
 
+        from .tasks import send_email_fn
         processed = 0
-        for camp_id in due_ids:
+        
+        for camp in due_campaigns:
             try:
-                # 1. Fetch campaign
-                camp = db.query(Campaign).filter(Campaign.id == int(camp_id)).first()
-                if not camp:
-                    redis_client.zrem("scheduled_campaigns", camp_id)
-                    continue
-
-                if camp.status != CampaignStatus.QUEUED:
-                    redis_client.zrem("scheduled_campaigns", camp_id)
-                    continue
-
-                # 2. Trigger execution logic (prepare_campaign_emails handles the loop)
-                # We need data to pass recipients, subject, body. 
-                # For a triggered job, we reconstruct the "data" object from the DB record
-                from pydantic import BaseModel
-                class DummyData(BaseModel):
-                    name: str
-                    subject: str
-                    body: str
-                    company: str
-                    recipients: list = []
-
-                # Fetch recipients (emails with current campaign_id)
-                recipients = [e.recipient_email for e in db.query(Email.recipient_email).filter(Email.campaign_id == camp.id).all()]
+                debug.debug_log(f"SCHEDULER: Triggering campaign {camp.id} ({camp.name})")
                 
-                data = DummyData(
-                    name=camp.name,
-                    subject=camp.subject,
-                    body=camp.body,
-                    company=camp.company,
-                    recipients=recipients
-                )
-
-                # Reset status to RUNNING via the service helper
-                send_result = prepare_campaign_emails(db, camp.id, data, background_tasks)
+                # A. Immediate Status Transition to prevent double execution
+                camp.status = CampaignStatus.RUNNING
+                db.add(camp)
+                db.commit() # Commit status change immediately
                 
-                # 3. Remove from Redis
-                redis_client.zrem("scheduled_campaigns", camp_id)
+                # B. Fetch all PENDING emails for this campaign
+                pending_emails = db.query(Email).filter(
+                    Email.campaign_id == camp.id,
+                    Email.status == EmailStatus.PENDING
+                ).all()
+                
+                # C. Queue emails to background tasks
+                if background_tasks:
+                    for e in pending_emails:
+                        background_tasks.add_task(send_email_fn, e.id, e.subject, e.body)
+                
+                # D. Cleanup Redis (legacy support)
+                if redis_client:
+                    redis_client.zrem("scheduled_campaigns", str(camp.id))
+                
                 processed += 1
-                debug.debug_log(f"REDIS_SCHEDULER: Successfully triggered campaign {camp_id}")
+                debug.debug_log(f"SCHEDULER: Successfully processed campaign {camp.id}")
             except Exception as inner_e:
-                debug.debug_log(f"REDIS_SCHEDULER: Error processing ID {camp_id}: {inner_e}")
+                debug.debug_log(f"SCHEDULER_ERROR for ID {camp.id}: {str(inner_e)}")
+                db.rollback()
 
         return {"status": "ok", "processed": processed}
+    except Exception as e:
+        debug.debug_log(f"SCHEDULER_CRITICAL_ERROR: {str(e)}")
+        return {"status": "error", "message": str(e)}
     finally:
-        redis_client.delete(lock_key)
+        # Cleanup lock if using Redis
+        if redis_client:
+            redis_client.delete("scheduler_execution_lock_v2")
+
 
 def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: str = "all", company_name: str | list = "all"):
     """

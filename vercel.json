@@ -31,7 +31,7 @@
     "crons": [
         {
             "path": "/api/campaigns/check-due",
-            "schedule": "0 0 * * *"
+            "schedule": "* * * * *"
         }
     ]
 }
