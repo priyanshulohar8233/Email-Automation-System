@@ -1,7 +1,7 @@
 from typing import List
 import smtplib
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import func, distinct, case, select, and_, cast, Date
+from sqlalchemy import func, distinct, case, select, and_, or_, cast, Date
 from sqlalchemy.orm import Session
 from .models import (
     Email, EmailStatus, EmailEvent, EventType, Campaign, CampaignStatus, 
@@ -880,43 +880,70 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
 
 def get_emails_per_company(db: Session, days: int = 30, company_name: str | list = "all"):
     """
-    Get real email counts per company for the dashboard chart.
-    Follows strict business logic:
-    - Counts campaigns in RUNNING, COMPLETED, or COMPLETED_WITH_ERRORS.
-    - Only counts emails that have an actual 'sent_at' timestamp.
+    Returns company-wise executed email totals for the dashboard donut chart.
+
+    Important business rules:
+    - Do not count QUEUED/SCHEDULED/PENDING-only campaign rows.
+    - Count only real executed email attempts.
+    - Be resilient to stale campaign.status values by relying on email/activity data.
     """
-    from .models import Campaign, Email, CampaignStatus
+    from .models import Campaign, Email
+
     limit_date = datetime.now(timezone.utc) - timedelta(days=days)
-    
+    executed_email_statuses = [
+        EmailStatus.SENT,
+        EmailStatus.DELIVERED,
+        EmailStatus.BOUNCED,
+        EmailStatus.SPAM,
+        EmailStatus.DROPPED,
+    ]
+
     query = db.query(
         Campaign.company,
         func.count(Email.id).label("total")
     ).join(Email, Campaign.id == Email.campaign_id)
-    
-    # 2. Filter by executed campaign statuses
-    target_statuses = [
-        CampaignStatus.RUNNING, 
-        CampaignStatus.COMPLETED, 
-        CampaignStatus.COMPLETED_WITH_ERRORS
-    ]
-    query = query.filter(Campaign.status.in_(target_statuses))
-    
-    # 3. Filter by 'sent_at' and time range
-    query = query.filter(Email.sent_at != None, Email.sent_at >= limit_date)
-    
+
+    # Count only actually executed emails. This excludes queued/pending rows even if
+    # sent_at was prefilled by an earlier default or legacy migration.
+    query = query.filter(Email.status.in_(executed_email_statuses))
+    query = query.filter(
+        or_(
+            and_(Email.sent_at.isnot(None), Email.sent_at >= limit_date),
+            and_(Email.opened_at.isnot(None), Email.opened_at >= limit_date),
+            and_(Email.clicked_at.isnot(None), Email.clicked_at >= limit_date),
+        )
+    )
+
     if company_name != "all":
         if isinstance(company_name, list):
             query = query.filter(Campaign.company.in_(company_name))
         else:
             query = query.filter(Campaign.company == company_name)
-            
+
     results = query.group_by(Campaign.company).all()
-    
-    # Format and ensure all standard companies are represented (even with 0)
-    data = [{"company": r[0], "total": r[1]} for r in results]
-    
-    return data
-    return data
+    data = [{"company": r[0] or "Unknown", "total": int(r[1] or 0)} for r in results if (r[1] or 0) > 0]
+
+    if data:
+        return data
+
+    # Fallback for legacy rows where email timestamps/statuses were not normalized
+    # but activity logs already contain the real execution history.
+    activity_query = db.query(
+        ActivityLog.company,
+        func.count(distinct(ActivityLog.email_id)).label("total")
+    ).filter(
+        ActivityLog.timestamp >= limit_date,
+        ActivityLog.status.in_(["SENT", "DELIVERED", "OPENED", "CLICKED", "BOUNCED"])
+    )
+
+    if company_name != "all":
+        if isinstance(company_name, list):
+            activity_query = activity_query.filter(ActivityLog.company.in_(company_name))
+        else:
+            activity_query = activity_query.filter(ActivityLog.company == company_name)
+
+    activity_rows = activity_query.group_by(ActivityLog.company).all()
+    return [{"company": r[0] or "Unknown", "total": int(r[1] or 0)} for r in activity_rows if (r[1] or 0) > 0]
 
 
 def prepare_campaign_emails(db: Session, campaign_id: int, data, background_tasks):

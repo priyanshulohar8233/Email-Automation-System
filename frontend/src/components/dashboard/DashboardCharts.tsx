@@ -119,7 +119,15 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
       else setLineData([]);
 
       if (Array.isArray(companyStatus) && companyStatus.length > 0) {
-        setPieData(companyStatus.map((stat: any) => ({ name: stat.company || "Other", value: stat.total || 0 })));
+        // Map backend keys {company, total} to Recharts {name, value}
+        // Ensure we handle 'Unknown' and empty strings gracefully
+        const mapped = companyStatus.map((stat: any) => ({
+          name: (stat.company || "Unknown").trim() || "Unknown",
+          value: Number(stat.total) || 0
+        })).filter(d => d.value > 0);
+        
+        console.log("DEBUG: Campaign status chart data sync:", mapped);
+        setPieData(mapped);
       } else {
         setPieData([]);
       }

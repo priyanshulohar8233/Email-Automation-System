@@ -1,21 +1,29 @@
-import os
-import sys
-
-# Add the backend directory to sys.path
-sys.path.append(os.path.join(os.getcwd(), 'backend'))
-
 from backend.app.database import SessionLocal
-from backend.app.models import Email, EmailStatus
+from backend.app.models import Email, EmailStatus, Campaign, ActivityLog
+import json
 
-db = SessionLocal()
-try:
-    first_email = db.query(Email).first()
-    if first_email:
-        print(f"Status in Python: '{first_email.status}'")
-        print(f"Type in Python: {type(first_email.status)}")
-        print(f"Is equal to EmailStatus.SENT ({EmailStatus.SENT})? {first_email.status == EmailStatus.SENT}")
-        print(f"Is equal to 'SENT'? {first_email.status == 'SENT'}")
-    else:
-        print("No emails found.")
-finally:
-    db.close()
+def check_diag():
+    db = SessionLocal()
+    try:
+        print("--- Email Table Stats ---")
+        emails = db.query(Email.status, Campaign.company, Email.sent_at).join(Campaign).all()
+        print(f"Total Emails: {len(emails)}")
+        for e in emails:
+            print(f"  Status: {e.status}, Company: {e.company}, SentAt: {e.sent_at}")
+            
+        print("\n--- ActivityLog Table Stats ---")
+        logs = db.query(ActivityLog.status, ActivityLog.company, ActivityLog.timestamp).all()
+        print(f"Total Logs: {len(logs)}")
+        for l in logs:
+            print(f"  Status: {l.status}, Company: {l.company}, Timestamp: {l.timestamp}")
+
+        from backend.app.services import get_emails_per_company
+        print("\n--- Testing get_emails_per_company (30 days) ---")
+        res = get_emails_per_company(db, days=30)
+        print(f"Result: {json.dumps(res, indent=2)}")
+        
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    check_diag()
