@@ -263,10 +263,15 @@ def campaign_status(days: int = 30, db: Session = Depends(get_db)):
         return []
 
 @router.get("/dashboard/stats", response_model=DashboardStats)
-def dashboard_stats(response: Response, background_tasks: BackgroundTasks, days: int = 30, time_range: str = "month", campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
+def dashboard_stats(response: Response, background_tasks: BackgroundTasks, days: str = "30", time_range: str = "month", campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
     # SaaS Grade: Proactive Scheduling Pulse
     background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
     
+    try:
+        parsed_days = int(days) if days and str(days).isdigit() else 30
+    except (ValueError, TypeError):
+        parsed_days = 30
+        
     # Range override (if range is provided, it takes precedence over days)
     range_map = {
         "week": (7, "vs last week"),
@@ -275,7 +280,7 @@ def dashboard_stats(response: Response, background_tasks: BackgroundTasks, days:
         "year": (365, "vs last year")
     }
     
-    effective_days, vs_label = range_map.get(time_range.lower(), (days, "vs last month"))
+    effective_days, vs_label = range_map.get(time_range.lower(), (parsed_days, "vs last month"))
     
     print(f"DEBUG: range={time_range}, lower={time_range.lower()}, vs_label={vs_label}")
     print(f"API HIT: /dashboard/stats (range={time_range}, days={effective_days}, campaign={campaign}, company={company})")
@@ -295,15 +300,20 @@ def dashboard_stats(response: Response, background_tasks: BackgroundTasks, days:
         }
 
 @router.get("/dashboard/email-stats")
-def get_email_stats(response: Response, background_tasks: BackgroundTasks, days: int = 7, company: str | None = None, db: Session = Depends(get_db)):
+def get_email_stats(response: Response, background_tasks: BackgroundTasks, days: str = "7", company: str | None = None, db: Session = Depends(get_db)):
     # SaaS Grade: Proactive Scheduling Pulse
     background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
 
-    print(f"API HIT: /dashboard/email-stats (days={days}, company={company})")
+    try:
+        parsed_days = int(days) if days and str(days).isdigit() else 7
+    except (ValueError, TypeError):
+        parsed_days = 7
+
+    print(f"API HIT: /dashboard/email-stats (days={parsed_days}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
-        return services.emails_over_time(db, days, company_name=company_list)
+        return services.emails_over_time(db, parsed_days, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"DB ERROR in email-stats: {e}")
         return {
@@ -313,13 +323,18 @@ def get_email_stats(response: Response, background_tasks: BackgroundTasks, days:
         }
 
 @router.get("/dashboard/recent-events")
-def get_recent_events(response: Response, days: int = 30, campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
-    print(f"API HIT: /dashboard/recent-events (days={days}, campaign={campaign}, company={company})")
+def get_recent_events(response: Response, days: str = "30", campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
+    try:
+        parsed_days = int(days) if days and str(days).isdigit() else 30
+    except (ValueError, TypeError):
+        parsed_days = 30
+        
+    print(f"API HIT: /dashboard/recent-events (days={parsed_days}, campaign={campaign}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
-        debug.debug_log(f"Fetching recent events: campaign={campaign}, days={days}, company={company_list}")
-        return services.recent_events(db, days, campaign_name=campaign, company_name=company_list)
+        debug.debug_log(f"Fetching recent events: campaign={campaign}, days={parsed_days}, company={company_list}")
+        return services.recent_events(db, parsed_days, campaign_name=campaign, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"ERROR in get_recent_events: {str(e)}")
         import traceback
