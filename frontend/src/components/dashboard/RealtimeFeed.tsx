@@ -136,7 +136,7 @@ export function RealtimeFeed({ campaignName = "all" }: { campaignName?: string }
             </CardContent>
             <div className="p-3 bg-muted/20 border-t border-border/50 text-center">
                 <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-[0.2em]">
-                    Last Refreshed: {lastFetch ? dayjs(lastFetch).format("HH:mm:ss") : "—"}
+                    Last Refreshed: {dayjs(lastFetch).format("HH:mm:ss")}
                 </p>
             </div>
         </Card>

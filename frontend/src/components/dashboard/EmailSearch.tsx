@@ -29,8 +29,7 @@ interface SearchResult {
  * Detailed Timeline Badge for the panel 
  */
 function TimelineItem({ event, isLast }: { event: StatusEvent; isLast: boolean; key?: any }) {
-  const dateStr = event?.time || "";
-  const date = dateStr ? new Date(dateStr) : new Date();
+  const date = new Date(event.time);
   return (
     <div className="relative flex gap-4 pb-8 items-start group">
       {!isLast && (
@@ -229,11 +228,7 @@ export function EmailSearch() {
                 <div className="pl-2">
                   {selectedResult.status_history?.length > 0 ? (
                     [...selectedResult.status_history]
-                      .sort((a, b) => {
-                        const timeA = a.time ? new Date(a.time).getTime() : 0;
-                        const timeB = b.time ? new Date(b.time).getTime() : 0;
-                        return timeB - timeA;
-                      })
+                      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
                       .map((event, idx, arr) => (
                         <TimelineItem 
                           key={event.status + event.time} 

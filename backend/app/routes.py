@@ -28,33 +28,24 @@ def health_check():
 
 @router.post("/send-campaign")
 def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    try:
-        return services.prepare_campaign_emails(db, req.campaign_id, req, background_tasks)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in send-campaign: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return services.prepare_campaign_emails(db, req.campaign_id, req, background_tasks)
 
+@router.get("/campaigns/check-due")
 @router.post("/campaigns/check-due")
 def trigger_due_campaigns(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     SaaS Grade: Redis + Vercel Cron trigger.
     Processes QUEUED campaigns that are now due using Redis ZSET.
     """
-    try:
-        cron_secret = os.getenv("CRON_SECRET")
-        if cron_secret:
-            auth_header = request.headers.get("authorization")
-            if auth_header != f"Bearer {cron_secret}":
-                debug.debug_log(f"CRON_AUTH_FAILED: Expected {cron_secret}, got {auth_header}")
-                raise HTTPException(status_code=401, detail="Unauthorized")
+    cron_secret = os.getenv("CRON_SECRET")
+    if cron_secret:
+        auth_header = request.headers.get("authorization")
+        if auth_header != f"Bearer {cron_secret}":
+            debug.debug_log(f"CRON_AUTH_FAILED: Expected {cron_secret}, got {auth_header}")
+            raise HTTPException(status_code=401, detail="Unauthorized")
 
-        result = services.process_scheduled_queue(db, background_tasks)
-        return result
-    except HTTPException:
-        raise
-    except Exception as e:
-        debug.debug_log(f"CRON_ERROR: {e}")
-        return {"status": "error", "message": str(e)}
+    result = services.process_scheduled_queue(db, background_tasks)
+    return result
 
 @router.get("/campaigns")
 def get_campaigns(search: str | None = None, status: str | None = None, db: Session = Depends(get_db)):
@@ -95,105 +86,78 @@ def create_campaign(req: CampaignCreate, background_tasks: BackgroundTasks, db: 
 
 @router.put("/campaigns/{id}")
 def update_campaign(id: int, req: CampaignCreate, db: Session = Depends(get_db)):
-    try:
-        return services.update_campaign(db, id, req)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in update_campaign: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return services.update_campaign(db, id, req)
 
 @router.delete("/campaigns/{id}")
 def delete_campaign(id: int, db: Session = Depends(get_db)):
-    try:
-        return services.delete_campaign(db, id)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in delete_campaign: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return services.delete_campaign(db, id)
 
 @router.post("/campaigns/{id}/toggle")
 def toggle_campaign(id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    try:
-        from .models import Campaign, CampaignStatus
-        camp = db.query(Campaign).get(id)
-        if not camp:
-            raise HTTPException(status_code=404, detail="Campaign not found")
-        
-        if camp.status == CampaignStatus.RUNNING:
-            camp.status = CampaignStatus.QUEUED
-        elif camp.status in [CampaignStatus.QUEUED, CampaignStatus.DRAFT, CampaignStatus.COMPLETED]:
-            # If it was completed, setting it to Running will allow trigger_campaign_emails 
-            # to find any new/resubmitted PENDING emails.
-            camp.status = CampaignStatus.RUNNING
-            # SaaS Grade: When resuming/starting, ensure any PENDING emails are triggered
-            services.trigger_campaign_emails(db, camp.id, background_tasks)
-        
-        db.commit()
-        db.refresh(camp)
-        return {"id": camp.id, "status": camp.status.value}
-    except HTTPException:
-        raise
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in toggle_campaign: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    from .models import Campaign, CampaignStatus
+    camp = db.query(Campaign).get(id)
+    if not camp:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    if camp.status == CampaignStatus.RUNNING:
+        camp.status = CampaignStatus.QUEUED
+    elif camp.status in [CampaignStatus.QUEUED, CampaignStatus.DRAFT, CampaignStatus.COMPLETED]:
+        # If it was completed, setting it to Running will allow trigger_campaign_emails 
+        # to find any new/resubmitted PENDING emails.
+        camp.status = CampaignStatus.RUNNING
+        # SaaS Grade: When resuming/starting, ensure any PENDING emails are triggered
+        services.trigger_campaign_emails(db, camp.id, background_tasks)
+    
+    db.commit()
+    db.refresh(camp)
+    return {"id": camp.id, "status": camp.status.value}
 
 
 @router.get("/settings")
 def get_settings(db: Session = Depends(get_db)):
-    try:
-        from .models import Settings
-        s = db.query(Settings).first()
-        if not s:
-            # Pro Grade: Auto-detect Vercel environment or fallback to localhost
-            public_url = f"https://{os.getenv('VERCEL_URL')}" if os.getenv('VERCEL_URL') else "http://localhost:8000"
-            s = Settings(
-                smtp_host="smtp.gmail.com", 
-                smtp_port=587, 
-                monthly_limit=1000000,
-                base_url=public_url
-            )
-            db.add(s)
-            db.commit()
-            db.refresh(s)
-        return s
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in get_settings: {e}")
-        return {
-            "smtp_host": "smtp.gmail.com",
-            "smtp_port": 587,
-            "monthly_limit": 1000000,
-            "base_url": "http://localhost:8000"
-        }
+    from .models import Settings
+    s = db.query(Settings).first()
+    if not s:
+        # Pro Grade: Auto-detect Vercel environment or fallback to localhost
+        public_url = f"https://{os.getenv('VERCEL_URL')}" if os.getenv('VERCEL_URL') else "http://localhost:8000"
+        s = Settings(
+            smtp_host="smtp.gmail.com", 
+            smtp_port=587, 
+            monthly_limit=1000000,
+            base_url=public_url
+        )
+        db.add(s)
+        db.commit()
+        db.refresh(s)
+    return s
 
 @router.put("/settings")
 def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
-    try:
-        from .models import Settings
-        s = db.query(Settings).first()
-        if not s:
-            s = Settings()
-            db.add(s)
-        if req.smtp_host:
-            s.smtp_host = req.smtp_host
-        if req.smtp_port is not None:
-            s.smtp_port = req.smtp_port
-        if req.smtp_username:
-            s.smtp_username = req.smtp_username
-        if req.smtp_password:
-            s.smtp_password = req.smtp_password
-        if req.sendgrid_api_key:
-            s.sendgrid_api_key = req.sendgrid_api_key
-        if req.email_provider:
-            s.email_provider = req.email_provider
-        if req.from_email:
-            s.from_email = req.from_email
-        if req.base_url:
-            s.base_url = req.base_url
-        if req.monthly_limit is not None:
-            s.monthly_limit = req.monthly_limit
-        db.commit()
-        return s
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in update_settings: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    from .models import Settings
+    s = db.query(Settings).first()
+    if not s:
+        s = Settings()
+        db.add(s)
+    if req.smtp_host:
+        s.smtp_host = req.smtp_host
+    if req.smtp_port is not None:
+        s.smtp_port = req.smtp_port
+    if req.smtp_username:
+        s.smtp_username = req.smtp_username
+    if req.smtp_password:
+        s.smtp_password = req.smtp_password
+    if req.sendgrid_api_key:
+        s.sendgrid_api_key = req.sendgrid_api_key
+    if req.email_provider:
+        s.email_provider = req.email_provider
+    if req.from_email:
+        s.from_email = req.from_email
+    if req.base_url:
+        s.base_url = req.base_url
+    if req.monthly_limit is not None:
+        s.monthly_limit = req.monthly_limit
+    db.commit()
+    return s
 
 @router.post("/settings/test-smtp")
 def test_smtp(db: Session = Depends(get_db)):
@@ -258,14 +222,10 @@ def test_smtp(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"SMTP Error: {error_detail}")
 
 @router.get("/analytics")
-def get_campaign_analytics(response: Response, campaign: str = "all", days: int = 30, range: str = "month", db: Session = Depends(get_db)):
+def get_campaign_analytics(response: Response, campaign: str = "all", days: int = 30, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
-        # Range mapping helper
-        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
-        effective_days = range_map.get(range.lower(), days)
-        
-        return services.get_analytics(db, campaign_name=campaign, days=effective_days)
+        return services.get_analytics(db, campaign_name=campaign, days=days)
     except Exception as e:
         debug.debug_log(f"DB ERROR in analytics: {e}")
         return {
@@ -276,70 +236,29 @@ def get_campaign_analytics(response: Response, campaign: str = "all", days: int 
 
 @router.get("/campaigns/names")
 def list_campaign_names(db: Session = Depends(get_db)):
-    try:
-        from .models import Campaign
-        results = db.query(Campaign.name).distinct().all()
-        return [r[0] for r in results]
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in list_campaign_names: {e}")
-        return []
+    from .models import Campaign
+    results = db.query(Campaign.name).distinct().all()
+    return [r[0] for r in results]
 
 @router.get("/analytics/realtime")
 def get_realtime_analytics(response: Response, campaign: str = "all", limit: int = 10, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    try:
-        return services.recent_events(db, days=30, limit=limit, campaign_name=campaign)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in realtime analytics: {e}")
-        return []
+    return services.recent_events(db, days=30, limit=limit, campaign_name=campaign)
 
 @router.get("/analytics/system-health")
 def get_system_health(db: Session = Depends(get_db)):
-    try:
-        return services.get_system_health(db)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in system-health: {e}")
-        return {"status": "error", "error": str(e)}
+    return services.get_system_health(db)
 
 @router.get("/analytics/emails-per-company")
 def get_emails_per_company(days: int = 30, db: Session = Depends(get_db)):
+    return services.get_emails_per_company(db, days)
+
+@router.get("/campaign-status")
+def campaign_status(days: int = 30, db: Session = Depends(get_db)):
+    """Step 5: Safe Campaign Status API"""
     try:
         return services.get_emails_per_company(db, days)
     except Exception as e:
-        debug.debug_log(f"DB ERROR in emails-per-company: {e}")
-        return []
-
-@router.get("/campaign-status")
-def campaign_status(days: int = 30, range: str = "month", db: Session = Depends(get_db)):
-    """Step 5: Safe Campaign Status API - Fixed to return actual campaign statuses"""
-    try:
-        from datetime import datetime, timezone, timedelta
-        from .models import Campaign, CampaignStatus
-        
-        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
-        effective_days = range_map.get(range.lower(), days)
-        cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
-        
-        campaigns = db.query(Campaign).filter(Campaign.created_at >= cutoff).all()
-        
-        def get_status_str(status_obj):
-            if not status_obj: return ""
-            if type(status_obj) is str: return status_obj
-            if hasattr(status_obj, 'value'): return status_obj.value
-            return str(status_obj).split('.')[-1]
-
-        running = len([c for c in campaigns if get_status_str(c.status) == "RUNNING"])
-        completed = len([c for c in campaigns if get_status_str(c.status) == "COMPLETED"])
-        failed = len([c for c in campaigns if get_status_str(c.status) in ["COMPLETED_WITH_ERRORS", "FAILED"]])
-        
-        res = []
-        if running > 0: res.append({"status": "Running", "count": running})
-        if completed > 0: res.append({"status": "Complete", "count": completed})
-        if failed > 0: res.append({"status": "Failed", "count": failed})
-        
-        return res
-    except Exception as e:
-        from . import debug
         debug.debug_log(f"DB ERROR in campaign-status: {e}")
         return []
 
@@ -381,21 +300,20 @@ def dashboard_stats(response: Response, background_tasks: BackgroundTasks, days:
         }
 
 @router.get("/dashboard/email-stats")
-def get_email_stats(response: Response, background_tasks: BackgroundTasks, days: str = "7", range: str = "week", company: str | None = None, db: Session = Depends(get_db)):
+def get_email_stats(response: Response, background_tasks: BackgroundTasks, days: str = "7", company: str | None = None, db: Session = Depends(get_db)):
     # SaaS Grade: Proactive Scheduling Pulse
     background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
 
     try:
-        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
-        effective_days = range_map.get(range.lower(), int(days) if str(days).isdigit() else 7)
+        parsed_days = int(days) if days and str(days).isdigit() else 7
     except (ValueError, TypeError):
-        effective_days = 7
+        parsed_days = 7
 
-    print(f"API HIT: /dashboard/email-stats (range={range}, days={effective_days}, company={company})")
+    print(f"API HIT: /dashboard/email-stats (days={parsed_days}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
-        return services.emails_over_time(db, effective_days, company_name=company_list)
+        return services.emails_over_time(db, parsed_days, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"DB ERROR in email-stats: {e}")
         return {
@@ -405,19 +323,18 @@ def get_email_stats(response: Response, background_tasks: BackgroundTasks, days:
         }
 
 @router.get("/dashboard/recent-events")
-def get_recent_events(response: Response, days: str = "30", range: str = "month", campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
+def get_recent_events(response: Response, days: str = "30", campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
     try:
-        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
-        effective_days = range_map.get(range.lower(), int(days) if str(days).isdigit() else 30)
+        parsed_days = int(days) if days and str(days).isdigit() else 30
     except (ValueError, TypeError):
-        effective_days = 30
+        parsed_days = 30
         
-    print(f"API HIT: /dashboard/recent-events (range={range}, days={effective_days}, campaign={campaign}, company={company})")
+    print(f"API HIT: /dashboard/recent-events (days={parsed_days}, campaign={campaign}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
-        debug.debug_log(f"Fetching recent events: campaign={campaign}, days={effective_days}, company={company_list}")
-        return services.recent_events(db, effective_days, campaign_name=campaign, company_name=company_list)
+        debug.debug_log(f"Fetching recent events: campaign={campaign}, days={parsed_days}, company={company_list}")
+        return services.recent_events(db, parsed_days, campaign_name=campaign, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"ERROR in get_recent_events: {str(e)}")
         import traceback
@@ -555,7 +472,7 @@ def email_events_webhook(payload: dict, db: Session = Depends(get_db)):
     return services.process_webhook_event(db, payload)
 
 @router.get("/activity")
-def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, days: int = 30, range: str = "month", db: Session = Depends(get_db)):
+def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, db: Session = Depends(get_db)):
     """
     Consolidated Activity API with Service-layer logic and Mock fallback.
     """
@@ -563,21 +480,15 @@ def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, days: i
     background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
     
     try:
-        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
-        effective_days = range_map.get(range.lower(), days)
-        return services.get_activity(db, limit=limit, days=effective_days)
+        return services.get_activity(db, limit=limit)
     except Exception as e:
         debug.debug_log(f"ERROR in get_activity_log route: {str(e)}")
         return []
 
 @router.get("/templates")
 def get_templates(db: Session = Depends(get_db)):
-    try:
-        from .models import Template
-        return db.query(Template).all()
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in get_templates: {e}")
-        return []
+    from .models import Template
+    return db.query(Template).all()
 
 @router.post("/templates")
 def create_template(req: TemplateCreate, db: Session = Depends(get_db)):
@@ -637,48 +548,26 @@ def ai_chat(req: AIChatRequest):
 
 @router.post("/contacts/import")
 def import_contacts(req: BulkContactsRequest, db: Session = Depends(get_db)):
-    try:
-        return services.create_contacts(db, req.contacts)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in import_contacts: {e}")
-        return {"success": False, "error": str(e)}
+    return services.create_contacts(db, req.contacts)
 
 @router.get("/contacts/{id}/profile", response_model=ContactProfileResponse)
 def get_contact_profile(id: int, db: Session = Depends(get_db)):
-    try:
-        profile = services.get_contact_profile(db, id)
-        if not profile:
-            raise HTTPException(status_code=404, detail="Contact not found")
-        return profile
-    except HTTPException:
-        raise
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in get_contact_profile: {e}")
-        raise HTTPException(status_code=500, detail="Database correlation error")
+    profile = services.get_contact_profile(db, id)
+    if not profile:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return profile
 
 @router.put("/contacts/{id}/tags")
 def update_contact_tags(id: int, tags: List[str], db: Session = Depends(get_db)):
-    try:
-        return services.update_contact_tags(db, id, tags)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in update_contact_tags: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return services.update_contact_tags(db, id, tags)
 
 @router.get("/segments", response_model=List[SegmentResponse])
 def get_segments(db: Session = Depends(get_db)):
-    try:
-        return services.get_segments(db)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in get_segments: {e}")
-        return []
+    return services.get_segments(db)
 
 @router.post("/segments", response_model=SegmentResponse)
 def create_segment(req: SegmentCreate, db: Session = Depends(get_db)):
-    try:
-        return services.create_segment(db, req)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in create_segment: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return services.create_segment(db, req)
 
 @router.delete("/segments/{id}")
 def delete_segment(id: int, db: Session = Depends(get_db)):
@@ -705,88 +594,58 @@ def export_contacts(db: Session = Depends(get_db)):
 
 @router.post("/templates/test-send")
 def test_send_template(req: TestEmailRequest, db: Session = Depends(get_db)):
+    from .models import Settings
+    s = db.query(Settings).first()
+    if not s:
+        raise HTTPException(status_code=400, detail="SMTP settings not configured")
+        
     try:
-        from .models import Settings
-        s = db.query(Settings).first()
-        if not s:
-            raise HTTPException(status_code=400, detail="SMTP settings not configured")
-            
-        try:
-            from .services import send_mail
-            send_mail(
-                to_addr=req.recipient,
-                subject=req.subject,
-                body_html=req.body,
-                smtp_host=s.smtp_host,
-                smtp_port=s.smtp_port,
-                smtp_user=s.smtp_user,
-                smtp_pass=s.smtp_pass,
-                attachments=req.attachments
-            )
-            return {"status": "success"}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
-    except HTTPException:
-        raise
+        from .services import send_mail
+        send_mail(
+            to_addr=req.recipient,
+            subject=req.subject,
+            body_html=req.body,
+            smtp_host=s.smtp_host,
+            smtp_port=s.smtp_port,
+            smtp_user=s.smtp_user,
+            smtp_pass=s.smtp_pass,
+            attachments=req.attachments
+        )
+        return {"status": "success"}
     except Exception as e:
-        debug.debug_log(f"ERROR in test_send_template: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error during template test")
+        raise HTTPException(status_code=500, detail=str(e))
 @router.get("/suppressions")
 def get_suppressions(db: Session = Depends(get_db)):
-    try:
-        return services.get_suppressions(db)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in get_suppressions: {e}")
-        return []
+    return services.get_suppressions(db)
 
 @router.delete("/suppressions/{id}")
 def delete_suppression(id: int, db: Session = Depends(get_db)):
-    try:
-        if services.delete_suppression(db, id):
-            return {"status": "success"}
-        raise HTTPException(status_code=404, detail="Suppression not found")
-    except HTTPException:
-        raise
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in delete_suppression: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if services.delete_suppression(db, id):
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Suppression not found")
 
 @router.post("/suppressions/manual")
 def add_manual_suppression(payload: dict, db: Session = Depends(get_db)):
+    email = payload.get("email")
+    reason = payload.get("reason", "MANUAL")
+    if not email:
+        raise HTTPException(status_code=400, detail="Email is required")
+    from .models import SuppressionReason
     try:
-        email = payload.get("email")
-        reason = payload.get("reason", "MANUAL")
-        if not email:
-            raise HTTPException(status_code=400, detail="Email is required")
-        from .models import SuppressionReason
-        try:
-            r_enum = SuppressionReason[reason.upper()]
-        except:
-            r_enum = SuppressionReason.MANUAL
-            
-        services.add_to_suppression(db, email, r_enum)
-        return {"status": "success"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in add_manual_suppression: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        r_enum = SuppressionReason[reason.upper()]
+    except:
+        r_enum = SuppressionReason.MANUAL
+        
+    services.add_to_suppression(db, email, r_enum)
+    return {"status": "success"}
 
 @router.get("/automations", response_model=List[AutomationResponse])
 def get_automations(db: Session = Depends(get_db)):
-    try:
-        return services.get_automations(db)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in get_automations: {e}")
-        return []
+    return services.get_automations(db)
 
 @router.post("/automations", response_model=AutomationResponse)
 def create_automation(req: AutomationCreate, db: Session = Depends(get_db)):
-    try:
-        return services.create_automation(db, req)
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in create_automation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return services.create_automation(db, req)
 
 @router.put("/automations/{id}", response_model=AutomationResponse)
 def update_automation(id: int, req: AutomationCreate, db: Session = Depends(get_db)):
@@ -797,15 +656,9 @@ def update_automation(id: int, req: AutomationCreate, db: Session = Depends(get_
 
 @router.delete("/automations/{id}")
 def delete_automation(id: int, db: Session = Depends(get_db)):
-    try:
-        if services.delete_automation(db, id):
-            return {"status": "success"}
-        raise HTTPException(status_code=404, detail="Automation not found")
-    except HTTPException:
-        raise
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in delete_automation: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if services.delete_automation(db, id):
+        return {"status": "success"}
+    raise HTTPException(status_code=404, detail="Automation not found")
 
 @router.put("/contacts/company")
 def update_contact_company(req: ContactCompanyUpdate, db: Session = Depends(get_db)):
@@ -820,126 +673,111 @@ def get_campaigns_history(date: Optional[str] = None, db: Session = Depends(get_
     Return all campaigns with aggregate activity stats.
     Filter by date if provided (YYYY-MM-DD).
     """
-    try:
-        from .models import Campaign, ActivityLog
-        from sqlalchemy import func
-        from datetime import datetime, time, timedelta
+    from .models import Campaign, ActivityLog
+    from sqlalchemy import func
+    from datetime import datetime, time, timedelta
 
-        query = db.query(Campaign)
+    query = db.query(Campaign)
 
-        if date:
-            try:
-                target_date = datetime.strptime(date, "%Y-%m-%d").date()
-                start_dt = datetime.combine(target_date, time.min)
-                end_dt = datetime.combine(target_date, time.max)
-                query = query.filter(Campaign.created_at.between(start_dt, end_dt))
-            except ValueError:
-                pass
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d").date()
+            start_dt = datetime.combine(target_date, time.min)
+            end_dt = datetime.combine(target_date, time.max)
+            query = query.filter(Campaign.created_at.between(start_dt, end_dt))
+        except ValueError:
+            pass
 
-        campaigns = query.order_by(Campaign.created_at.desc()).all()
+    campaigns = query.order_by(Campaign.created_at.desc()).all()
+    
+    result = []
+    for c in campaigns:
+        # Calculate stats from ActivityLog for this campaign
+        logs = db.query(ActivityLog).filter(ActivityLog.campaign_id == c.id).all()
         
-        result = []
-        for c in campaigns:
-            # Calculate stats from ActivityLog for this campaign
-            logs = db.query(ActivityLog).filter(ActivityLog.campaign_id == c.id).all()
-            
-            sent = len(logs)
-            delivered = sum(1 for l in logs if l.status in ("DELIVERED", "OPENED", "CLICKED"))
-            opened = sum(1 for l in logs if l.status in ("OPENED", "CLICKED"))
-            clicked = sum(1 for l in logs if l.status == "CLICKED")
-            
-            result.append({
-                "id": c.id,
-                "name": c.name,
-                "date": c.created_at.isoformat() if c.created_at else "",
-                "scheduled_for": c.scheduled_for.isoformat() if c.scheduled_for else None,
-                "sent": sent,
-                "delivered": delivered,
-                "opened": opened,
-                "clicked": clicked,
-                "status": c.status.value if hasattr(c.status, 'value') else str(c.status)
-            })
+        sent = len(logs)
+        delivered = sum(1 for l in logs if l.status in ("DELIVERED", "OPENED", "CLICKED"))
+        opened = sum(1 for l in logs if l.status in ("OPENED", "CLICKED"))
+        clicked = sum(1 for l in logs if l.status == "CLICKED")
         
-        return result
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in campaigns history: {e}")
-        return []
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "date": c.created_at.isoformat() if c.created_at else "",
+            "sent": sent,
+            "delivered": delivered,
+            "opened": opened,
+            "clicked": clicked,
+            "status": c.status.value if hasattr(c.status, 'value') else str(c.status)
+        })
+    
+    return result
 
 @router.get("/search/email")
 def search_email_history(email: str, db: Session = Depends(get_db)):
     """
     Return full activity history for a specific email address.
     """
-    try:
-        import json
-        from .models import ActivityLog, Campaign
-        
-        logs = db.query(ActivityLog).filter(
-            ActivityLog.recipient_email.ilike(f"%{email}%")
-        ).order_by(ActivityLog.timestamp.desc()).all()
-        
-        result = []
-        for l in logs:
-            campaign_name = "Unknown"
-            if l.campaign_id:
-                c = db.query(Campaign).filter(Campaign.id == l.campaign_id).first()
-                if c: campaign_name = c.name
-                
-            try:
-                history = json.loads(l.status_history or "[]")
-            except:
-                history = []
-                
-            result.append({
-                "id": l.id,
-                "email_id": l.email_id,
-                "recipient_email": l.recipient_email,
-                "recipient_name": l.recipient_name or "",
-                "campaign_name": campaign_name, # Frontend expects campaign_name
-                "sender": l.sender or "",
-                "company": l.company or "",
-                "country": l.country or "Unknown",
-                "status": l.status or "SENT",
-                "status_history": history, # Full detailed history with timestamps
-                "timestamp": l.timestamp.isoformat() if l.timestamp else ""
-            })
+    import json
+    from .models import ActivityLog, Campaign
+    
+    logs = db.query(ActivityLog).filter(
+        ActivityLog.recipient_email.ilike(f"%{email}%")
+    ).order_by(ActivityLog.timestamp.desc()).all()
+    
+    result = []
+    for l in logs:
+        campaign_name = "Unknown"
+        if l.campaign_id:
+            c = db.query(Campaign).filter(Campaign.id == l.campaign_id).first()
+            if c: campaign_name = c.name
             
-        return result
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in email search: {e}")
-        return []
+        try:
+            history = json.loads(l.status_history or "[]")
+        except:
+            history = []
+            
+        result.append({
+            "id": l.id,
+            "email_id": l.email_id,
+            "recipient_email": l.recipient_email,
+            "recipient_name": l.recipient_name or "",
+            "campaign_name": campaign_name, # Frontend expects campaign_name
+            "sender": l.sender or "",
+            "company": l.company or "",
+            "country": l.country or "Unknown",
+            "status": l.status or "SENT",
+            "status_history": history, # Full detailed history with timestamps
+            "timestamp": l.timestamp.isoformat() if l.timestamp else ""
+        })
+        
+    return result
 
 @router.get("/activity/{log_id}", response_model=ActivityLogResponse)
 def get_activity_detail(log_id: int, db: Session = Depends(get_db)):
     """
     Return detailed activity log entry by ID.
     """
+    import json
+    from .models import ActivityLog
+    log = db.query(ActivityLog).filter(ActivityLog.id == log_id).first()
+    if not log:
+        raise HTTPException(status_code=404, detail="Log entry not found")
+        
     try:
-        import json
-        from .models import ActivityLog
-        log = db.query(ActivityLog).filter(ActivityLog.id == log_id).first()
-        if not log:
-            raise HTTPException(status_code=404, detail="Log entry not found")
-            
-        try:
-            history = json.loads(log.status_history or "[]")
-        except:
-            history = []
-            
-        return {
-            "id": log.id,
-            "email_id": log.email_id,
-            "recipient_email": log.recipient_email,
-            "recipient_name": log.recipient_name or "",
-            "sender": log.sender or "",
-            "company": log.company or "",
-            "country": log.country or "Unknown",
-            "status": log.status or "SENT",
-            "status_history": history,
-            "timestamp": log.timestamp.isoformat() if log.timestamp else ""
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        debug.debug_log(f"DB ERROR in get_activity_detail: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        history = json.loads(log.status_history or "[]")
+    except:
+        history = []
+        
+    return {
+        "id": log.id,
+        "email_id": log.email_id,
+        "recipient_email": log.recipient_email,
+        "recipient_name": log.recipient_name or "",
+        "sender": log.sender or "",
+        "company": log.company or "",
+        "country": log.country or "Unknown",
+        "status": log.status or "SENT",
+        "status_history": history,
+        "timestamp": log.timestamp.isoformat() if log.timestamp else ""
+    }

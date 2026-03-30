@@ -16,12 +16,11 @@ from .config import settings
 from sqlalchemy.pool import StaticPool
 
 # Strict connection for Neon PostgreSQL
-db_url = settings.DATABASE_URL_NEW or settings.DATABASE_URL or os.getenv("DATABASE_URL_NEW") or os.getenv("DATABASE_URL")
+db_url = settings.DATABASE_URL_NEW or os.getenv("DATABASE_URL_NEW", "")
 
 # Diagnostic print as requested by user
 if not db_url:
-    print("CRITICAL: DATABASE_URL_NEW and DATABASE_URL are both missing!")
-    raise RuntimeError("Database URL not found. Please set DATABASE_URL_NEW or DATABASE_URL in environment variables.")
+    print("DEBUG: DATABASE_URL_NEW is None")
 else:
     print(f"DEBUG: Connecting to: {db_url[:15]}...")
 

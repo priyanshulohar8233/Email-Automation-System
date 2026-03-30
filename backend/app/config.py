@@ -4,7 +4,6 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     # Mandatory fields for Pydantic v2 validation
     DATABASE_URL_NEW: str = os.getenv("DATABASE_URL_NEW", "")
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
     REDIS_URL: str = os.getenv("REDIS_URL", "")
     BASE_URL: str = os.getenv("BASE_URL", "http://localhost")
     SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
@@ -26,8 +25,7 @@ class Settings(BaseSettings):
 settings = Settings()
 
 # Debugging moved OUTSIDE the class to avoid Pydantic v2 errors
-if not settings.DATABASE_URL_NEW and not settings.DATABASE_URL:
-    print("CRITICAL: Neither DATABASE_URL_NEW nor DATABASE_URL is set!")
+if not settings.DATABASE_URL_NEW:
+    print("CRITICAL: DATABASE_URL_NEW is NOT set!")
 else:
-    active_url = settings.DATABASE_URL_NEW or settings.DATABASE_URL
-    print(f"DATABASE_CONNECTION: Using {('DATABASE_URL_NEW' if settings.DATABASE_URL_NEW else 'DATABASE_URL')} ({active_url[:15]}...)")
+    print(f"DATABASE_CONNECTION: Using DATABASE_URL_NEW ({settings.DATABASE_URL_NEW[:15]}...)")

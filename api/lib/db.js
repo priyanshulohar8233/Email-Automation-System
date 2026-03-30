@@ -1,13 +1,7 @@
 const { Pool } = require('pg');
 
-const connectionString = process.env.DATABASE_URL_NEW || process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error("Database URL not found. Please set DATABASE_URL_NEW or DATABASE_URL in Vercel environment variables.");
-}
-
 const pool = new Pool({
-  connectionString,
+  connectionString: process.env.DATABASE_URL_NEW,
   ssl: {
     rejectUnauthorized: false
   }

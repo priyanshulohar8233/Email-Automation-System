@@ -11,7 +11,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw, Activity, ChevronDown, Check } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 import { formatIST, formatISTTimeOnly, dayjs } from "@/lib/timeUtils";
-import { useDashboard } from "@/context/DashboardContext";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface ActivityRow {
@@ -143,11 +142,7 @@ function StatusDropdown({ status, history }: { status: string; history: { status
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
-export function RecentActivityTable({ days: propDays = 30, company = "all" }: { days?: number; company?: string }) {
-  const { timeRange, days: contextDays } = useDashboard();
-  // Prefer days from context for dashboard sync, fallback to prop for general use
-  const activeDays = contextDays || propDays;
-  
+export function RecentActivityTable({ days = 30, company = "all" }: { days?: number; company?: string }) {
   const [events, setEvents] = useState<ActivityRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -155,7 +150,7 @@ export function RecentActivityTable({ days: propDays = 30, company = "all" }: { 
   const fetchEvents = async (signal?: AbortSignal, silently = false) => {
     if (!silently) { setLoading(true); setError(null); }
     try {
-      const data = await dashboardAPI.getActivity(signal, activeDays, timeRange);
+      const data = await dashboardAPI.getActivity(signal);
       setEvents(data as ActivityRow[]);
     } catch (err: any) {
       if (err.name !== "AbortError") {
@@ -175,7 +170,7 @@ export function RecentActivityTable({ days: propDays = 30, company = "all" }: { 
       }
     }, 10000);
     return () => { controller.abort(); clearInterval(interval); };
-  }, [activeDays, timeRange, company]);
+  }, []);
 
   return (
     <Card className="border-border bg-card shadow-sm transition-colors duration-300 overflow-hidden">

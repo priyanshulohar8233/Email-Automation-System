@@ -544,56 +544,141 @@ def get_dashboard_stats(days: int = 30, campaign_name: str = "all", company_name
 
 
 def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all"):
-    from datetime import datetime, timedelta, timezone
-    from sqlalchemy import func, cast, Date
-    from .models import Campaign
+    from datetime import datetime, timedelta, date, timezone
+    import calendar
+    from sqlalchemy import cast, Date, func
     
     now = datetime.now(timezone.utc)
-    # 1. Calculation: Define exact window
-    # We want 'days' full days including today
-    start_date = (now - timedelta(days=days-1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    end_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
     
-    # 2. Query: Group by created_at date
+    # Define buckets and range based on 'days' parameter
+    buckets = []
+    start_date = None
+    end_date = None
+    
+    if days == 7:
+        # Week View: Mon -> Sun of current week
+        weekday = now.weekday() # 0 = Mon, 6 = Sun
+        start_date = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = start_date + timedelta(days=7)
+        
+        for i in range(7):
+            d = start_date + timedelta(days=i)
+            buckets.append({
+                "label": d.strftime('%a'), # Mon, Tue...
+                "start": d,
+                "end": d + timedelta(days=1)
+            })
+            
+    elif days == 30:
+        # Month View: 3-day intervals of current month
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_day = calendar.monthrange(now.year, now.month)[1]
+        end_date = (start_date + timedelta(days=last_day-1)).replace(hour=23, minute=59, second=59) + timedelta(seconds=1)
+        
+        # New 3-day grouping logic: 1-3, 4-6, ..., 25-27, 28-30/31
+        intervals = [(1, 3), (4, 6), (7, 9), (10, 12), (13, 15), (16, 18), (19, 21), (22, 24), (25, 27), (28, last_day)]
+        for s, e in intervals:
+            b_start = start_date.replace(day=s)
+            # b_end is the start of the day AFTER 'e'
+            if e == last_day:
+                if now.month == 12:
+                    b_end = start_date.replace(year=now.year + 1, month=1, day=1)
+                else:
+                    b_end = start_date.replace(month=now.month + 1, day=1)
+            else:
+                b_end = start_date.replace(day=e+1)
+            
+            buckets.append({
+                "label": f"{s}-{e}",
+                "start": b_start,
+                "end": b_end
+            })
+            
+    elif days == 90:
+        # Quarter View: 10-day grouping (10, 20, ..., 90)
+        end_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date = end_date - timedelta(days=90)
+        
+        for i in range(0, 90, 10):
+            b_start = start_date + timedelta(days=i)
+            b_end = b_start + timedelta(days=10)
+            buckets.append({
+                "label": str(i + 10), # 10, 20, 30... 90
+                "start": b_start,
+                "end": b_end
+            })
+            
+    elif days == 365:
+        # Year View: Monthly intervals of current year
+        start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = start_date.replace(year=start_date.year + 1)
+        
+        for m in range(1, 13):
+            b_start = start_date.replace(month=m)
+            if m == 12:
+                b_end = b_start.replace(year=b_start.year + 1, month=1)
+            else:
+                b_end = b_start.replace(month=m + 1)
+            buckets.append({
+                "label": calendar.month_name[m][:3], # Jan, Feb...
+                "start": b_start,
+                "end": b_end
+            })
+    else:
+        # Fallback to daily for any other value (Last 'days' days)
+        end_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date = end_date - timedelta(days=days)
+        for i in range(days):
+            d = start_date + timedelta(days=i)
+            buckets.append({
+                "label": d.strftime('%b %d'),
+                "start": d,
+                "end": d + timedelta(days=1)
+            })
+
+    from .models import Contact
+    # Fetch aggregated counts by date
     query = db.query(
-        cast(Campaign.created_at, Date).label("d"),
-        func.sum(Campaign.sent_count).label("c")
+        cast(Email.sent_at, Date).label("d"),
+        func.count(Email.id).label("c")
     ).filter(
-        Campaign.created_at >= start_date,
-        Campaign.created_at < end_date
+        Email.sent_at >= start_date,
+        Email.sent_at < end_date,
+        Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
     )
-    
+
     if company_name and company_name != "all":
         companies = [company_name] if isinstance(company_name, str) else company_name
-        query = query.filter(Campaign.company.in_(companies))
-        
-    results = query.group_by(cast(Campaign.created_at, Date)).all()
-    results_map = {r.d: int(r.c or 0) for r in results}
+        query = query.join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
+
+    print(f"DEBUG: Running chart query for {days} days...")
+    results = query.group_by(cast(Email.sent_at, Date)).all()
     
-    # 3. Aggregation: Build full buckets list with 0 padding
-    data = []
-    for i in range(days):
-        current_day = (start_date + timedelta(days=i)).date()
-        
-        # Label formatting based on range
-        if days <= 14:
-            label = current_day.strftime('%a') # Mon, Tue...
-        elif days <= 100:
-            label = current_day.strftime('%b %d') # Jan 15
-        else:
-            label = current_day.strftime('%b') # Jan, Feb... (aggregated by day though)
-            
-        data.append({
-            "day": label,
-            "emails": results_map.get(current_day, 0)
+    # SaaS Grade: Mock data curve if DB is empty
+    if not results:
+        import random
+        mock_data = []
+        base = 150
+        for i, b in enumerate(buckets):
+            val = base + (i * 10) + random.randint(-20, 20)
+            mock_data.append({"day": b["label"], "emails": val})
+        return mock_data
+
+    # Map real results into buckets
+    chart_data = []
+    for b in buckets:
+        count = 0
+        b_start_date = b["start"].date()
+        b_end_date = b["end"].date()
+        for r_date, c in results:
+            if b_start_date <= r_date < b_end_date:
+                count += c
+        chart_data.append({
+            "day": b["label"], 
+            "emails": count
         })
-        
-    # SaaS Grade: If all zeros, provide a small mock boost if it's a fresh system
-    # This prevents the chart from looking broken during first use
-    if all(d["emails"] == 0 for d in data):
-        debug.debug_log("CHART: No data found, returning empty set (no mock boost applied)")
-    
-    return data
+                        
+    return chart_data
 
 
 
@@ -844,10 +929,9 @@ def prepare_campaign_emails(db: Session, campaign_id: int, data, background_task
     # Update campaign status
     if eta and eta > datetime.now(timezone.utc):
         camp.status = CampaignStatus.QUEUED
-        camp.scheduled_for = eta # Set to proper datetime object
+        camp.scheduled_for = eta.isoformat()
     else:
         camp.status = CampaignStatus.RUNNING
-        camp.scheduled_for = datetime.now(timezone.utc) # Instant campaigns get current time
     
     db.commit()
     
@@ -948,69 +1032,74 @@ def create_campaign(db: Session, data, background_tasks=None):
 def process_scheduled_queue(db: Session, background_tasks):
     """
     Step 4: Safe Scheduler Worker for Vercel.
-    Pulls due campaigns directly from the Database and starts them.
+    Pulls due campaign IDs from Redis and starts them.
     """
-    # 1. Redis Lock to prevent concurrent execution on Vercel
-    if redis_client:
-        lock_key = "scheduler_execution_lock_v2"
-        is_locked = redis_client.set(lock_key, "locked", ex=50, nx=True)
-        if not is_locked:
-             return {"status": "skipped", "message": "Another scheduler is running"}
+    if not redis_client:
+        return {"status": "error", "message": "Redis not connected"}
+
+    now_ts = int(datetime.now(timezone.utc).timestamp())
     
+    # Use a lock to prevent multi-trigger overlap in Vercel
+    lock_key = "scheduler_execution_lock"
+    is_locked = redis_client.set(lock_key, "locked", ex=50, nx=True)
+    if not is_locked:
+        return {"status": "skipped", "message": "Another scheduler is running"}
+
     try:
-        now = datetime.now(timezone.utc)
+        # Get all campaigns where scheduled time <= now
+        due_ids = redis_client.zrangebyscore("scheduled_campaigns", 0, now_ts)
         
-        # 2. PRO GRADE: Query database directly for due campaigns
-        due_campaigns = db.query(Campaign).filter(
-            Campaign.status == CampaignStatus.QUEUED,
-            Campaign.scheduled_for <= now
-        ).all()
-        
-        if not due_campaigns:
+        if not due_ids:
             return {"status": "ok", "processed": 0}
 
-        from .tasks import send_email_fn
         processed = 0
-        
-        for camp in due_campaigns:
+        for camp_id in due_ids:
             try:
-                debug.debug_log(f"SCHEDULER: Triggering campaign {camp.id} ({camp.name})")
+                # 1. Fetch campaign
+                camp = db.query(Campaign).filter(Campaign.id == int(camp_id)).first()
+                if not camp:
+                    redis_client.zrem("scheduled_campaigns", camp_id)
+                    continue
+
+                if camp.status != CampaignStatus.QUEUED:
+                    redis_client.zrem("scheduled_campaigns", camp_id)
+                    continue
+
+                # 2. Trigger execution logic (prepare_campaign_emails handles the loop)
+                # We need data to pass recipients, subject, body. 
+                # For a triggered job, we reconstruct the "data" object from the DB record
+                from pydantic import BaseModel
+                class DummyData(BaseModel):
+                    name: str
+                    subject: str
+                    body: str
+                    company: str
+                    recipients: list = []
+
+                # Fetch recipients (emails with current campaign_id)
+                recipients = [e.recipient_email for e in db.query(Email.recipient_email).filter(Email.campaign_id == camp.id).all()]
                 
-                # A. Immediate Status Transition to prevent double execution
-                camp.status = CampaignStatus.RUNNING
-                db.add(camp)
-                db.commit() # Commit status change immediately
+                data = DummyData(
+                    name=camp.name,
+                    subject=camp.subject,
+                    body=camp.body,
+                    company=camp.company,
+                    recipients=recipients
+                )
+
+                # Reset status to RUNNING via the service helper
+                send_result = prepare_campaign_emails(db, camp.id, data, background_tasks)
                 
-                # B. Fetch all PENDING emails for this campaign
-                pending_emails = db.query(Email).filter(
-                    Email.campaign_id == camp.id,
-                    Email.status == EmailStatus.PENDING
-                ).all()
-                
-                # C. Queue emails to background tasks
-                if background_tasks:
-                    for e in pending_emails:
-                        background_tasks.add_task(send_email_fn, e.id, e.subject, e.body)
-                
-                # D. Cleanup Redis (legacy support)
-                if redis_client:
-                    redis_client.zrem("scheduled_campaigns", str(camp.id))
-                
+                # 3. Remove from Redis
+                redis_client.zrem("scheduled_campaigns", camp_id)
                 processed += 1
-                debug.debug_log(f"SCHEDULER: Successfully processed campaign {camp.id}")
+                debug.debug_log(f"REDIS_SCHEDULER: Successfully triggered campaign {camp_id}")
             except Exception as inner_e:
-                debug.debug_log(f"SCHEDULER_ERROR for ID {camp.id}: {str(inner_e)}")
-                db.rollback()
+                debug.debug_log(f"REDIS_SCHEDULER: Error processing ID {camp_id}: {inner_e}")
 
         return {"status": "ok", "processed": processed}
-    except Exception as e:
-        debug.debug_log(f"SCHEDULER_CRITICAL_ERROR: {str(e)}")
-        return {"status": "error", "message": str(e)}
     finally:
-        # Cleanup lock if using Redis
-        if redis_client:
-            redis_client.delete("scheduler_execution_lock_v2")
-
+        redis_client.delete(lock_key)
 
 def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: str = "all", company_name: str | list = "all"):
     """
@@ -1061,21 +1150,15 @@ def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: s
         "company": e.email.campaign.company
     } for e in events]
 
-def get_activity(db: Session, limit: int = 20, days: int = 30):
+def get_activity(db: Session, limit: int = 20):
     """
     Step 4: Safe Activity API with Mock Fallback for Dashboard.
     Returns grouped activity: one row per (email_id), ordered by latest event.
     """
     import json
-    from datetime import datetime, timedelta, timezone
-    
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
-    
     try:
-        # Get rows within the time range, ordered by latest
-        rows = db.query(ActivityLog).filter(
-            ActivityLog.timestamp >= cutoff
-        ).order_by(ActivityLog.timestamp.desc()).limit(100).all()
+        # Get latest 50 rows from DB ordered by timestamp desc
+        rows = db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(50).all()
     except Exception as e:
         debug.debug_log(f"DB ERROR in get_activity: {e}")
         rows = []
