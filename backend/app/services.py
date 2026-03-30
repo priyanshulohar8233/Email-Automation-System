@@ -762,6 +762,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
     from datetime import datetime, timedelta, timezone
     from .models import Contact
     start_date, end_date = get_date_window(days)
+    debug.debug_log(f"FETCHING ACTIVITY: days={days}, start={start_date}, end={end_date}, company={company_name}")
     
     # Outer join with Contact and Campaign to get name, company, and campaign details
     query = db.query(
@@ -936,6 +937,7 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
     from .models import Campaign, Email
 
     start_date, end_date = get_date_window(days)
+    debug.debug_log(f"FETCHING ACTIVITY: days={days}, start={start_date}, end={end_date}, company={company_name}")
     executed_email_statuses = [
         EmailStatus.SENT,
         EmailStatus.DELIVERED,
@@ -954,9 +956,9 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
     query = query.filter(Email.status.in_(executed_email_statuses))
     query = query.filter(
         or_(
-            and_(Email.sent_at.isnot(None), Email.sent_at >= limit_date),
-            and_(Email.opened_at.isnot(None), Email.opened_at >= limit_date),
-            and_(Email.clicked_at.isnot(None), Email.clicked_at >= limit_date),
+            and_(Email.sent_at.isnot(None), Email.sent_at >= start_date, Email.sent_at < end_date),
+            and_(Email.opened_at.isnot(None), Email.opened_at >= start_date, Email.opened_at < end_date),
+            and_(Email.clicked_at.isnot(None), Email.clicked_at >= start_date, Email.clicked_at < end_date),
         )
     )
 
@@ -979,7 +981,7 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
         ActivityLog.company,
         func.count(distinct(ActivityLog.email_id)).label("total")
     ).filter(
-        ActivityLog.timestamp >= limit_date,
+        ActivityLog.timestamp >= start_date,
         ActivityLog.status.in_(["SENT", "DELIVERED", "OPENED", "CLICKED", "BOUNCED"])
     )
 
@@ -1188,35 +1190,6 @@ def process_scheduled_queue(db: Session, background_tasks):
     finally:
         redis_client.delete(lock_key)
 
-def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: str = "all", company_name: str | list = "all"):
-    """
-    Returns latest email events (sent, opened, clicked) for dashboard charts/activity feeds.
-    Strictly uses DB data - no mocks.
-    """
-    from .models import EmailEvent, Email, Campaign, EventType
-    from datetime import datetime, timedelta, timezone
-    now = datetime.now(timezone.utc)
-    limit_date = now - timedelta(days=days)
-    
-    query = db.query(EmailEvent).join(Email).join(Campaign).filter(EmailEvent.timestamp >= start_date, EmailEvent.timestamp < end_date)
-    
-    if campaign_name != "all":
-        query = query.filter(Campaign.name == campaign_name)
-    if company_name != "all":
-        companies = [company_name] if isinstance(company_name, str) else company_name
-        query = query.filter(Campaign.company.in_(companies))
-        
-    events = query.order_by(EmailEvent.timestamp.desc()).limit(limit).all()
-    
-    if not events:
-        return []
-
-    return [{
-        "type": e.event_type.value if hasattr(e.event_type, 'value') else str(e.event_type),
-        "message": f"Event {e.event_type.value} recorded for {e.email.recipient_email}",
-        "timestamp": e.timestamp.isoformat(),
-        "company": e.email.campaign.company
-    } for e in events]
 
 def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str | list = "all"):
     """
@@ -1226,9 +1199,10 @@ def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str
     import json
     from datetime import datetime, timedelta, timezone
     start_date, end_date = get_date_window(days)
+    debug.debug_log(f"FETCHING ACTIVITY: days={days}, start={start_date}, end={end_date}, company={company_name}")
     
     try:
-        query = db.query(ActivityLog).filter(ActivityLog.timestamp >= limit_date)
+        query = db.query(ActivityLog).filter(ActivityLog.timestamp >= start_date, ActivityLog.timestamp < end_date)
         
         if company_name != "all":
             companies = [company_name] if isinstance(company_name, str) else company_name
