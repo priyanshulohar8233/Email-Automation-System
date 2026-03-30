@@ -5,9 +5,9 @@ from sqlalchemy.orm import relationship
 from .database import Base, IST
 
 
-def get_now_utc():
-    from datetime import datetime, timezone
-    return datetime.now(timezone.utc)
+def get_now_ist():
+    from datetime import datetime
+    return datetime.now(IST).replace(tzinfo=None)
 
 class CampaignStatus(str, enum.Enum):
     DRAFT = "DRAFT"
@@ -32,9 +32,9 @@ class Campaign(Base):
     opens_count = Column(Integer, default=0)
     unread_count = Column(Integer, default=0)
     bounce_count = Column(Integer, default=0)
-    scheduled_for = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=get_now_utc)
-    completed_at = Column(DateTime(timezone=True), nullable=True)
+    scheduled_for = Column(DateTime(timezone=False), nullable=True)
+    created_at = Column(DateTime(timezone=False), default=get_now_ist)
+    completed_at = Column(DateTime(timezone=False), nullable=True)
     is_processing = Column(Boolean, default=False)
 
 class EmailStatus(str, enum.Enum):
@@ -69,9 +69,9 @@ class Email(Base):
     bounce_reason = Column(String, nullable=True)
     bounce_type = Column(Enum(BounceType), nullable=True)
     delivery_status = Column(String, nullable=True) # e.g., "delivered", "processed", "deferred"
-    sent_at = Column(DateTime(timezone=True), default=get_now_ist, index=True)
-    opened_at = Column(DateTime(timezone=True), nullable=True)
-    clicked_at = Column(DateTime(timezone=True), nullable=True)
+    sent_at = Column(DateTime(timezone=False), default=get_now_ist, index=True)
+    opened_at = Column(DateTime(timezone=False), nullable=True)
+    clicked_at = Column(DateTime(timezone=False), nullable=True)
 
     events = relationship("EmailEvent", back_populates="email", order_by="EmailEvent.timestamp.asc()")
 
@@ -106,7 +106,7 @@ class EmailEvent(Base):
     # For Click tracking
     url = Column(String, nullable=True) 
     
-    timestamp = Column(DateTime(timezone=True), default=get_now_ist, index=True)
+    timestamp = Column(DateTime(timezone=False), default=get_now_ist, index=True)
 
     email = relationship("Email", back_populates="events")
 
@@ -121,7 +121,7 @@ class Segment(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     criteria = Column(String, default="{}") # JSON criteria for filtering contacts
-    created_at = Column(DateTime(timezone=True), default=get_now_utc)
+    created_at = Column(DateTime(timezone=False), default=get_now_ist)
 
 class Suppression(Base):
     __tablename__ = "suppressions"
@@ -129,7 +129,7 @@ class Suppression(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     reason = Column(Enum(SuppressionReason), nullable=False)
     metadata_raw = Column(String, nullable=True) # JSON details (e.g., SMTP code)
-    created_at = Column(DateTime(timezone=True), default=get_now_utc)
+    created_at = Column(DateTime(timezone=False), default=get_now_ist)
 
 class Contact(Base):
     __tablename__ = "contacts"
@@ -147,8 +147,8 @@ class Contact(Base):
     total_clicks = Column(Integer, default=0)
     engagement_score = Column(Integer, default=0)
     
-    created_at = Column(DateTime(timezone=True), default=get_now_utc)
-    updated_at = Column(DateTime(timezone=True), default=get_now_ist, onupdate=get_now_ist)
+    created_at = Column(DateTime(timezone=False), default=get_now_ist)
+    updated_at = Column(DateTime(timezone=False), default=get_now_ist, onupdate=get_now_ist)
 
 class Settings(Base):
     __tablename__ = "settings"
@@ -169,8 +169,8 @@ class Template(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, default="Untitled Template")
     content = Column(String, default="[]") # JSON string of blocks
-    created_at = Column(DateTime(timezone=True), default=get_now_utc)
-    updated_at = Column(DateTime(timezone=True), default=get_now_ist, onupdate=get_now_ist)
+    created_at = Column(DateTime(timezone=False), default=get_now_ist)
+    updated_at = Column(DateTime(timezone=False), default=get_now_ist, onupdate=get_now_ist)
 
 class AutomationTrigger(str, enum.Enum):
     WELCOME = "WELCOME" # Subscriber joins list
@@ -185,8 +185,8 @@ class Automation(Base):
     status = Column(String, default="draft") # draft, active, paused
     trigger_type = Column(Enum(AutomationTrigger), default=AutomationTrigger.WELCOME)
     trigger_config = Column(String, default="{}") # JSON config for trigger
-    created_at = Column(DateTime(timezone=True), default=get_now_utc)
-    updated_at = Column(DateTime(timezone=True), default=get_now_ist, onupdate=get_now_ist)
+    created_at = Column(DateTime(timezone=False), default=get_now_ist)
+    updated_at = Column(DateTime(timezone=False), default=get_now_ist, onupdate=get_now_ist)
 
     steps = relationship("AutomationStep", back_populates="automation", cascade="all, delete-orphan", order_by="AutomationStep.position.asc()")
 
@@ -212,4 +212,4 @@ class ActivityLog(Base):
     status = Column(String)                                     # Current/latest status
     status_history = Column(String, default="[]")              # JSON: ["SENT","DELIVERED",...]
     country = Column(String, nullable=True)
-    timestamp = Column(DateTime(timezone=True), default=func.now())  # Latest event time
+    timestamp = Column(DateTime(timezone=False), default=func.now())  # Latest event time

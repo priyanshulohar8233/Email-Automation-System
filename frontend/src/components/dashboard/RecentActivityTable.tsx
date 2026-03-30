@@ -11,11 +11,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw, Activity, ChevronDown, Check } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 
-// SaaS Grade: Ensure IST display for UTC data
-dayjs.extend(utc);
+// SaaS Grade: Ensure IST formatting for Activity Table
 dayjs.extend(timezone);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -51,12 +49,21 @@ function extractCompany(company: string, email: string): string {
   return host.charAt(0).toUpperCase() + host.slice(1);
 }
 
-/** Smart time: today/older → "DD/MM/YY (hh:mm A)" in IST */
+/** Smart time: today → "10:00 AM", older → "24/03/26 (10:00 AM)" */
 function formatTime(ts: string): string {
   if (!ts) return "—";
-  const date = dayjs.utc(ts).tz("Asia/Kolkata");
+  const date = dayjs(ts);
   if (!date.isValid()) return "—";
-  return date.format("DD/MM/YY (hh:mm A)");
+  
+  const now = dayjs();
+  const timeStr = date.format("hh:mm A");
+  
+  if (date.isSame(now, 'day')) {
+    return timeStr;
+  }
+  
+  const dateStr = date.format("DD/MM/YY");
+  return `${dateStr} (${timeStr})`;
 }
 
 /** Priority order for statuses */

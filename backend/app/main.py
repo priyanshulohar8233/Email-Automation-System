@@ -107,11 +107,11 @@ def test_api():
 @app.get("/health")
 def health_check():
     print("API HIT: /health")
-    from .models import get_now_utc
+    from .models import get_now_ist
     return {
         "status": "ok", 
         "service": "email-automation-api",
-        "timestamp": str(get_now_utc()),
+        "timestamp": str(get_now_ist()),
         "version": "2.0.2",
         "db_connected": engine is not None
     }
