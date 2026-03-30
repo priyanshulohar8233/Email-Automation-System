@@ -12,12 +12,15 @@ import {
   Bar,
   Legend
 } from "recharts";
-import { ChevronRight, Check, Layers, FastForward, MousePointer2, AlertCircle, Eye, Globe, Activity, EyeOff } from "lucide-react";
+import { ChevronRight, Check, Layers, FastForward, MousePointer2, AlertCircle, Eye, Globe, Activity, EyeOff, Calendar } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { RealtimeFeed } from "@/components/dashboard/RealtimeFeed";
+import { DashboardProvider, useDashboard } from "@/context/DashboardContext";
 
-export default function Analytics() {
+function AnalyticsContent() {
+  const { timeRange, days, updateRange, selectedCompanies, setSelectedCompanies, companyFilter } = useDashboard();
+  
   const [analyticsData, setAnalyticsData] = useState<any>({
     deliveredEmails: 0,
     openRate: 0,
@@ -30,31 +33,44 @@ export default function Analytics() {
     locationsData: [],
   });
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Local state for campaign (stays for granular override if needed, but defaults to 'all')
   const [campaign, setCampaign] = useState("all");
   const [showCampaignMenu, setShowCampaignMenu] = useState(false);
   const campaignMenuRef = useRef<HTMLDivElement>(null);
-  const [availableCampaigns, setAvailableCampaigns] = useState<string[]>([]);
+  
+  // Date and Company Menu States (copied from Dashboard for sync UI)
+  const [showDateMenu, setShowDateMenu] = useState(false);
+  const dateMenuRef = useRef<HTMLDivElement>(null);
+  const [showCompanyMenu, setShowCompanyMenu] = useState(false);
+  const companyMenuRef = useRef<HTMLDivElement>(null);
 
+  const [availableCampaigns, setAvailableCampaigns] = useState<string[]>([]);
+  const [availableCompanies, setAvailableCompanies] = useState<string[]>([]);
+
+  // Fetch meta data
   useEffect(() => {
-    async function fetchCampaignNames() {
+    async function fetchMeta() {
       try {
-        const res = await fetch("/api/campaigns/names");
-        if (res.ok) {
-          const names = await res.json();
-          setAvailableCampaigns(names);
-        }
+        const [campRes, compRes] = await Promise.all([
+          fetch("/api/campaigns/names"),
+          fetch("/api/companies")
+        ]);
+        if (campRes.ok) setAvailableCampaigns(await campRes.json());
+        if (compRes.ok) setAvailableCompanies(await compRes.json());
       } catch (e) {
-        console.error("Failed to fetch campaign names", e);
+        console.error("Failed to fetch meta names", e);
       }
     }
-    fetchCampaignNames();
+    fetchMeta();
   }, []);
 
+  // Click outside handlers
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (campaignMenuRef.current && !campaignMenuRef.current.contains(event.target as Node)) {
-        setShowCampaignMenu(false);
-      }
+      if (campaignMenuRef.current && !campaignMenuRef.current.contains(event.target as Node)) setShowCampaignMenu(false);
+      if (dateMenuRef.current && !dateMenuRef.current.contains(event.target as Node)) setShowDateMenu(false);
+      if (companyMenuRef.current && !companyMenuRef.current.contains(event.target as Node)) setShowCompanyMenu(false);
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -63,8 +79,11 @@ export default function Analytics() {
   const fetchAnalytics = async (signal?: AbortSignal, silently = false) => {
     try {
       if (!silently) setIsLoading(true);
-      // Use 30 days as default for detailed analytics or custom as needed
-      let url = `/api/analytics?campaign=${encodeURIComponent(campaign)}&days=30`;
+      
+      // SYNCED API CALL: Uses timeRange, companyFilter, and campaign
+      let url = `/api/analytics?campaign=${encodeURIComponent(campaign)}&time_range=${timeRange}&days=${days}`;
+      if (companyFilter && companyFilter !== "all") url += `&company=${encodeURIComponent(companyFilter)}`;
+      
       const response = await fetch(url, { signal });
       if (response.ok) {
         const data = await response.json();
@@ -83,7 +102,6 @@ export default function Analytics() {
     const controller = new AbortController();
     fetchAnalytics(controller.signal);
 
-    // Dynamic Polling: Refresh every 15s to keep charts alive
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         fetchAnalytics(controller.signal, true);
@@ -94,7 +112,20 @@ export default function Analytics() {
       controller.abort();
       clearInterval(interval);
     };
-  }, [campaign]);
+  }, [campaign, timeRange, companyFilter]);
+
+  const formatCompanyName = (name: string) => {
+    if (name.length > 20) return name.substring(0, 18) + "...";
+    return name;
+  };
+
+  const toggleCompany = (name: string) => {
+    if (selectedCompanies.includes(name)) {
+      setSelectedCompanies(selectedCompanies.filter(c => c !== name));
+    } else {
+      setSelectedCompanies([...selectedCompanies, name]);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -103,14 +134,95 @@ export default function Analytics() {
         subtitle="Deep dive into your campaign performance."
       >
         <div className="flex items-center gap-3">
-          {/* Campaign Selector */}
+          {/* 1. Date Filter (Synced with Dashboard) */}
+          <div className="relative w-fit min-w-[120px]" ref={dateMenuRef}>
+            <div
+              style={{ borderRadius: "14px" }}
+              onClick={() => setShowDateMenu(!showDateMenu)}
+              className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
+            >
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-foreground transition-colors duration-300 capitalize">
+                {timeRange}
+              </span>
+              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showDateMenu ? 'rotate-90' : 'rotate-0'}`} />
+            </div>
+
+            {showDateMenu && (
+              <div
+                style={{ borderRadius: "14px" }}
+                className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
+              >
+                {(['week', 'month', 'quarter', 'year'] as const).map((r) => (
+                  <div
+                    key={r}
+                    onClick={() => {
+                      updateRange(r);
+                      setShowDateMenu(false);
+                    }}
+                    className={`px-4 py-2.5 text-sm cursor-pointer transition-colors flex items-center justify-between capitalize ${timeRange === r ? 'bg-indigo-50 dark:bg-indigo-950/30 text-indigo-700 dark:text-indigo-400 font-medium' : 'text-foreground hover:bg-muted'}`}
+                  >
+                    {r}
+                    {timeRange === r && <Activity className="h-3.5 w-3.5" />}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 2. Company Filter (Synced with Dashboard) */}
+          <div className="relative w-fit min-w-[150px]" ref={companyMenuRef}>
+            <div
+              style={{ borderRadius: "14px" }}
+              onClick={() => setShowCompanyMenu(!showCompanyMenu)}
+              className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showCompanyMenu ? 'border-emerald-500 ring-1 ring-emerald-500 shadow-sm' : 'border-border shadow-sm'}`}
+            >
+              <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="text-foreground transition-colors duration-300">
+                {selectedCompanies.length === 0 ? "All Companies" : selectedCompanies.length === 1 ? formatCompanyName(selectedCompanies[0]) : `${selectedCompanies.length} Selected`}
+              </span>
+              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0 ${showCompanyMenu ? 'rotate-90' : 'rotate-0'}`} />
+            </div>
+
+            {showCompanyMenu && (
+              <div
+                style={{ borderRadius: "14px" }}
+                className="absolute right-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-[200px]"
+              >
+                <div
+                  onClick={() => {
+                    setSelectedCompanies([]);
+                    setShowCompanyMenu(false);
+                  }}
+                  className={`px-4 py-2.5 text-xs cursor-pointer transition-colors flex items-center justify-between border-b border-border/50 hover:bg-muted ${selectedCompanies.length === 0 ? 'text-emerald-600 font-bold' : 'text-muted-foreground'}`}
+                >
+                  All Companies
+                  {selectedCompanies.length === 0 && <Check className="h-3 w-3" />}
+                </div>
+                <div className="max-h-60 overflow-y-auto">
+                  {availableCompanies.map((name) => (
+                    <div
+                      key={name}
+                      onClick={() => toggleCompany(name)}
+                      className={`px-4 py-2 text-[11px] cursor-pointer transition-colors flex items-center justify-between hover:bg-muted ${selectedCompanies.includes(name) ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-foreground'}`}
+                    >
+                      {name}
+                      {selectedCompanies.includes(name) && <Check className="h-3 w-3" />}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Campaign Selector (Granular Override) */}
           <div className="relative w-72" ref={campaignMenuRef}>
             <div
               style={{ borderRadius: "14px" }}
               onClick={() => setShowCampaignMenu(!showCampaignMenu)}
               className={`flex items-center gap-2 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-full ${showCampaignMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
             >
-              <Layers className="h-3.5 w-3.5 text-muted-foreground" />
+              <Activity className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-foreground flex-1 truncate transition-colors duration-300">
                 {campaign === "all" ? "All Campaigns" : campaign}
               </span>
@@ -144,7 +256,7 @@ export default function Analytics() {
         </div>
       </PageHeader>
 
-      {/* Big Stats */}
+      {/* Analytics Cards */}
       <div className="grid gap-4 md:grid-cols-5">
         <Card className="border-indigo-500/10 shadow-sm bg-card/50 backdrop-blur-sm">
           <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
@@ -155,7 +267,7 @@ export default function Analytics() {
             <div className="text-3xl font-bold text-foreground tabular-nums">{analyticsData.deliveredEmails?.toLocaleString() || 0}</div>
             <p className={`text-[10px] mt-1 flex items-center gap-1 ${analyticsData.deliveredEmailsGrowth >= 0 ? "text-emerald-500" : "text-red-500"}`}>
               <span className="font-bold">{analyticsData.deliveredEmailsGrowth > 0 ? "+" : ""}{analyticsData.deliveredEmailsGrowth}%</span>
-              <span className="text-muted-foreground/50 font-medium">vs previous period</span>
+              <span className="text-muted-foreground/50 font-medium capitalize">vs last {timeRange}</span>
             </p>
           </CardContent>
         </Card>
@@ -169,7 +281,7 @@ export default function Analytics() {
             <div className="text-3xl font-bold text-foreground tabular-nums">{analyticsData.openRate}%</div>
             <p className={`text-[10px] mt-1 flex items-center gap-1 ${analyticsData.openRateGrowth >= 0 ? "text-emerald-500" : "text-red-500"}`}>
               <span className="font-bold">{analyticsData.openRateGrowth > 0 ? "+" : ""}{analyticsData.openRateGrowth}%</span>
-              <span className="text-muted-foreground/50 font-medium">vs previous period</span>
+              <span className="text-muted-foreground/50 font-medium capitalize">vs last {timeRange}</span>
             </p>
           </CardContent>
         </Card>
@@ -183,7 +295,7 @@ export default function Analytics() {
             <div className="text-3xl font-bold text-foreground tabular-nums">{analyticsData.clickRate}%</div>
             <p className={`text-[10px] mt-1 flex items-center gap-1 ${analyticsData.clickRateGrowth >= 0 ? "text-emerald-500" : "text-red-500"}`}>
               <span className="font-bold">{analyticsData.clickRateGrowth > 0 ? "+" : ""}{analyticsData.clickRateGrowth}%</span>
-              <span className="text-muted-foreground/50 font-medium">vs previous period</span>
+              <span className="text-muted-foreground/50 font-medium capitalize">vs last {timeRange}</span>
             </p>
           </CardContent>
         </Card>
@@ -207,10 +319,10 @@ export default function Analytics() {
             <AlertCircle className="h-3.5 w-3.5 text-red-500 opacity-70" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold text-foreground tabular-nums">{analyticsData.spamRate}%</div>
+            <div className="text-3xl font-bold text-foreground tabular-nums">{analyticsData.spamRate || 0}%</div>
             <p className={`text-[10px] mt-1 flex items-center gap-1 ${analyticsData.spamRateGrowth <= 0 ? "text-emerald-500" : "text-red-500"}`}>
               <span className="font-bold">{analyticsData.spamRateGrowth > 0 ? "+" : ""}{analyticsData.spamRateGrowth}%</span>
-              <span className="text-muted-foreground/50 font-medium">vs previous period</span>
+              <span className="text-muted-foreground/50 font-medium capitalize">vs last {timeRange}</span>
             </p>
           </CardContent>
         </Card>
@@ -221,7 +333,6 @@ export default function Analytics() {
           <RealtimeFeed campaignName={campaign} />
         </div>
         <div className="lg:col-span-2 space-y-6">
-          {/* Charts */}
           <Card>
             <CardHeader>
               <CardTitle>Delivery Performance</CardTitle>
@@ -302,7 +413,6 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Top Links Section */}
       <Card className="border-indigo-500/10 shadow-xl shadow-indigo-500/5 overflow-hidden">
         <CardHeader className="border-b border-indigo-500/5 bg-indigo-500/5 pb-3">
           <div className="flex items-center justify-between">
@@ -376,5 +486,13 @@ export default function Analytics() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function Analytics() {
+  return (
+    <DashboardProvider>
+      <AnalyticsContent />
+    </DashboardProvider>
   );
 }

@@ -222,16 +222,34 @@ def test_smtp(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"SMTP Error: {error_detail}")
 
 @router.get("/analytics")
-def get_campaign_analytics(response: Response, campaign: str = "all", days: int = 30, db: Session = Depends(get_db)):
+def get_campaign_analytics(response: Response, campaign: str = "all", days: str = "30", time_range: str = "month", company: str | None = None, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    
     try:
-        return services.get_analytics(db, campaign_name=campaign, days=days)
+        parsed_days = int(days) if days and str(days).isdigit() else 30
+    except (ValueError, TypeError):
+        parsed_days = 30
+        
+    range_map = {
+        "week": 7,
+        "month": 30,
+        "quarter": 90,
+        "year": 365
+    }
+    effective_days = range_map.get(time_range.lower(), parsed_days)
+    
+    try:
+        company_list = company.split(",") if company and company != "all" else "all"
+        debug.debug_log(f"Analytics API: campaign={campaign}, range={time_range}, days={effective_days}, company={company_list}")
+        return services.get_analytics(db, campaign_name=campaign, days=effective_days, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"DB ERROR in analytics: {e}")
         return {
-            "emails_over_time": [],
-            "campaign_status": [],
-            "recent_activity": []
+            "deliveredEmails": 0,
+            "openRate": 0,
+            "clickRate": 0,
+            "performanceData": [],
+            "recentActivity": []
         }
 
 @router.get("/campaigns/names")
