@@ -60,22 +60,40 @@ export default function Analytics() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    async function fetchAnalytics() {
-      try {
-        let url = `/api/analytics?campaign=${encodeURIComponent(campaign)}&days=3650`;
-        const response = await fetch(url);
-        if (response.ok) {
-          const data = await response.json();
-          setAnalyticsData(data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch analytics:", error);
-      } finally {
-        setIsLoading(false);
+  const fetchAnalytics = async (signal?: AbortSignal, silently = false) => {
+    try {
+      if (!silently) setIsLoading(true);
+      // Use 30 days as default for detailed analytics or custom as needed
+      let url = `/api/analytics?campaign=${encodeURIComponent(campaign)}&days=30`;
+      const response = await fetch(url, { signal });
+      if (response.ok) {
+        const data = await response.json();
+        setAnalyticsData(data);
       }
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error("Failed to fetch analytics:", error);
+      }
+    } finally {
+      if (!silently) setIsLoading(false);
     }
-    fetchAnalytics();
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchAnalytics(controller.signal);
+
+    // Dynamic Polling: Refresh every 15s to keep charts alive
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchAnalytics(controller.signal, true);
+      }
+    }, 15000);
+
+    return () => {
+      controller.abort();
+      clearInterval(interval);
+    };
   }, [campaign]);
 
   return (

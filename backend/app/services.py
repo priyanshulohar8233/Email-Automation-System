@@ -460,6 +460,45 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
             "clicks": day_stats["clicks"]
         })
 
+    # 4. Device Distribution
+    device_query = db.query(
+        EmailEvent.device, 
+        func.count(EmailEvent.id).label("count")
+    ).filter(EmailEvent.timestamp >= (now - timedelta(days=days)))
+    
+    if campaign_name != "all":
+        device_query = device_query.join(Email).join(Campaign).filter(Campaign.name == campaign_name)
+    
+    device_results = device_query.group_by(EmailEvent.device).all()
+    device_data = [{"name": r[0] or "Unknown", "value": r[1]} for r in device_results]
+    if not device_data:
+        device_data = [{"name": "Desktop", "value": 0}, {"name": "Mobile", "value": 0}]
+
+    # 5. Top Locations
+    location_query = db.query(
+        EmailEvent.country, 
+        EmailEvent.city,
+        func.count(EmailEvent.id).label("opens")
+    ).filter(
+        EmailEvent.event_type == EventType.OPENED,
+        EmailEvent.timestamp >= (now - timedelta(days=days))
+    )
+    
+    if campaign_name != "all":
+        location_query = location_query.join(Email).join(Campaign).filter(Campaign.name == campaign_name)
+        
+    location_results = location_query.group_by(EmailEvent.country, EmailEvent.city).order_by(func.count(EmailEvent.id).desc()).limit(5).all()
+    
+    total_opens = metrics.get("opened", 1) or 1
+    locations_data = [
+        {
+            "country": r[0] or "Unknown", 
+            "city": r[1] or "Unknown", 
+            "opens": r[2],
+            "rate": round((r[2] / total_opens) * 100, 1)
+        } for r in location_results
+    ]
+
     return {
         "deliveredEmails": metrics["delivered"],
         "openRate": metrics["openRate"],
@@ -469,10 +508,10 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30):
         "unread": metrics["unreadCount"],
         "deliveredEmailsGrowth": calc_growth(metrics["delivered"], prev_metrics["delivered"]),
         "openRateGrowth": calc_growth(metrics["openRate"], prev_metrics["openRate"]),
-        "clickRateGrowth": 0.0,
+        "clickRateGrowth": calc_growth(metrics["clickRate"], prev_metrics["clickRate"]),
         "performanceData": performance,
-        "deviceData": [{"name": "Desktop", "value": 75}, {"name": "Mobile", "value": 25}],
-        "locationsData": [],
+        "deviceData": device_data,
+        "locationsData": locations_data,
         "linkData": get_link_performance(db, campaign_name),
         "recentActivity": recent_events(db, days=days, campaign_name=campaign_name, limit=10)
     }

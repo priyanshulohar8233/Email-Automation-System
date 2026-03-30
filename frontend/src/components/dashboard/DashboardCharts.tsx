@@ -105,52 +105,41 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
+  const fetchCharts = async (signal?: AbortSignal, silently = false) => {
+    try {
+      if (!silently) { setLoading(true); setError(null); }
+      const [emailStats, stats, companyStatus] = await Promise.all([
+        dashboardAPI.getEmailStats(days, company, signal),
+        dashboardAPI.getStats(days, "all", company, signal),
+        dashboardAPI.getCampaignStatus(days, company, signal)
+      ]);
 
-    // Fetch stats and charts in parallel
-    Promise.all([
-      dashboardAPI.getEmailStats(days, company),
-      dashboardAPI.getStats(days, "all", company),
-      dashboardAPI.getCampaignStatus(days, company)
-    ])
-      .then(([emailStats, stats, companyStatus]) => {
-        // Process email stats for line chart
-        if (Array.isArray(emailStats)) {
-          setLineData(emailStats);
-        } else if (emailStats && (emailStats as any).emails_over_time) {
-          setLineData((emailStats as any).emails_over_time);
-        } else {
-          setLineData([]);
-        }
+      if (Array.isArray(emailStats)) setLineData(emailStats);
+      else if (emailStats && (emailStats as any).emails_over_time) setLineData((emailStats as any).emails_over_time);
+      else setLineData([]);
 
-        // Use emails per company for the donut chart
-        if (Array.isArray(companyStatus) && companyStatus.length > 0) {
-          const formattedStats = companyStatus.map((stat: any) => ({
-            name: stat.company,
-            value: stat.total
-          }));
-          setPieData(formattedStats);
-        } else if (stats && stats.raw) {
-          // Fallback to old status data if no company data yet
-          setPieData([
-            { name: "Opened", value: stats.raw.opened || 0 },
-            { name: "Unread", value: stats.raw.unread || 0 },
-            { name: "Bounced", value: stats.raw.bounced || 0 },
-          ]);
-        } else {
-          setPieData([]);
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Error loading charts:", err);
-        setError("Chart data currently unavailable.");
-        setLoading(false);
-        setLineData([]);
+      if (Array.isArray(companyStatus) && companyStatus.length > 0) {
+        setPieData(companyStatus.map((stat: any) => ({ name: stat.company || "Other", value: stat.total || 0 })));
+      } else {
         setPieData([]);
-      });
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.error("Dashboard charts error:", err);
+        if (!silently) setError("Analysis data currently pending execution.");
+      }
+    } finally {
+      if (!silently) setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchCharts(controller.signal);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchCharts(controller.signal, true);
+    }, 15000);
+    return () => { controller.abort(); clearInterval(interval); };
   }, [days, company]);
 
   const onPieEnter = (_: any, index: number) => {
