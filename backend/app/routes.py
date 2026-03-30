@@ -28,24 +28,33 @@ def health_check():
 
 @router.post("/send-campaign")
 def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    return services.prepare_campaign_emails(db, req.campaign_id, req, background_tasks)
+    try:
+        return services.prepare_campaign_emails(db, req.campaign_id, req, background_tasks)
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in send-campaign: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/campaigns/check-due")
 @router.post("/campaigns/check-due")
 def trigger_due_campaigns(request: Request, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     """
     SaaS Grade: Redis + Vercel Cron trigger.
     Processes QUEUED campaigns that are now due using Redis ZSET.
     """
-    cron_secret = os.getenv("CRON_SECRET")
-    if cron_secret:
-        auth_header = request.headers.get("authorization")
-        if auth_header != f"Bearer {cron_secret}":
-            debug.debug_log(f"CRON_AUTH_FAILED: Expected {cron_secret}, got {auth_header}")
-            raise HTTPException(status_code=401, detail="Unauthorized")
+    try:
+        cron_secret = os.getenv("CRON_SECRET")
+        if cron_secret:
+            auth_header = request.headers.get("authorization")
+            if auth_header != f"Bearer {cron_secret}":
+                debug.debug_log(f"CRON_AUTH_FAILED: Expected {cron_secret}, got {auth_header}")
+                raise HTTPException(status_code=401, detail="Unauthorized")
 
-    result = services.process_scheduled_queue(db, background_tasks)
-    return result
+        result = services.process_scheduled_queue(db, background_tasks)
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        debug.debug_log(f"CRON_ERROR: {e}")
+        return {"status": "error", "message": str(e)}
 
 @router.get("/campaigns")
 def get_campaigns(search: str | None = None, status: str | None = None, db: Session = Depends(get_db)):
@@ -86,31 +95,45 @@ def create_campaign(req: CampaignCreate, background_tasks: BackgroundTasks, db: 
 
 @router.put("/campaigns/{id}")
 def update_campaign(id: int, req: CampaignCreate, db: Session = Depends(get_db)):
-    return services.update_campaign(db, id, req)
+    try:
+        return services.update_campaign(db, id, req)
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in update_campaign: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/campaigns/{id}")
 def delete_campaign(id: int, db: Session = Depends(get_db)):
-    return services.delete_campaign(db, id)
+    try:
+        return services.delete_campaign(db, id)
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in delete_campaign: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/campaigns/{id}/toggle")
 def toggle_campaign(id: int, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
-    from .models import Campaign, CampaignStatus
-    camp = db.query(Campaign).get(id)
-    if not camp:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    if camp.status == CampaignStatus.RUNNING:
-        camp.status = CampaignStatus.QUEUED
-    elif camp.status in [CampaignStatus.QUEUED, CampaignStatus.DRAFT, CampaignStatus.COMPLETED]:
-        # If it was completed, setting it to Running will allow trigger_campaign_emails 
-        # to find any new/resubmitted PENDING emails.
-        camp.status = CampaignStatus.RUNNING
-        # SaaS Grade: When resuming/starting, ensure any PENDING emails are triggered
-        services.trigger_campaign_emails(db, camp.id, background_tasks)
-    
-    db.commit()
-    db.refresh(camp)
-    return {"id": camp.id, "status": camp.status.value}
+    try:
+        from .models import Campaign, CampaignStatus
+        camp = db.query(Campaign).get(id)
+        if not camp:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        
+        if camp.status == CampaignStatus.RUNNING:
+            camp.status = CampaignStatus.QUEUED
+        elif camp.status in [CampaignStatus.QUEUED, CampaignStatus.DRAFT, CampaignStatus.COMPLETED]:
+            # If it was completed, setting it to Running will allow trigger_campaign_emails 
+            # to find any new/resubmitted PENDING emails.
+            camp.status = CampaignStatus.RUNNING
+            # SaaS Grade: When resuming/starting, ensure any PENDING emails are triggered
+            services.trigger_campaign_emails(db, camp.id, background_tasks)
+        
+        db.commit()
+        db.refresh(camp)
+        return {"id": camp.id, "status": camp.status.value}
+    except HTTPException:
+        raise
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in toggle_campaign: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/settings")
@@ -142,31 +165,35 @@ def get_settings(db: Session = Depends(get_db)):
 
 @router.put("/settings")
 def update_settings(req: SettingsUpdate, db: Session = Depends(get_db)):
-    from .models import Settings
-    s = db.query(Settings).first()
-    if not s:
-        s = Settings()
-        db.add(s)
-    if req.smtp_host:
-        s.smtp_host = req.smtp_host
-    if req.smtp_port is not None:
-        s.smtp_port = req.smtp_port
-    if req.smtp_username:
-        s.smtp_username = req.smtp_username
-    if req.smtp_password:
-        s.smtp_password = req.smtp_password
-    if req.sendgrid_api_key:
-        s.sendgrid_api_key = req.sendgrid_api_key
-    if req.email_provider:
-        s.email_provider = req.email_provider
-    if req.from_email:
-        s.from_email = req.from_email
-    if req.base_url:
-        s.base_url = req.base_url
-    if req.monthly_limit is not None:
-        s.monthly_limit = req.monthly_limit
-    db.commit()
-    return s
+    try:
+        from .models import Settings
+        s = db.query(Settings).first()
+        if not s:
+            s = Settings()
+            db.add(s)
+        if req.smtp_host:
+            s.smtp_host = req.smtp_host
+        if req.smtp_port is not None:
+            s.smtp_port = req.smtp_port
+        if req.smtp_username:
+            s.smtp_username = req.smtp_username
+        if req.smtp_password:
+            s.smtp_password = req.smtp_password
+        if req.sendgrid_api_key:
+            s.sendgrid_api_key = req.sendgrid_api_key
+        if req.email_provider:
+            s.email_provider = req.email_provider
+        if req.from_email:
+            s.from_email = req.from_email
+        if req.base_url:
+            s.base_url = req.base_url
+        if req.monthly_limit is not None:
+            s.monthly_limit = req.monthly_limit
+        db.commit()
+        return s
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in update_settings: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/settings/test-smtp")
 def test_smtp(db: Session = Depends(get_db)):
@@ -678,26 +705,32 @@ def export_contacts(db: Session = Depends(get_db)):
 
 @router.post("/templates/test-send")
 def test_send_template(req: TestEmailRequest, db: Session = Depends(get_db)):
-    from .models import Settings
-    s = db.query(Settings).first()
-    if not s:
-        raise HTTPException(status_code=400, detail="SMTP settings not configured")
-        
     try:
-        from .services import send_mail
-        send_mail(
-            to_addr=req.recipient,
-            subject=req.subject,
-            body_html=req.body,
-            smtp_host=s.smtp_host,
-            smtp_port=s.smtp_port,
-            smtp_user=s.smtp_user,
-            smtp_pass=s.smtp_pass,
-            attachments=req.attachments
-        )
-        return {"status": "success"}
+        from .models import Settings
+        s = db.query(Settings).first()
+        if not s:
+            raise HTTPException(status_code=400, detail="SMTP settings not configured")
+            
+        try:
+            from .services import send_mail
+            send_mail(
+                to_addr=req.recipient,
+                subject=req.subject,
+                body_html=req.body,
+                smtp_host=s.smtp_host,
+                smtp_port=s.smtp_port,
+                smtp_user=s.smtp_user,
+                smtp_pass=s.smtp_pass,
+                attachments=req.attachments
+            )
+            return {"status": "success"}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        debug.debug_log(f"ERROR in test_send_template: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error during template test")
 @router.get("/suppressions")
 def get_suppressions(db: Session = Depends(get_db)):
     try:
@@ -708,24 +741,36 @@ def get_suppressions(db: Session = Depends(get_db)):
 
 @router.delete("/suppressions/{id}")
 def delete_suppression(id: int, db: Session = Depends(get_db)):
-    if services.delete_suppression(db, id):
-        return {"status": "success"}
-    raise HTTPException(status_code=404, detail="Suppression not found")
+    try:
+        if services.delete_suppression(db, id):
+            return {"status": "success"}
+        raise HTTPException(status_code=404, detail="Suppression not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in delete_suppression: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/suppressions/manual")
 def add_manual_suppression(payload: dict, db: Session = Depends(get_db)):
-    email = payload.get("email")
-    reason = payload.get("reason", "MANUAL")
-    if not email:
-        raise HTTPException(status_code=400, detail="Email is required")
-    from .models import SuppressionReason
     try:
-        r_enum = SuppressionReason[reason.upper()]
-    except:
-        r_enum = SuppressionReason.MANUAL
-        
-    services.add_to_suppression(db, email, r_enum)
-    return {"status": "success"}
+        email = payload.get("email")
+        reason = payload.get("reason", "MANUAL")
+        if not email:
+            raise HTTPException(status_code=400, detail="Email is required")
+        from .models import SuppressionReason
+        try:
+            r_enum = SuppressionReason[reason.upper()]
+        except:
+            r_enum = SuppressionReason.MANUAL
+            
+        services.add_to_suppression(db, email, r_enum)
+        return {"status": "success"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in add_manual_suppression: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/automations", response_model=List[AutomationResponse])
 def get_automations(db: Session = Depends(get_db)):
@@ -752,9 +797,15 @@ def update_automation(id: int, req: AutomationCreate, db: Session = Depends(get_
 
 @router.delete("/automations/{id}")
 def delete_automation(id: int, db: Session = Depends(get_db)):
-    if services.delete_automation(db, id):
-        return {"status": "success"}
-    raise HTTPException(status_code=404, detail="Automation not found")
+    try:
+        if services.delete_automation(db, id):
+            return {"status": "success"}
+        raise HTTPException(status_code=404, detail="Automation not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in delete_automation: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/contacts/company")
 def update_contact_company(req: ContactCompanyUpdate, db: Session = Depends(get_db)):
@@ -863,26 +914,32 @@ def get_activity_detail(log_id: int, db: Session = Depends(get_db)):
     """
     Return detailed activity log entry by ID.
     """
-    import json
-    from .models import ActivityLog
-    log = db.query(ActivityLog).filter(ActivityLog.id == log_id).first()
-    if not log:
-        raise HTTPException(status_code=404, detail="Log entry not found")
-        
     try:
-        history = json.loads(log.status_history or "[]")
-    except:
-        history = []
-        
-    return {
-        "id": log.id,
-        "email_id": log.email_id,
-        "recipient_email": log.recipient_email,
-        "recipient_name": log.recipient_name or "",
-        "sender": log.sender or "",
-        "company": log.company or "",
-        "country": log.country or "Unknown",
-        "status": log.status or "SENT",
-        "status_history": history,
-        "timestamp": log.timestamp.isoformat() if log.timestamp else ""
-    }
+        import json
+        from .models import ActivityLog
+        log = db.query(ActivityLog).filter(ActivityLog.id == log_id).first()
+        if not log:
+            raise HTTPException(status_code=404, detail="Log entry not found")
+            
+        try:
+            history = json.loads(log.status_history or "[]")
+        except:
+            history = []
+            
+        return {
+            "id": log.id,
+            "email_id": log.email_id,
+            "recipient_email": log.recipient_email,
+            "recipient_name": log.recipient_name or "",
+            "sender": log.sender or "",
+            "company": log.company or "",
+            "country": log.country or "Unknown",
+            "status": log.status or "SENT",
+            "status_history": history,
+            "timestamp": log.timestamp.isoformat() if log.timestamp else ""
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in get_activity_detail: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
