@@ -254,10 +254,11 @@ def get_emails_per_company(days: int = 30, db: Session = Depends(get_db)):
     return services.get_emails_per_company(db, days)
 
 @router.get("/campaign-status")
-def campaign_status(days: int = 30, db: Session = Depends(get_db)):
-    """Step 5: Safe Campaign Status API"""
+def campaign_status(days: int = 30, company: Optional[str] = "all", db: Session = Depends(get_db)):
+    """Step 5: Safe Campaign Status API with filtering"""
     try:
-        return services.get_emails_per_company(db, days)
+        company_list = company.split(",") if company and company != "all" else "all"
+        return services.get_emails_per_company(db, days, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"DB ERROR in campaign-status: {e}")
         return []
@@ -472,15 +473,17 @@ def email_events_webhook(payload: dict, db: Session = Depends(get_db)):
     return services.process_webhook_event(db, payload)
 
 @router.get("/activity")
-def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, db: Session = Depends(get_db)):
+def get_activity_log(background_tasks: BackgroundTasks, days: int = 30, company: str = "all", limit: int = 20, db: Session = Depends(get_db)):
     """
-    Consolidated Activity API with Service-layer logic and Mock fallback.
+    Consolidated Activity API with Service-layer logic.
+    Supports filtering by days and company.
     """
     # SaaS Grade: Proactive Scheduling Pulse
     background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
     
     try:
-        return services.get_activity(db, limit=limit)
+        company_list = company.split(",") if company and company != "all" else "all"
+        return services.get_activity(db, limit=limit, days=days, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"ERROR in get_activity_log route: {str(e)}")
         return []

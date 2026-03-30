@@ -109,24 +109,23 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
     setLoading(true);
     setError(null);
 
-    // Fetch both stats and email stats in parallel
+    // Fetch stats and charts in parallel
     Promise.all([
       dashboardAPI.getEmailStats(days, company),
       dashboardAPI.getStats(days, "all", company),
-      dashboardAPI.getCampaignStatus(days)
+      dashboardAPI.getCampaignStatus(days, company)
     ])
       .then(([emailStats, stats, companyStatus]) => {
         // Process email stats for line chart
         if (Array.isArray(emailStats)) {
           setLineData(emailStats);
         } else if (emailStats && (emailStats as any).emails_over_time) {
-          // Step 3 fix: handle unified response if returned
           setLineData((emailStats as any).emails_over_time);
         } else {
           setLineData([]);
         }
 
-        // Use emails per company (new endpoint) for the donut chart
+        // Use emails per company for the donut chart
         if (Array.isArray(companyStatus) && companyStatus.length > 0) {
           const formattedStats = companyStatus.map((stat: any) => ({
             name: stat.company,
@@ -147,13 +146,12 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
       })
       .catch((err) => {
         console.error("Error loading charts:", err);
-        // Step 6: Fail Safe - don't show full error if we have default empty data
         setError("Chart data currently unavailable.");
         setLoading(false);
         setLineData([]);
         setPieData([]);
       });
-  }, [days, company]); // Step 7: Clean dependencies
+  }, [days, company]);
 
   const onPieEnter = (_: any, index: number) => {
     setActiveIndex(index);

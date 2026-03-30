@@ -351,12 +351,13 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
         end_date = now
     
     # 1. Base Query Filter
+    # SaaS Grade: Only count emails that have been actually 'sent' (sent_at is set)
     query_emails = db.query(
         func.count(Email.id).label("total_attempts"),
-        func.count(case((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED]), Email.id))).label("delivered"),
-        func.count(case((Email.status == EmailStatus.BOUNCED, Email.id))).label("bounces"),
-        func.count(case((Email.status == EmailStatus.SPAM, Email.id))).label("spam")
-    ).filter(Email.sent_at >= start_date, Email.sent_at < end_date)
+        func.count(case(((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])), Email.id), else_=None)).label("delivered"),
+        func.count(case(((Email.status == EmailStatus.BOUNCED), Email.id), else_=None)).label("bounces"),
+        func.count(case(((Email.status == EmailStatus.SPAM), Email.id), else_=None)).label("spam")
+    ).filter(Email.sent_at != None, Email.sent_at >= start_date, Email.sent_at < end_date)
     
     query_events = db.query(
         func.count(distinct(case(((EmailEvent.event_type == EventType.OPENED), EmailEvent.email_id), else_=None))).label("opens"),
@@ -375,11 +376,11 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
         # PRO GRADE: Filter by the campaign's company (ownership)
         query_emails = query_emails.join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
         
-        # Fix: If query_events already joined Email, join Campaign next
-        if campaign_name != "all":
-             query_events = query_events.join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
+        # Join logic for events
+        if campaign_name == "all":
+            query_events = query_events.join(Email).join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
         else:
-             query_events = query_events.join(Email).join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
+             query_events = query_events.join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
              
     email_res = query_emails.first()
     event_res = query_events.first()
@@ -507,16 +508,6 @@ def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", compa
         Campaign.created_at < prev_end
     ).scalar() or 0
 
-    if m["totalSent"] == 0 and m["opens"] == 0:
-        # SaaS Grade: Mock stats if DB is empty
-        return {
-            "totalEmails": 1248, "openRate": 42.5, "clickRate": 12.8, "bounceRate": 0.5, 
-            "unread": 85, "activeCampaigns": 3, "totalEmailsGrowth": 12.5, "openRateGrowth": 5.2,
-            "clickRateGrowth": 2.1, "bounceRateGrowth": -0.8, "activeCampaignsGrowth": 1.0,
-            "vsLabel": vs_label,
-            "raw": {"bounced": 6, "opened": 530, "delivered": 1240, "unread": 85}
-        }
-    
     return {
         "totalEmails": m["totalSent"],
         "openRate": m["openRate"],
@@ -848,50 +839,45 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
         ]
     return final_grouped[:limit]
 
-def get_emails_per_company(db: Session, days: int = 30):
-    from .models import Campaign, Email
-    from datetime import datetime, timedelta
-    from sqlalchemy import func
+def get_emails_per_company(db: Session, days: int = 30, company_name: str | list = "all"):
+    """
+    Get real email counts per company for the dashboard chart.
+    Follows strict business logic:
+    - Counts campaigns in RUNNING, COMPLETED, or COMPLETED_WITH_ERRORS.
+    - Only counts emails that have an actual 'sent_at' timestamp.
+    """
+    from .models import Campaign, Email, CampaignStatus
     limit_date = datetime.now(timezone.utc) - timedelta(days=days)
     
-    results = db.query(
+    query = db.query(
         Campaign.company,
-        func.count(Email.id).label("count")
-    ).join(Email, Campaign.id == Email.campaign_id)\
-     .filter(Email.sent_at >= limit_date)\
-     .group_by(Campaign.company).all()
+        func.count(Email.id).label("total")
+    ).join(Email, Campaign.id == Email.campaign_id)
     
-    counts = {
-        "MP Consultant LLC": 0,
-        "MP Lumina": 0,
-        "A Making Company": 0
-    }
-    
-    for row in results:
-        company = row[0]
-        if company in counts:
-            counts[company] += row[1]
-        else:
-            # Fallback legacy logic for fuzzy matching if company record has different casing/naming
-            comp_lower = (company or "").lower()
-            if "making" in comp_lower: counts["A Making Company"] += row[1]
-            elif "lumina" in comp_lower: counts["MP Lumina"] += row[1]
-            else: counts["MP Consultant LLC"] += row[1]
-            
-    total_found = sum(counts.values())
-    if total_found == 0:
-        # SaaS Grade Mock: Distribution among our primary personas
-        return [
-            {"company": "MP Consultant LLC", "total": 450},
-            {"company": "MP Lumina", "total": 320},
-            {"company": "A Making Company", "total": 180}
-        ]
-        
-    return [
-        {"company": "MP Consultant LLC", "total": counts["MP Consultant LLC"]},
-        {"company": "MP Lumina", "total": counts["MP Lumina"]},
-        {"company": "A Making Company", "total": counts["A Making Company"]}
+    # 2. Filter by executed campaign statuses
+    target_statuses = [
+        CampaignStatus.RUNNING, 
+        CampaignStatus.COMPLETED, 
+        CampaignStatus.COMPLETED_WITH_ERRORS
     ]
+    query = query.filter(Campaign.status.in_(target_statuses))
+    
+    # 3. Filter by 'sent_at' and time range
+    query = query.filter(Email.sent_at != None, Email.sent_at >= limit_date)
+    
+    if company_name != "all":
+        if isinstance(company_name, list):
+            query = query.filter(Campaign.company.in_(company_name))
+        else:
+            query = query.filter(Campaign.company == company_name)
+            
+    results = query.group_by(Campaign.company).all()
+    
+    # Format and ensure all standard companies are represented (even with 0)
+    data = [{"company": r[0], "total": r[1]} for r in results]
+    
+    return data
+    return data
 
 
 def prepare_campaign_emails(db: Session, campaign_id: int, data, background_tasks):
@@ -908,14 +894,18 @@ def prepare_campaign_emails(db: Session, campaign_id: int, data, background_task
         try:
             eta = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00"))
         except:
-            try:
-                eta = datetime.strptime(data.scheduled_at, "%Y-%m-%dT%H:%M:%S.%f")
-            except:
-                pass
+            pass
 
     records = []
     recipients = getattr(data, 'recipients', []) or []
+    
+    # Deduplication Logic: Check existing emails for this campaign
+    existing_emails = {e.recipient_email for e in db.query(Email.recipient_email).filter(Email.campaign_id == campaign_id).all()}
+    
     for addr in recipients:
+        if addr in existing_emails:
+            continue
+            
         e = Email(
             campaign_id=campaign_id, 
             recipient_email=addr, 
@@ -929,14 +919,18 @@ def prepare_campaign_emails(db: Session, campaign_id: int, data, background_task
     # Update campaign status
     if eta and eta > datetime.now(timezone.utc):
         camp.status = CampaignStatus.QUEUED
-        camp.scheduled_for = eta.isoformat()
+        camp.scheduled_for = eta
     else:
         camp.status = CampaignStatus.RUNNING
+        # If launching now, ensure we have emails to send (could be existing ones)
+        if not records:
+            existing_pending = db.query(Email).filter(Email.campaign_id == campaign_id, Email.status == EmailStatus.PENDING).all()
+            records = list(existing_pending)
     
     db.commit()
     
     # Trigger background tasks for immediate sends
-    if not (eta and eta > datetime.now(timezone.utc)):
+    if camp.status == CampaignStatus.RUNNING:
         for e in records:
             background_tasks.add_task(send_email_fn, e.id, data.subject, data.body)
             
@@ -1033,29 +1027,27 @@ def process_scheduled_queue(db: Session, background_tasks):
     """
     Step 4: Safe Scheduler Worker for Vercel.
     Pulls due campaign IDs from Redis and starts them.
+    Fix: Triggers existing emails instead of recreating them.
     """
     if not redis_client:
         return {"status": "error", "message": "Redis not connected"}
 
     now_ts = int(datetime.now(timezone.utc).timestamp())
     
-    # Use a lock to prevent multi-trigger overlap in Vercel
+    # Use a lock to prevent multi-trigger overlap
     lock_key = "scheduler_execution_lock"
     is_locked = redis_client.set(lock_key, "locked", ex=50, nx=True)
     if not is_locked:
         return {"status": "skipped", "message": "Another scheduler is running"}
 
     try:
-        # Get all campaigns where scheduled time <= now
         due_ids = redis_client.zrangebyscore("scheduled_campaigns", 0, now_ts)
-        
         if not due_ids:
             return {"status": "ok", "processed": 0}
 
         processed = 0
         for camp_id in due_ids:
             try:
-                # 1. Fetch campaign
                 camp = db.query(Campaign).filter(Campaign.id == int(camp_id)).first()
                 if not camp:
                     redis_client.zrem("scheduled_campaigns", camp_id)
@@ -1065,32 +1057,13 @@ def process_scheduled_queue(db: Session, background_tasks):
                     redis_client.zrem("scheduled_campaigns", camp_id)
                     continue
 
-                # 2. Trigger execution logic (prepare_campaign_emails handles the loop)
-                # We need data to pass recipients, subject, body. 
-                # For a triggered job, we reconstruct the "data" object from the DB record
-                from pydantic import BaseModel
-                class DummyData(BaseModel):
-                    name: str
-                    subject: str
-                    body: str
-                    company: str
-                    recipients: list = []
+                # Lock and update status
+                camp.status = CampaignStatus.RUNNING
+                db.commit()
 
-                # Fetch recipients (emails with current campaign_id)
-                recipients = [e.recipient_email for e in db.query(Email.recipient_email).filter(Email.campaign_id == camp.id).all()]
+                # Trigger execution of existing PENDING emails
+                trigger_campaign_emails(db, camp.id, background_tasks)
                 
-                data = DummyData(
-                    name=camp.name,
-                    subject=camp.subject,
-                    body=camp.body,
-                    company=camp.company,
-                    recipients=recipients
-                )
-
-                # Reset status to RUNNING via the service helper
-                send_result = prepare_campaign_emails(db, camp.id, data, background_tasks)
-                
-                # 3. Remove from Redis
                 redis_client.zrem("scheduled_campaigns", camp_id)
                 processed += 1
                 debug.debug_log(f"REDIS_SCHEDULER: Successfully triggered campaign {camp_id}")
@@ -1104,7 +1077,7 @@ def process_scheduled_queue(db: Session, background_tasks):
 def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: str = "all", company_name: str | list = "all"):
     """
     Returns latest email events (sent, opened, clicked) for dashboard charts/activity feeds.
-    Includes mock fallback for WoW.
+    Strictly uses DB data - no mocks.
     """
     from .models import EmailEvent, Email, Campaign, EventType
     from datetime import datetime, timedelta, timezone
@@ -1122,26 +1095,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: s
     events = query.order_by(EmailEvent.timestamp.desc()).limit(limit).all()
     
     if not events:
-        # Mock fallback
-        import random
-        mock_types = [EventType.SENT, EventType.OPENED, EventType.CLICKED]
-        mock_companies = ["MP Consultant LLC", "MP Lumina", "A Making Company"]
-        
-        mock_events = []
-        for i in range(limit):
-            t = (now - timedelta(minutes=random.randint(5, 500)))
-            event_type = random.choice(mock_types)
-            msg = "Campaign sent to new list"
-            if event_type == EventType.OPENED: msg = "Email opened by recipient"
-            elif event_type == EventType.CLICKED: msg = "Link clicked in newsletter"
-            
-            mock_events.append({
-                "type": event_type.value if hasattr(event_type, 'value') else str(event_type),
-                "message": msg,
-                "timestamp": t.isoformat(),
-                "company": random.choice(mock_companies)
-            })
-        return mock_events
+        return []
 
     return [{
         "type": e.event_type.value if hasattr(e.event_type, 'value') else str(e.event_type),
@@ -1150,35 +1104,29 @@ def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: s
         "company": e.email.campaign.company
     } for e in events]
 
-def get_activity(db: Session, limit: int = 20):
+def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str | list = "all"):
     """
-    Step 4: Safe Activity API with Mock Fallback for Dashboard.
     Returns grouped activity: one row per (email_id), ordered by latest event.
+    Supports filtering by days and company.
     """
     import json
+    from datetime import datetime, timedelta, timezone
+    limit_date = datetime.now(timezone.utc) - timedelta(days=days)
+    
     try:
-        # Get latest 50 rows from DB ordered by timestamp desc
-        rows = db.query(ActivityLog).order_by(ActivityLog.timestamp.desc()).limit(50).all()
+        query = db.query(ActivityLog).filter(ActivityLog.timestamp >= limit_date)
+        
+        if company_name != "all":
+            companies = [company_name] if isinstance(company_name, str) else company_name
+            query = query.filter(ActivityLog.company.in_(companies))
+            
+        rows = query.order_by(ActivityLog.timestamp.desc()).limit(limit * 2).all()
     except Exception as e:
         debug.debug_log(f"DB ERROR in get_activity: {e}")
         rows = []
     
     if not rows:
-        # SaaS Grade Mock Data: Professional fallback
-        from datetime import datetime, timedelta, timezone
-        now = datetime.now(timezone.utc)
-        return [
-            {
-                "id": 8881, "email_id": 101, "recipient_email": "active.user@enterprise.com", "recipient_name": "Active User",
-                "sender": "noreply@mailflow.com", "company": "Enterprise Inc", "status": "CLICKED", "status_history": ["SENT", "DELIVERED", "OPENED", "CLICKED"],
-                "country": "USA", "timestamp": (now - timedelta(minutes=5)).isoformat()
-            },
-            {
-                "id": 8882, "email_id": 102, "recipient_email": "new.sub@startup.io", "recipient_name": "New Subscriber",
-                "sender": "hello@mailflow.com", "company": "Startup IO", "status": "SENT", "status_history": ["SENT"],
-                "country": "UK", "timestamp": (now - timedelta(hours=1)).isoformat()
-            }
-        ]
+        return []
 
     seen = {}
     for row in rows:
@@ -1190,6 +1138,9 @@ def get_activity(db: Session, limit: int = 20):
                 seen[key] = row
     
     result = []
+    # Simplified priority for sorting timeline
+    priority = {"CLICKED": 4, "OPENED": 3, "DELIVERED": 2, "SENT": 1, "BOUNCED": 0}
+
     for row in list(seen.values())[:limit]:
         try:
             history_raw = json.loads(row.status_history or "[]")
@@ -1203,34 +1154,14 @@ def get_activity(db: Session, limit: int = 20):
                     event_time = row.timestamp.isoformat() if row.timestamp else None
                 
                 if status_name:
-                    history_objs.append({"status": status_name, "time": event_time})
+                    history_objs.append({"status": status_name.upper(), "time": event_time})
         except Exception:
-            history_objs = [{"status": row.status, "time": row.timestamp.isoformat() if row.timestamp else None}]
+            history_objs = [{"status": row.status.upper(), "time": row.timestamp.isoformat() if row.timestamp else None}]
         
-        # Priority for sorting timeline (Clicked > Opened > Delivered > Sent)
-        priority = {"CLICKED": 4, "OPENED": 3, "DELIVERED": 2, "SENT": 1, "BOUNCED": 0}
+        # Deduplicate and sort history
+        history_map = {h["status"]: h for h in history_objs}
+        history_sorted = sorted(history_map.values(), key=lambda x: priority.get(x["status"], 0), reverse=True)
         
-        # Unique by status, keeping the latest timestamp for each status
-        latest_per_status = {}
-        for obj in history_objs:
-            s_name = obj["status"].upper()
-            if s_name not in latest_per_status:
-                latest_per_status[s_name] = obj
-            else:
-                # Simple overwrite or time check if available
-                latest_per_status[s_name] = obj
-                
-        history_sorted = sorted(latest_per_status.values(), key=lambda x: priority.get(x["status"].upper(), 0), reverse=True)
-        
-        # Country Logic (Round 21)
-        p_domains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com"]
-        r_email = row.recipient_email or ""
-        domain = r_email.split("@")[-1].lower() if "@" in r_email else ""
-        
-        display_country = row.country or "Unknown"
-        if domain in p_domains:
-            display_country = row.country
-
         result.append({
             "id": row.id,
             "email_id": row.email_id,
@@ -1238,9 +1169,9 @@ def get_activity(db: Session, limit: int = 20):
             "recipient_name": row.recipient_name or "",
             "sender": row.sender or "",
             "company": row.company or "",
-            "status": row.status or "SENT",
+            "status": row.status.upper() if row.status else "SENT",
             "status_history": history_sorted,
-            "country": display_country,
+            "country": row.country or "Unknown",
             "timestamp": row.timestamp.isoformat() if row.timestamp else "",
         })
     return result
@@ -1313,6 +1244,9 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
             if c.status == CampaignStatus.COMPLETED:
                 display_status = "Complete" + (" with Errors" if failed > 0 else "")
 
+            # Smarter time display: if launched now, use created_at, else scheduled_for
+            display_time = c.scheduled_for or c.created_at
+            
             def format_rate(num, den):
                 if den <= 0: return f"0 (0.0%)"
                 rate = round((num / den) * 100, 1)
@@ -1323,13 +1257,13 @@ def get_campaigns(db: Session, search: str | None = None, status: str | None = N
                 "name": c.name,
                 "status": display_status,
                 "sent": sent,
-                "delivered": sent, # delivered is sent for this MVP
+                "delivered": sent,
                 "failed": failed,
                 "opens": format_rate(opens, sent),
                 "unread": format_rate(unread, sent),
                 "bounce": format_rate(failed, sent + failed),
                 "company": str(c.company or "MP Consultant LLC"),
-                "scheduled": c.scheduled_for.isoformat() if c.scheduled_for else None,
+                "scheduled": display_time.isoformat() if display_time else None,
             })
         return results
     except Exception as e:

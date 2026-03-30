@@ -150,7 +150,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
   const fetchEvents = async (signal?: AbortSignal, silently = false) => {
     if (!silently) { setLoading(true); setError(null); }
     try {
-      const data = await dashboardAPI.getActivity(signal);
+      const data = await dashboardAPI.getActivity(days, company, signal);
       setEvents(data as ActivityRow[]);
     } catch (err: any) {
       if (err.name !== "AbortError") {
@@ -170,7 +170,7 @@ export function RecentActivityTable({ days = 30, company = "all" }: { days?: num
       }
     }, 10000);
     return () => { controller.abort(); clearInterval(interval); };
-  }, []);
+  }, [days, company]);
 
   return (
     <Card className="border-border bg-card shadow-sm transition-colors duration-300 overflow-hidden">

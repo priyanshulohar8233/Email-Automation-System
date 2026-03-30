@@ -244,9 +244,9 @@ function DashboardContent() {
       {/* Charts Section */}
       <DashboardCharts days={days} company={company} />
 
-      {/* Recent Activity - Kept stationary at 30 days as per requirements */}
+      {/* Recent Activity - Now synced with dashboard filters */}
       <div className="grid gap-4">
-        <RecentActivityTable days={30} company={company} />
+        <RecentActivityTable days={days} company={company} />
       </div>
     </div>
   );
