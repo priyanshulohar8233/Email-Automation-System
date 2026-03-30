@@ -107,12 +107,11 @@ def test_api():
 @app.get("/health")
 def health_check():
     print("API HIT: /health")
-    from datetime import datetime
-    from .database import IST
+    from datetime import datetime, timezone
     return {
         "status": "ok", 
         "service": "email-automation-api",
-        "timestamp": str(datetime.now(IST)),
+        "timestamp": str(datetime.now(timezone.utc)),
         "version": "2.0.2",
         "db_connected": engine is not None
     }

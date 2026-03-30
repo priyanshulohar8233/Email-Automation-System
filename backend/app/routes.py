@@ -23,9 +23,8 @@ router = APIRouter(prefix="/api")
 
 @router.get("/health")
 def health_check():
-    from datetime import datetime
-    from .database import IST
-    return {"status": "ok", "timestamp": str(datetime.now(IST))}
+    from datetime import datetime, timezone
+    return {"status": "ok", "timestamp": str(datetime.now(timezone.utc))}
 
 @router.post("/send-campaign")
 def send_campaign(req: CampaignRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):

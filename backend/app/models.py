@@ -2,12 +2,8 @@ import enum
 import datetime
 from sqlalchemy import Column, Integer, String, DateTime, Enum, ForeignKey, func, Boolean
 from sqlalchemy.orm import relationship
-from .database import Base, IST
+from .database import Base
 
-
-def get_now_ist():
-    from datetime import datetime
-    return datetime.now(IST)
 
 class CampaignStatus(str, enum.Enum):
     DRAFT = "DRAFT"
@@ -33,7 +29,7 @@ class Campaign(Base):
     unread_count = Column(Integer, default=0)
     bounce_count = Column(Integer, default=0)
     scheduled_for = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=get_now_ist)
+    created_at = Column(DateTime(timezone=True), default=func.now())
     completed_at = Column(DateTime(timezone=True), nullable=True)
     is_processing = Column(Boolean, default=False)
 
@@ -69,7 +65,7 @@ class Email(Base):
     bounce_reason = Column(String, nullable=True)
     bounce_type = Column(Enum(BounceType), nullable=True)
     delivery_status = Column(String, nullable=True) # e.g., "delivered", "processed", "deferred"
-    sent_at = Column(DateTime(timezone=True), default=get_now_ist, index=True)
+    sent_at = Column(DateTime(timezone=True), default=func.now(), index=True)
     opened_at = Column(DateTime(timezone=True), nullable=True)
     clicked_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -106,7 +102,7 @@ class EmailEvent(Base):
     # For Click tracking
     url = Column(String, nullable=True) 
     
-    timestamp = Column(DateTime(timezone=True), default=get_now_ist, index=True)
+    timestamp = Column(DateTime(timezone=True), default=func.now(), index=True)
 
     email = relationship("Email", back_populates="events")
 
@@ -121,7 +117,7 @@ class Segment(Base):
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     criteria = Column(String, default="{}") # JSON criteria for filtering contacts
-    created_at = Column(DateTime(timezone=True), default=get_now_ist)
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
 class Suppression(Base):
     __tablename__ = "suppressions"
@@ -129,7 +125,7 @@ class Suppression(Base):
     email = Column(String, unique=True, index=True, nullable=False)
     reason = Column(Enum(SuppressionReason), nullable=False)
     metadata_raw = Column(String, nullable=True) # JSON details (e.g., SMTP code)
-    created_at = Column(DateTime(timezone=True), default=get_now_ist)
+    created_at = Column(DateTime(timezone=True), default=func.now())
 
 class Contact(Base):
     __tablename__ = "contacts"
@@ -147,8 +143,8 @@ class Contact(Base):
     total_clicks = Column(Integer, default=0)
     engagement_score = Column(Integer, default=0)
     
-    created_at = Column(DateTime(timezone=True), default=get_now_ist)
-    updated_at = Column(DateTime(timezone=True), default=get_now_ist, onupdate=get_now_ist)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
 class Settings(Base):
     __tablename__ = "settings"
@@ -169,8 +165,8 @@ class Template(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, default="Untitled Template")
     content = Column(String, default="[]") # JSON string of blocks
-    created_at = Column(DateTime(timezone=True), default=get_now_ist)
-    updated_at = Column(DateTime(timezone=True), default=get_now_ist, onupdate=get_now_ist)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
 class AutomationTrigger(str, enum.Enum):
     WELCOME = "WELCOME" # Subscriber joins list
@@ -185,8 +181,8 @@ class Automation(Base):
     status = Column(String, default="draft") # draft, active, paused
     trigger_type = Column(Enum(AutomationTrigger), default=AutomationTrigger.WELCOME)
     trigger_config = Column(String, default="{}") # JSON config for trigger
-    created_at = Column(DateTime(timezone=True), default=get_now_ist)
-    updated_at = Column(DateTime(timezone=True), default=get_now_ist, onupdate=get_now_ist)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
 
     steps = relationship("AutomationStep", back_populates="automation", cascade="all, delete-orphan", order_by="AutomationStep.position.asc()")
 

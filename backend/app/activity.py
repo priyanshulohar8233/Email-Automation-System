@@ -1,6 +1,5 @@
 import json
-from datetime import datetime
-from .database import IST
+from datetime import datetime, timezone
 
 from .debug import debug_log
 from .models import ActivityLog
@@ -32,7 +31,7 @@ def upsert_activity_log(
     """
     try:
         existing = db.query(ActivityLog).filter(ActivityLog.email_id == email_id).first()
-        now = datetime.now(IST)
+        now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
         name = _extract_name_from_email(recipient_email)
 

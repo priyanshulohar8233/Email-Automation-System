@@ -10,7 +10,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw, Activity, ChevronDown, Check } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
-import dayjs from "dayjs";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface ActivityRow {
@@ -48,13 +47,12 @@ function extractCompany(company: string, email: string): string {
 /** Smart time: today → "10:00 PM", older → "24/03/26 (10:00 PM)" */
 function formatTime(ts: string): string {
   if (!ts) return "—";
-  const date = dayjs(ts);
-  const now = dayjs();
-  
-  const timeStr = date.format("hh:mm A");
-  if (date.isSame(now, 'day')) return timeStr;
-  
-  return `${date.format("DD/MM/YY")} (${timeStr})`;
+  const date = new Date(ts);
+  const now = new Date();
+  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  if (date.toDateString() === now.toDateString()) return timeStr;
+  const dateStr = date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return `${dateStr} (${timeStr})`;
 }
 
 /** Priority order for statuses */

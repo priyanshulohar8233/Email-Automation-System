@@ -1,4 +1,4 @@
-import dayjs from "dayjs";
+import { format } from "date-fns";
 import { Check, Mail, MousePointer2, Eye, AlertCircle, UserX, Clock, FastForward } from "lucide-react";
 
 interface Event {
@@ -55,7 +55,7 @@ export function ActivityTimeline({ events }: ActivityTimelineProps) {
                                 {event.event_type.replace("_", " ")}
                             </span>
                             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
-                                {dayjs(event.timestamp).format("h:mm:ss A")}
+                                {format(new Date(event.timestamp), "h:mm:ss a")}
                             </span>
                         </div>
 
