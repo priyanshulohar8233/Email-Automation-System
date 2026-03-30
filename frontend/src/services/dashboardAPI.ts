@@ -81,10 +81,11 @@ export const dashboardAPI = {
             throw error;
         }
     },
-    getEmailStats: async (days?: number, company?: string, signal?: AbortSignal): Promise<any> => {
-        let url = days ? `${API_URL}/api/dashboard/email-stats?days=${days}` : `${API_URL}/api/dashboard/email-stats`;
+    getEmailStats: async (days?: number, company?: string, signal?: AbortSignal, range: string = "month"): Promise<any> => {
+        let url = `${API_URL}/api/dashboard/email-stats?range=${range}`;
+        if (days) url += `&days=${days}`;
         if (company && company !== "all") {
-            url += (url.includes('?') ? '&' : '?') + `company=${encodeURIComponent(company)}`;
+            url += `&company=${encodeURIComponent(company)}`;
         }
         const response = await fetchWithTimeout(url, { 
             signal,
@@ -97,10 +98,11 @@ export const dashboardAPI = {
         }
         return await response.json();
     },
-    getRecentEvents: async (days?: number, company?: string, signal?: AbortSignal): Promise<any[]> => {
-        let url = days ? `${API_URL}/api/dashboard/recent-events?days=${days}` : `${API_URL}/api/dashboard/recent-events`;
+    getRecentEvents: async (days?: number, company?: string, signal?: AbortSignal, range: string = "month"): Promise<any[]> => {
+        let url = `${API_URL}/api/dashboard/recent-events?range=${range}`;
+        if (days) url += `&days=${days}`;
         if (company && company !== "all") {
-            url += (url.includes('?') ? '&' : '?') + `company=${encodeURIComponent(company)}`;
+            url += `&company=${encodeURIComponent(company)}`;
         }
         const response = await fetchWithTimeout(url, { 
             signal,
@@ -131,14 +133,14 @@ export const dashboardAPI = {
             return []; // Fallback to empty array to show "No Data" gracefully
         }
     },
-    getActivity: async (signal?: AbortSignal): Promise<any[]> => {
-        const url = `${API_URL}/api/activity`;
+    getActivity: async (signal?: AbortSignal, days: number = 30, range: string = "month"): Promise<any[]> => {
+        const url = `${API_URL}/api/activity?range=${range}&days=${days}`;
         const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching activity");
         return await response.json();
     },
-    getCampaignStatus: async (days?: number, signal?: AbortSignal): Promise<any[]> => {
-        const url = days ? `${API_URL}/api/campaign-status?days=${days}` : `${API_URL}/api/campaign-status`;
+    getCampaignStatus: async (days?: number, signal?: AbortSignal, range: string = "month"): Promise<any[]> => {
+        const url = `${API_URL}/api/campaign-status?range=${range}${days ? `&days=${days}` : ''}`;
         const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
         if (!response.ok) throw new Error("Error fetching campaign status");
         return await response.json();

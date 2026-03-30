@@ -18,6 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
+import { useDashboard } from "@/context/DashboardContext";
 
 const STATUS_COLORS: Record<string, string> = {
   "Running": "#3B82F6",         // Blue
@@ -88,6 +89,7 @@ const renderActiveShape = (props: any) => {
 };
 
 export function DashboardCharts({ days = 30, company = "all" }: { days?: number, company?: string }) {
+  const { timeRange } = useDashboard();
   const [lineData, setLineData] = useState<{ day: string; emails: number }[]>([]);
   const [pieData, setPieData] = useState<{ name: string; value: number }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,9 +113,9 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
 
     // Fetch both stats and email stats in parallel
     Promise.all([
-      dashboardAPI.getEmailStats(days, company),
-      dashboardAPI.getStats(days, "all", company),
-      dashboardAPI.getCampaignStatus(days)
+      dashboardAPI.getEmailStats(days, company, undefined, timeRange),
+      dashboardAPI.getStats(days, "all", company, undefined, timeRange),
+      dashboardAPI.getCampaignStatus(days, undefined, timeRange)
     ])
       .then(([emailStats, stats, companyStatus]) => {
         // Process email stats for line chart
@@ -156,7 +158,7 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
         setLineData([]);
         setPieData([]);
       });
-  }, [days, company]); // Step 7: Clean dependencies
+  }, [days, company, timeRange]); // Step 7: Clean dependencies
 
   const onPieEnter = (_: any, index: number) => {
     setActiveIndex(index);

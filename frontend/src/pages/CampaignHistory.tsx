@@ -31,6 +31,7 @@ interface CampaignHistoryData {
   id: number;
   name: string;
   date: string;
+  scheduled_for?: string | null;
   sent: number;
   delivered: number;
   opened: number;
@@ -247,7 +248,7 @@ export default function CampaignHistory() {
                       {campaign.name}
                     </TableCell>
                     <TableCell className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                      {formatIST(campaign.date)}
+                      {formatIST(campaign.scheduled_for || campaign.date)}
                     </TableCell>
                     <TableCell className="text-xs font-black text-foreground">
                       {campaign.sent.toLocaleString()}

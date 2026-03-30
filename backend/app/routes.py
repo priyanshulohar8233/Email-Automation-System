@@ -222,10 +222,14 @@ def test_smtp(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"SMTP Error: {error_detail}")
 
 @router.get("/analytics")
-def get_campaign_analytics(response: Response, campaign: str = "all", days: int = 30, db: Session = Depends(get_db)):
+def get_campaign_analytics(response: Response, campaign: str = "all", days: int = 30, range: str = "month", db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
-        return services.get_analytics(db, campaign_name=campaign, days=days)
+        # Range mapping helper
+        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
+        effective_days = range_map.get(range.lower(), days)
+        
+        return services.get_analytics(db, campaign_name=campaign, days=effective_days)
     except Exception as e:
         debug.debug_log(f"DB ERROR in analytics: {e}")
         return {
@@ -254,12 +258,15 @@ def get_emails_per_company(days: int = 30, db: Session = Depends(get_db)):
     return services.get_emails_per_company(db, days)
 
 @router.get("/campaign-status")
-def campaign_status(days: int = 30, db: Session = Depends(get_db)):
+def campaign_status(days: int = 30, range: str = "month", db: Session = Depends(get_db)):
     """Step 5: Safe Campaign Status API - Fixed to return actual campaign statuses"""
     try:
         from datetime import datetime, timezone, timedelta
         from .models import Campaign, CampaignStatus
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        
+        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
+        effective_days = range_map.get(range.lower(), days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=effective_days)
         
         campaigns = db.query(Campaign).filter(Campaign.created_at >= cutoff).all()
         
@@ -322,20 +329,21 @@ def dashboard_stats(response: Response, background_tasks: BackgroundTasks, days:
         }
 
 @router.get("/dashboard/email-stats")
-def get_email_stats(response: Response, background_tasks: BackgroundTasks, days: str = "7", company: str | None = None, db: Session = Depends(get_db)):
+def get_email_stats(response: Response, background_tasks: BackgroundTasks, days: str = "7", range: str = "week", company: str | None = None, db: Session = Depends(get_db)):
     # SaaS Grade: Proactive Scheduling Pulse
     background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
 
     try:
-        parsed_days = int(days) if days and str(days).isdigit() else 7
+        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
+        effective_days = range_map.get(range.lower(), int(days) if str(days).isdigit() else 7)
     except (ValueError, TypeError):
-        parsed_days = 7
+        effective_days = 7
 
-    print(f"API HIT: /dashboard/email-stats (days={parsed_days}, company={company})")
+    print(f"API HIT: /dashboard/email-stats (range={range}, days={effective_days}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
-        return services.emails_over_time(db, parsed_days, company_name=company_list)
+        return services.emails_over_time(db, effective_days, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"DB ERROR in email-stats: {e}")
         return {
@@ -345,18 +353,19 @@ def get_email_stats(response: Response, background_tasks: BackgroundTasks, days:
         }
 
 @router.get("/dashboard/recent-events")
-def get_recent_events(response: Response, days: str = "30", campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
+def get_recent_events(response: Response, days: str = "30", range: str = "month", campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
     try:
-        parsed_days = int(days) if days and str(days).isdigit() else 30
+        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
+        effective_days = range_map.get(range.lower(), int(days) if str(days).isdigit() else 30)
     except (ValueError, TypeError):
-        parsed_days = 30
+        effective_days = 30
         
-    print(f"API HIT: /dashboard/recent-events (days={parsed_days}, campaign={campaign}, company={company})")
+    print(f"API HIT: /dashboard/recent-events (range={range}, days={effective_days}, campaign={campaign}, company={company})")
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
-        debug.debug_log(f"Fetching recent events: campaign={campaign}, days={parsed_days}, company={company_list}")
-        return services.recent_events(db, parsed_days, campaign_name=campaign, company_name=company_list)
+        debug.debug_log(f"Fetching recent events: campaign={campaign}, days={effective_days}, company={company_list}")
+        return services.recent_events(db, effective_days, campaign_name=campaign, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"ERROR in get_recent_events: {str(e)}")
         import traceback
@@ -494,7 +503,7 @@ def email_events_webhook(payload: dict, db: Session = Depends(get_db)):
     return services.process_webhook_event(db, payload)
 
 @router.get("/activity")
-def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, db: Session = Depends(get_db)):
+def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, days: int = 30, range: str = "month", db: Session = Depends(get_db)):
     """
     Consolidated Activity API with Service-layer logic and Mock fallback.
     """
@@ -502,7 +511,9 @@ def get_activity_log(background_tasks: BackgroundTasks, limit: int = 20, db: Ses
     background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
     
     try:
-        return services.get_activity(db, limit=limit)
+        range_map = {"week": 7, "month": 30, "quarter": 90, "year": 365}
+        effective_days = range_map.get(range.lower(), days)
+        return services.get_activity(db, limit=limit, days=effective_days)
     except Exception as e:
         debug.debug_log(f"ERROR in get_activity_log route: {str(e)}")
         return []
@@ -726,6 +737,7 @@ def get_campaigns_history(date: Optional[str] = None, db: Session = Depends(get_
             "id": c.id,
             "name": c.name,
             "date": c.created_at.isoformat() if c.created_at else "",
+            "scheduled_for": c.scheduled_for.isoformat() if c.scheduled_for else None,
             "sent": sent,
             "delivered": delivered,
             "opened": opened,
