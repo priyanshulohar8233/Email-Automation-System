@@ -10,17 +10,13 @@ import { dashboardAPI, DashboardStats } from "@/services/dashboardAPI";
 import { DashboardProvider, useDashboard } from "@/context/DashboardContext";
 
 function DashboardContent() {
-  const { timeRange, days, updateRange } = useDashboard();
+  const { timeRange, days, updateRange, selectedCompanies, setSelectedCompanies, companyFilter } = useDashboard();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDateMenu, setShowDateMenu] = useState(false);
   
-  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [showCompanyMenu, setShowCompanyMenu] = useState(false);
-  const company = useMemo(() => {
-    return selectedCompanies.length > 0 ? selectedCompanies.join(",") : "all";
-  }, [selectedCompanies]);
 
   const COMPANIES = [
     "A Making Company",
@@ -51,7 +47,7 @@ function DashboardContent() {
         setLoading(true);
         setError(null);
       }
-      const data = await dashboardAPI.getStats(days, "all", company, signal, timeRange);
+      const data = await dashboardAPI.getStats(days, "all", companyFilter, signal, timeRange);
       setStats(data);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') return;
@@ -83,7 +79,7 @@ function DashboardContent() {
       controller.abort();
       clearInterval(interval);
     };
-  }, [days, company, timeRange]);
+  }, [days, companyFilter, timeRange]);
 
   return (
     <div className="space-y-8">
@@ -242,11 +238,11 @@ function DashboardContent() {
       )}
 
       {/* Charts Section */}
-      <DashboardCharts days={days} company={company} />
+      <DashboardCharts days={days} company={companyFilter} />
 
       {/* Recent Activity - Now synced with dashboard filters */}
       <div className="grid gap-4">
-        <RecentActivityTable days={days} company={company} />
+        <RecentActivityTable days={days} company={companyFilter} />
       </div>
     </div>
   );

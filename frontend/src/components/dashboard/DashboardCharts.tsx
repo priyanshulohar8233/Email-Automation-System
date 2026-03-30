@@ -120,11 +120,11 @@ export function DashboardCharts({ days = 30, company = "all" }: { days?: number,
 
       if (Array.isArray(companyStatus) && companyStatus.length > 0) {
         // Map backend keys {company, total} to Recharts {name, value}
-        // Ensure we handle 'Unknown' and empty strings gracefully
+        // Strict Filter: Explicitly exclude 'Unknown' from visual chart and legend
         const mapped = companyStatus.map((stat: any) => ({
-          name: (stat.company || "Unknown").trim() || "Unknown",
+          name: (stat.company || "Unknown").trim(),
           value: Number(stat.total) || 0
-        })).filter(d => d.value > 0);
+        })).filter(d => d.value > 0 && d.name.toLowerCase() !== "unknown");
         
         console.log("DEBUG: Campaign status chart data sync:", mapped);
         setPieData(mapped);

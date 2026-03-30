@@ -336,6 +336,44 @@ def process_webhook_event(db: Session, payload: dict):
         return log_event(db, int(email_id), event_type, url=url)
     return False
 
+
+def get_date_window(days: int = 30):
+    """
+    Returns (start_date, end_date) consistent with the Dashboard charts.
+    - 7 days: Current Week (Monday 00:00:00 to Sunday 23:59:59)
+    - 30 days: Current Month (1st to last day)
+    - 90 days: Last 90 days from now
+    - 365 days: Current Year (Jan 1st to Dec 31st)
+    """
+    import calendar
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    
+    if days == 7:
+        # Week View: Mon -> Sun of current week
+        weekday = now.weekday() # 0 = Mon, 6 = Sun
+        start_date = (now - timedelta(days=weekday)).replace(hour=0, minute=0, second=0, microsecond=0)
+        end_date = start_date + timedelta(days=7)
+        return start_date, end_date
+        
+    if days == 30:
+        # Month View: Full current month
+        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        last_day = calendar.monthrange(now.year, now.month)[1]
+        end_date = (start_date + timedelta(days=last_day-1)).replace(hour=23, minute=59, second=59) + timedelta(seconds=1)
+        return start_date, end_date
+        
+    if days == 365:
+        # Year View: Full current year
+        start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        end_date = start_date.replace(year=start_date.year + 1)
+        return start_date, end_date
+        
+    # Quarter (90) or any other: Rolling window
+    end_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    start_date = end_date - timedelta(days=days)
+    return start_date, end_date
+
 def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all", start_date: datetime = None, end_date: datetime = None):
     """
     SaaS Grade Single Source of Truth for all metrics.
@@ -345,10 +383,10 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
     from sqlalchemy import func, distinct, case
     
     now = datetime.now(timezone.utc)
-    if not start_date:
-        start_date = now - timedelta(days=days)
-    if not end_date:
-        end_date = now
+    if not start_date or not end_date:
+        s, e = get_date_window(days)
+        if not start_date: start_date = s
+        if not end_date: end_date = e
     
     # 1. Base Query Filter
     # SaaS Grade: Only count emails that have been actually 'sent' (sent_at is set)
@@ -523,11 +561,19 @@ def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", compa
     now = datetime.now(timezone.utc)
     
     # 1. Current Period Metrics
-    m = get_unified_metrics(db, days=days, campaign_name=campaign_name, company_name=company_name)
+    s, e = get_date_window(days)
+    m = get_unified_metrics(db, days=days, campaign_name=campaign_name, company_name=company_name, start_date=s, end_date=e)
     
     # 2. Previous Period Metrics for Growth
-    prev_start = now - timedelta(days=days * 2)
-    prev_end = now - timedelta(days=days)
+    if days == 7:
+        prev_start = s - timedelta(days=7)
+        prev_end = s
+    elif days == 30:
+        prev_start = (s - timedelta(days=1)).replace(day=1)
+        prev_end = s
+    else:
+        prev_start = s - timedelta(days=days)
+        prev_end = s
     p = get_unified_metrics(db, campaign_name=campaign_name, company_name=company_name, start_date=prev_start, end_date=prev_end)
     
     # helper for growth
@@ -715,7 +761,7 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
 def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: str = "all", company_name: str | list = "all"):
     from datetime import datetime, timedelta, timezone
     from .models import Contact
-    limit_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date, end_date = get_date_window(days)
     
     # Outer join with Contact and Campaign to get name, company, and campaign details
     query = db.query(
@@ -734,7 +780,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
         companies = [company_name] if isinstance(company_name, str) else company_name
         query = query.filter(Contact.company.in_(companies))
         
-    events = query.filter(EmailEvent.timestamp >= limit_date).order_by(EmailEvent.timestamp.desc()).limit(limit * 5).all() # Fetch more for grouping
+    events = query.filter(EmailEvent.timestamp >= start_date, EmailEvent.timestamp < end_date).order_by(EmailEvent.timestamp.desc()).limit(limit * 5).all() # Fetch more for grouping
     
     PERSONAL_PROVIDERS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "aol.com", "protonmail.com"}
     TLD_COUNTRY_MAP = {"in": "India", "uk": "United Kingdom", "us": "USA", "au": "Australia", "de": "Germany", "fr": "France", "ca": "Canada"}
@@ -889,7 +935,7 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
     """
     from .models import Campaign, Email
 
-    limit_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date, end_date = get_date_window(days)
     executed_email_statuses = [
         EmailStatus.SENT,
         EmailStatus.DELIVERED,
@@ -921,7 +967,8 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
             query = query.filter(Campaign.company == company_name)
 
     results = query.group_by(Campaign.company).all()
-    data = [{"company": r[0] or "Unknown", "total": int(r[1] or 0)} for r in results if (r[1] or 0) > 0]
+    # Remove 'Unknown' or Null companies as per user requirement
+    data = [{"company": r[0], "total": int(r[1] or 0)} for r in results if r[0] and r[0].lower() != "unknown" and (r[1] or 0) > 0]
 
     if data:
         return data
@@ -943,7 +990,8 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
             activity_query = activity_query.filter(ActivityLog.company == company_name)
 
     activity_rows = activity_query.group_by(ActivityLog.company).all()
-    return [{"company": r[0] or "Unknown", "total": int(r[1] or 0)} for r in activity_rows if (r[1] or 0) > 0]
+    # Remove 'Unknown' or Null companies as per user requirement
+    return [{"company": r[0], "total": int(r[1] or 0)} for r in activity_rows if r[0] and r[0].lower() != "unknown" and (r[1] or 0) > 0]
 
 
 def prepare_campaign_emails(db: Session, campaign_id: int, data, background_tasks):
@@ -1150,7 +1198,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 10, campaign_name: s
     now = datetime.now(timezone.utc)
     limit_date = now - timedelta(days=days)
     
-    query = db.query(EmailEvent).join(Email).join(Campaign).filter(EmailEvent.timestamp >= limit_date)
+    query = db.query(EmailEvent).join(Email).join(Campaign).filter(EmailEvent.timestamp >= start_date, EmailEvent.timestamp < end_date)
     
     if campaign_name != "all":
         query = query.filter(Campaign.name == campaign_name)
@@ -1177,7 +1225,7 @@ def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str
     """
     import json
     from datetime import datetime, timedelta, timezone
-    limit_date = datetime.now(timezone.utc) - timedelta(days=days)
+    start_date, end_date = get_date_window(days)
     
     try:
         query = db.query(ActivityLog).filter(ActivityLog.timestamp >= limit_date)
