@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { X, Sparkles, MessageSquare, Plus, Check } from "lucide-react";
+import { toUTC } from "@/lib/timeUtils";
 
 interface CreateCampaignModalProps {
     onClose: () => void;
@@ -100,7 +101,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                         subject: subject.trim(),
                         body: body.trim(),
                         recipients: finalRecipients,
-                        scheduled_at: isScheduled && scheduledAt ? new Date(scheduledAt).toISOString() : null
+                        scheduled_at: isScheduled && scheduledAt ? toUTC(scheduledAt) : null
                     }),
                 });
                 if (!sendRes.ok) {

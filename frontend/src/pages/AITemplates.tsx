@@ -7,6 +7,7 @@ import { Sparkles, Check, Send, Copy, RefreshCw, Wand2, Type, Mail, Library, Che
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { dayjs, toUTC } from "@/lib/timeUtils";
 
 // Helper component for Image Preview
 function ImagePreviewBlock({ imageUrl, localImage, imagePreview, label, width = 100, height = 300, onRemove, onWidthChange, onHeightChange }: { imageUrl: string, localImage: File | null, imagePreview: string, label: string, width?: number, height?: number, onRemove?: () => void, onWidthChange?: (newWidth: number) => void, onHeightChange?: (newHeight: number) => void }) {
@@ -327,7 +328,7 @@ export default function AITemplates() {
                     subject: generatedSubject,
                     body: finalBody,
                     recipients: recipients.map(r => r.email),
-                    scheduled_at: scheduledTime || null,
+                    scheduled_at: scheduledTime ? toUTC(scheduledTime) : null,
                     attachments: currentAttachments
                 })
             });
@@ -1110,7 +1111,7 @@ export default function AITemplates() {
                                 className="h-8 gap-1.5 transition-all text-xs font-semibold bg-muted/50 border-border text-foreground hover:bg-muted disabled:opacity-30"
                                 disabled={!generatedBody || isSending}
                                 onClick={() => {
-                                    const time = prompt("Enter schedule time (YYYY-MM-DDTHH:MM):", new Date(Date.now() + 3600000).toISOString().slice(0, 16));
+                                    const time = prompt("Enter schedule time (YYYY-MM-DDTHH:MM):", dayjs().tz('Asia/Kolkata').add(1, 'hour').format('YYYY-MM-DDTHH:mm'));
                                     if (time) handleQuickSend(time);
                                 }}
                                 title={validCount === 0 ? "Upload a recipient list to enable scheduling" : ""}

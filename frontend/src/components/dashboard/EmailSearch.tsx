@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Search, X, Calendar, Globe, Building2, User, Clock, Check, ChevronRight } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { formatIST } from "@/lib/timeUtils";
 
 // --- Types ---
 interface StatusEvent {
@@ -44,7 +44,7 @@ function TimelineItem({ event, isLast }: { event: StatusEvent; isLast: boolean; 
       <div className="flex flex-col gap-1 pt-0.5">
         <span className="text-sm font-bold text-foreground capitalize">{event.status.toLowerCase()}</span>
         <span className="text-xs text-muted-foreground font-medium">
-          {format(date, "MMM dd, yyyy • hh:mm:ss a")}
+          {formatIST(event.time)}
         </span>
       </div>
     </div>

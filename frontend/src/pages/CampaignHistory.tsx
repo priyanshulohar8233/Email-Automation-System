@@ -25,7 +25,7 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { dashboardAPI } from "@/services/dashboardAPI";
 import { cn } from "@/lib/utils";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { dayjs, formatIST } from "@/lib/timeUtils";
 
 interface CampaignHistoryData {
   id: number;
@@ -70,8 +70,8 @@ export default function CampaignHistory() {
     setError(null);
     try {
       let dateParam = "";
-      if (dateFilter === "today") dateParam = format(new Date(), "yyyy-MM-dd");
-      else if (dateFilter === "yesterday") dateParam = format(subDays(new Date(), 1), "yyyy-MM-dd");
+      if (dateFilter === "today") dateParam = dayjs().tz("Asia/Kolkata").format("YYYY-MM-DD");
+      else if (dateFilter === "yesterday") dateParam = dayjs().tz("Asia/Kolkata").subtract(1, 'day').format("YYYY-MM-DD");
       // Note: Backend might need update for range, but instructions asked for ?date=YYYY-MM-DD
       // For 7d/30d we'll leave it empty and filter frontend for now if backend doesn't support ranges yet,
       // but requirement 6.2 said: GET /campaigns?date=YYYY-MM-DD
@@ -246,8 +246,8 @@ export default function CampaignHistory() {
                     <TableCell className="font-bold text-sm text-foreground py-4">
                       {campaign.name}
                     </TableCell>
-                    <TableCell className="text-xs font-medium text-muted-foreground">
-                      {format(new Date(campaign.date), "MMM dd, yyyy")}
+                    <TableCell className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                      {formatIST(campaign.date)}
                     </TableCell>
                     <TableCell className="text-xs font-black text-foreground">
                       {campaign.sent.toLocaleString()}

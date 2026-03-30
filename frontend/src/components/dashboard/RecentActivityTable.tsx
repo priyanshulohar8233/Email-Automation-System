@@ -10,6 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw, Activity, ChevronDown, Check } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
+import { formatIST, formatISTTimeOnly, dayjs } from "@/lib/timeUtils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface ActivityRow {
@@ -44,15 +45,20 @@ function extractCompany(company: string, email: string): string {
   return host.charAt(0).toUpperCase() + host.slice(1);
 }
 
-/** Smart time: today → "10:00 PM", older → "24/03/26 (10:00 PM)" */
+/** Smart time: IST Timezone strictly formatted */
 function formatTime(ts: string): string {
   if (!ts) return "—";
-  const date = new Date(ts);
-  const now = new Date();
-  const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  if (date.toDateString() === now.toDateString()) return timeStr;
-  const dateStr = date.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
-  return `${dateStr} (${timeStr})`;
+  
+  // Use dayjs for robust timezone evaluation
+  const date = dayjs.utc(ts).tz("Asia/Kolkata");
+  const now = dayjs().tz("Asia/Kolkata");
+  
+  // If it's today, show only time, otherwise DD/MM/YY (hh:mm A) as requested
+  if (date.isSame(now, 'day')) {
+    return date.format("hh:mm A");
+  }
+  
+  return date.format("DD/MM/YY (hh:mm A)");
 }
 
 /** Priority order for statuses */

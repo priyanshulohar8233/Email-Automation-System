@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Mail, Check, Eye, MousePointer2, AlertCircle, RefreshCw, Globe, Smartphone, Monitor } from "lucide-react";
-import { format } from "date-fns";
+import { formatIST, dayjs } from "@/lib/timeUtils";
 
 interface RealtimeEvent {
     id: number;
@@ -99,7 +99,7 @@ export function RealtimeFeed({ campaignName = "all" }: { campaignName?: string }
                                             </p>
                                         </div>
                                         <span className="text-[10px] font-bold text-muted-foreground whitespace-nowrap bg-muted px-2 py-0.5 rounded-full uppercase tracking-tighter">
-                                            {format(new Date(event.timestamp), "h:mm a")}
+                                            {formatIST(event.timestamp)}
                                         </span>
                                     </div>
                                     <p className="text-[11px] text-muted-foreground/80 truncate italic">
@@ -136,7 +136,7 @@ export function RealtimeFeed({ campaignName = "all" }: { campaignName?: string }
             </CardContent>
             <div className="p-3 bg-muted/20 border-t border-border/50 text-center">
                 <p className="text-[9px] font-bold text-muted-foreground/50 uppercase tracking-[0.2em]">
-                    Last Refreshed: {format(lastFetch, "HH:mm:ss")}
+                    Last Refreshed: {dayjs(lastFetch).format("HH:mm:ss")}
                 </p>
             </div>
         </Card>
