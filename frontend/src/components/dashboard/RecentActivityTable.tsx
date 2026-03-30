@@ -11,9 +11,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RefreshCcw, Activity, ChevronDown, Check } from "lucide-react";
 import { dashboardAPI } from "@/services/dashboardAPI";
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 
 // SaaS Grade: Ensure IST formatting for Activity Table
+dayjs.extend(utc);
 dayjs.extend(timezone);
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -52,10 +54,10 @@ function extractCompany(company: string, email: string): string {
 /** Smart time: today → "10:00 AM", older → "24/03/26 (10:00 AM)" */
 function formatTime(ts: string): string {
   if (!ts) return "—";
-  const date = dayjs(ts);
+  const date = dayjs(ts).tz("Asia/Kolkata");
   if (!date.isValid()) return "—";
   
-  const now = dayjs();
+  const now = dayjs().tz("Asia/Kolkata");
   const timeStr = date.format("hh:mm A");
   
   if (date.isSame(now, 'day')) {

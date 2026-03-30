@@ -1,6 +1,8 @@
 import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 
+dayjs.extend(utc);
 dayjs.extend(timezone);
 
 import React, { useState, useEffect } from "react";
@@ -105,7 +107,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                         subject: subject.trim(),
                         body: body.trim(),
                         recipients: finalRecipients,
-                        scheduled_at: isScheduled && scheduledAt ? dayjs(scheduledAt).format("YYYY-MM-DD HH:mm:ss") : null
+                        scheduled_at: isScheduled && scheduledAt ? dayjs.tz(scheduledAt, "Asia/Kolkata").toISOString() : null
                     }),
                 });
                 if (!sendRes.ok) {
