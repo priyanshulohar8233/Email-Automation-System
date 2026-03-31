@@ -259,9 +259,14 @@ def list_campaign_names(db: Session = Depends(get_db)):
     return [r[0] for r in results]
 
 @router.get("/analytics/realtime")
-def get_realtime_analytics(response: Response, campaign: str = "all", limit: int = 10, db: Session = Depends(get_db)):
+def get_realtime_analytics(response: Response, campaign: str = "all", company: str | None = None, limit: int = 10, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
-    return services.recent_events(db, days=30, limit=limit, campaign_name=campaign)
+    try:
+        company_list = company.split(",") if company and company != "all" else "all"
+        return services.recent_events(db, days=30, limit=limit, campaign_name=campaign, company_name=company_list)
+    except Exception as e:
+        debug.debug_log(f"DB ERROR in realtime analytics: {e}")
+        return []
 
 @router.get("/analytics/system-health")
 def get_system_health(db: Session = Depends(get_db)):
@@ -555,6 +560,19 @@ def generate_template(req: AIGenerateRequest):
     try:
         result = services.generate_ai_template(req.topic, req.tone)
         return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/generate-email")
+def generate_branded_email_route(req: GenerateBrandedEmailRequest):
+    try:
+        return services.generate_branded_email(
+            req.template, 
+            req.description, 
+            req.seniority, 
+            req.image, 
+            req.attachment
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

@@ -20,6 +20,7 @@ const sidebarItems = [
     label: "Templates",
     href: "/templates/custom",
     subItems: [
+      { label: "Standard Layout", href: "/templates/standard-layout" },
       { label: "Custom Builder", href: "/templates/custom" },
       { label: "AI Templates", href: "/templates/feature" }
     ]

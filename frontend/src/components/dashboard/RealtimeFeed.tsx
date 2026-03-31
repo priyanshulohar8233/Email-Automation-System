@@ -20,14 +20,17 @@ interface RealtimeEvent {
     };
 }
 
-export function RealtimeFeed({ campaignName = "all" }: { campaignName?: string }) {
+export function RealtimeFeed({ campaignName = "all", companyName = "all" }: { campaignName?: string, companyName?: string }) {
     const [events, setEvents] = useState<RealtimeEvent[]>([]);
     const [isPaused, setIsPaused] = useState(false);
     const [lastFetch, setLastFetch] = useState<Date>(new Date());
 
     const fetchEvents = async () => {
         try {
-            const url = campaignName === "all" ? "/api/analytics/realtime?limit=10" : `/api/analytics/realtime?limit=10&campaign=${encodeURIComponent(campaignName)}`;
+            let url = `/api/analytics/realtime?limit=10&campaign=${encodeURIComponent(campaignName)}`;
+            if (companyName && companyName !== "all") {
+                url += `&company=${encodeURIComponent(companyName)}`;
+            }
             const response = await fetch(url);
             if (response.ok) {
                 const data = await response.json();
@@ -45,7 +48,7 @@ export function RealtimeFeed({ campaignName = "all" }: { campaignName?: string }
             if (!isPaused) fetchEvents();
         }, 5000);
         return () => clearInterval(interval);
-    }, [isPaused, campaignName]);
+    }, [isPaused, campaignName, companyName]);
 
     const getIcon = (type: string) => {
         switch (type.toLowerCase()) {

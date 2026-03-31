@@ -246,11 +246,27 @@ def log_event(db: Session, email_id: int, event_type: EventType, ip: str = None,
         debug.debug_log(f"TRACKING_FLOW_ERROR: {str(e)}")
         raise e
 
-def get_link_performance(db: Session, campaign_name: str = "all"):
+def get_link_performance(db: Session, campaign_name: str = "all", company_name: str | list = "all", days: int = 30):
     # Group clicks by URL and count
-    q = db.query(EmailEvent.url, func.count(EmailEvent.id).label("clicks")).filter(EmailEvent.event_type == EventType.CLICKED)
+    
+    start_date, end_date = get_date_window(days)
+    q = db.query(EmailEvent.url, func.count(EmailEvent.id).label("clicks")).filter(
+        EmailEvent.event_type == EventType.CLICKED,
+        EmailEvent.timestamp >= start_date,
+        EmailEvent.timestamp < end_date
+    )
+
+    
     if campaign_name != "all":
         q = q.join(Email).join(Campaign).filter(Campaign.name == campaign_name)
+    if company_name and company_name != "all":
+        companies = [company_name] if isinstance(company_name, str) else company_name
+        # Fallback to join if not already joined via campaign_name logic
+        if campaign_name == "all":
+            q = q.join(Email).join(Campaign).filter(Campaign.company.in_(companies))
+        else:
+            q = q.filter(Campaign.company.in_(companies))
+
     
     results = q.group_by(EmailEvent.url).order_by(func.count(EmailEvent.id).desc()).limit(10).all()
     return [{"url": r.url or "Direct/Unknown", "clicks": r.clicks} for r in results]
@@ -449,10 +465,12 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
     }
 
 
+
 def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, company_name: str | list = "all"):
     """
     Deep dive analytics synced with Dashboard math.
     """
+    from .models import EmailEvent, EventType, Email, Campaign, ActivityLog
     from datetime import datetime, timedelta, timezone
     from sqlalchemy import func, case, distinct
     
@@ -467,7 +485,7 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, compa
         prev_start = s - timedelta(days=7)
         prev_end = s
     elif days == 30:
-        prev_start = (s - timedelta(days=1)).replace(day=1)
+        prev_start = (s - timedelta(days=30))
         prev_end = s
     else:
         prev_start = s - timedelta(days=days)
@@ -479,25 +497,8 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, compa
         return round(((cur - prev) / prev) * 100, 1)
 
     # 3. Time Series Data (Performance Chart)
-    # SaaS Grade: Synchronized with the selected window buckets
     performance = []
     
-    # Re-use bucket logic from emails_over_time but for open/click trend
-    chart_data = emails_over_time(db, days=days, company_name=company_name) # This gives us buckets
-    
-    # For Analytics, we want Opens/Clicks specifically per bucket
-    for bucket in chart_data:
-        b_start = bucket.get("start")
-        b_end = bucket.get("end")
-        
-        # If buckets don't have start/end, we'll need to re-derive or just use the label
-        # But emails_over_time returns {label, emails} which is just sent count.
-        # We need to re-run the bucket logic or slightly modify it.
-        # Let's re-run a simplified version for Opens/Clicks trend.
-        pass
-
-    # Simplified Performance Trend (Last 7 buckets or matching window)
-    # Let's just use the existing daily group_by logic but synced to start_date
     daily_stats = db.query(
         func.date_trunc('day', EmailEvent.timestamp).label('day'),
         func.count(distinct(case(((EmailEvent.event_type == EventType.OPENED), EmailEvent.email_id), else_=None))).label('opens'),
@@ -507,31 +508,30 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, compa
         EmailEvent.timestamp < e
     )
     
-    if campaign_name != "all":
-        daily_stats = daily_stats.join(Email).join(Campaign).filter(Campaign.name == campaign_name)
-    if company_name != "all":
-        companies = [company_name] if isinstance(company_name, str) else company_name
-        daily_stats = daily_stats.join(Email).join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
-        
+    if campaign_name != "all" or (company_name and company_name != "all"):
+        daily_stats = daily_stats.join(Email, EmailEvent.email_id == Email.id).join(Campaign, Email.campaign_id == Campaign.id)
+        if campaign_name != "all":
+            daily_stats = daily_stats.filter(Campaign.name == campaign_name)
+        if company_name and company_name != "all":
+            companies = [company_name] if isinstance(company_name, str) else company_name
+            daily_stats = daily_stats.filter(Campaign.company.in_(companies))
+            
     results = daily_stats.group_by(func.date_trunc('day', EmailEvent.timestamp)).all()
     stats_map = {r.day.date(): {"opens": r.opens, "clicks": r.clicks} for r in results}
     
     # Populate intervals (Days or Months depending on range)
-    # For now, let's stick to the labels generated by the dashboard for consistency
     if days == 7:
         for i in range(7):
             d = s + timedelta(days=i)
             day_stats = stats_map.get(d.date(), {"opens": 0, "clicks": 0})
             performance.append({"time": d.strftime('%a'), "opens": day_stats["opens"], "clicks": day_stats["clicks"]})
-    elif days == 30:
-         # Simplified daily for month
-         for i in range(30):
+    elif days <= 31:
+         for i in range(days):
             d = s + timedelta(days=i)
             if d > e: break
             day_stats = stats_map.get(d.date(), {"opens": 0, "clicks": 0})
             performance.append({"time": d.strftime('%d'), "opens": day_stats["opens"], "clicks": day_stats["clicks"]})
     else:
-        # Default fallback
         for r in results:
             performance.append({"time": r.day.strftime('%m/%d'), "opens": r.opens, "clicks": r.clicks})
 
@@ -541,11 +541,13 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, compa
         func.count(EmailEvent.id).label("count")
     ).filter(EmailEvent.timestamp >= s, EmailEvent.timestamp < e)
     
-    if campaign_name != "all":
-        device_query = device_query.join(Email).join(Campaign).filter(Campaign.name == campaign_name)
-    if company_name != "all":
-        companies = [company_name] if isinstance(company_name, str) else company_name
-        device_query = device_query.join(Email).join(Campaign).filter(Campaign.company.in_(companies))
+    if campaign_name != "all" or (company_name and company_name != "all"):
+        device_query = device_query.join(Email, EmailEvent.email_id == Email.id).join(Campaign, Email.campaign_id == Campaign.id)
+        if campaign_name != "all":
+            device_query = device_query.filter(Campaign.name == campaign_name)
+        if company_name and company_name != "all":
+            companies = [company_name] if isinstance(company_name, str) else company_name
+            device_query = device_query.filter(Campaign.company.in_(companies))
     
     device_results = device_query.group_by(EmailEvent.device).all()
     device_data = [{"name": r[0] or "Unknown", "value": r[1]} for r in device_results]
@@ -563,11 +565,13 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, compa
         EmailEvent.timestamp < e
     )
     
-    if campaign_name != "all":
-        location_query = location_query.join(Email).join(Campaign).filter(Campaign.name == campaign_name)
-    if company_name != "all":
-        companies = [company_name] if isinstance(company_name, str) else company_name
-        location_query = location_query.join(Email).join(Campaign).filter(Campaign.company.in_(companies))
+    if campaign_name != "all" or (company_name and company_name != "all"):
+        location_query = location_query.join(Email, EmailEvent.email_id == Email.id).join(Campaign, Email.campaign_id == Campaign.id)
+        if campaign_name != "all":
+            location_query = location_query.filter(Campaign.name == campaign_name)
+        if company_name and company_name != "all":
+            companies = [company_name] if isinstance(company_name, str) else company_name
+            location_query = location_query.filter(Campaign.company.in_(companies))
         
     location_results = location_query.group_by(EmailEvent.country, EmailEvent.city).order_by(func.count(EmailEvent.id).desc()).limit(5).all()
     
@@ -581,6 +585,7 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, compa
         } for r in location_results
     ]
 
+    # Return exactly what the frontend expects
     return {
         "deliveredEmails": m["delivered"],
         "openRate": m["openRate"],
@@ -594,9 +599,10 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, compa
         "performanceData": performance,
         "deviceData": device_data,
         "locationsData": locations_data,
-        "linkData": get_link_performance(db, campaign_name),
+        "linkData": get_link_performance(db, campaign_name, company_name=company_name, days=days),
         "recentActivity": recent_events(db, days=days, campaign_name=campaign_name, company_name=company_name, limit=10)
     }
+
 
 def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all", vs_label: str = "vs last month"):
     # Unified Source of Truth
@@ -2307,3 +2313,106 @@ def update_automation(db: Session, id: int, data):
     db.commit()
     db.refresh(auto)
     return auto
+
+
+def generate_branded_email(template_name: str, description: str, seniority: str, image: str = None, attachment: str = None) -> dict:
+    """
+    Generates an AI email and wraps it in a specific company branding/signature layout.
+    """
+    # 1. Generate the core content (subject and body) using existing AI logic
+    ai_result = generate_ai_template(description, seniority)
+    subject = ai_result.get("subject", "Generated Email")
+    body_text = ai_result.get("body", "")
+    
+    # 2. Define Branded Layouts
+    layouts = {
+        "MP Lumina": {
+            "primary": "#6366f1",
+            "secondary": "#4f46e5",
+            "logo": "https://img.icons8.com/fluency/96/sparkling.png",
+            "signature": """
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #f3f4f6; font-family: 'Inter', sans-serif;">
+                    <table cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                            <td style="vertical-align: top; padding-right: 15px;">
+                                <img src="https://img.icons8.com/fluency/48/sparkling.png" width="48" height="48" alt="Lumina" />
+                            </td>
+                            <td style="border-left: 2px solid #6366f1; padding-left: 15px;">
+                                <div style="font-weight: 800; font-size: 16px; color: #111827;">Sarah Jenkins</div>
+                                <div style="font-size: 13px; color: #6366f1; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Head of Creative Strategy</div>
+                                <div style="font-size: 12px; color: #6b7280;">MP Lumina | Illuminating Brands</div>
+                                <div style="margin-top: 8px;">
+                                    <a href="#" style="text-decoration: none; color: #6366f1; font-size: 12px; font-weight: 600;">www.mplumina.com</a>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            """
+        },
+        "MP Consultant": {
+            "primary": "#0f172a",
+            "secondary": "#334155",
+            "logo": "https://img.icons8.com/color/96/business-group.png",
+            "signature": """
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #0f172a; font-family: 'Georgia', serif;">
+                    <div style="font-weight: bold; font-size: 18px; color: #0f172a; margin-bottom: 2px;">Robert Sterling</div>
+                    <div style="font-size: 14px; color: #334155; font-style: italic; margin-bottom: 10px;">Senior Management Consultant</div>
+                    <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
+                        <b>MP Consultant Group</b><br/>
+                        1221 Avenue of the Americas, New York, NY<br/>
+                        Office: +1 (212) 555-0198
+                    </div>
+                </div>
+            """
+        },
+        "A Making Company": {
+            "primary": "#f97316",
+            "secondary": "#ea580c",
+            "logo": "https://img.icons8.com/color/96/factory.png",
+            "signature": """
+                <div style="margin-top: 40px; background-color: #fff7ed; padding: 20px; border-radius: 8px; border-left: 4px solid #f97316; font-family: 'Roboto', sans-serif;">
+                    <div style="display: inline-block; font-weight: 900; font-size: 20px; color: #c2410c; letter-spacing: -0.02em;">A MAKING CO.</div>
+                    <div style="margin-top: 10px; height: 1px; background-color: #ffedd5; width: 100%;"></div>
+                    <div style="margin-top: 12px; font-size: 14px; color: #111827;">
+                        <b>James 'Forge' Miller</b> | Operations Director<br/>
+                        <span style="color: #f97316;">Build. Create. Scale.</span>
+                    </div>
+                    <div style="margin-top: 8px; font-size: 11px; color: #9a3412; text-transform: uppercase; font-weight: bold;">
+                        ISO 9001 CERTIFIED MANUFACTURING
+                    </div>
+                </div>
+            """
+        }
+    }
+    
+    config = layouts.get(template_name, layouts["MP Lumina"])
+    
+    # 3. Assemble HTML
+    formatted_body = body_text.replace('\n', '<br/>')
+    
+    image_html = ""
+    if image:
+        image_html = f'<div style="margin: 20px 0;"><img src="{image}" style="width: 100%; max-width: 600px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);" /></div>'
+
+    html_content = f"""
+    <div style="max-width: 600px; margin: 0 auto; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #374151; line-height: 1.6; background-color: #ffffff; padding: 40px; border-radius: 16px; border: 1px solid #e5e7eb;">
+        <div style="padding-bottom: 20px; border-bottom: 1px solid #f3f4f6; margin-bottom: 30px;">
+            <img src="{config['logo']}" width="48" height="48" />
+        </div>
+        
+        <div style="font-size: 16px; min-height: 200px;">
+            {formatted_body}
+        </div>
+        
+        {image_html}
+        
+        {config['signature']}
+        
+        <div style="margin-top: 40px; font-size: 11px; color: #9ca3af; text-align: center; border-top: 1px solid #f3f4f6; padding-top: 20px;">
+            Sent via MailFlow AI Engine. To unsubscribe, <a href="#" style="color: {config['primary']}; text-decoration: none;">click here</a>.
+        </div>
+    </div>
+    """
+    
+    return {"html": html_content, "subject": subject, "body_text": body_text}

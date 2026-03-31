@@ -48,6 +48,13 @@ class CampaignCreate(BaseModel):
 class AIGenerateRequest(BaseModel):
     topic: str
     tone: str
+
+class GenerateBrandedEmailRequest(BaseModel):
+    template: str
+    description: str
+    seniority: str
+    image: Optional[str] = None
+    attachment: Optional[str] = None
 class DashboardStats(BaseModel):
     totalEmails: int
     openRate: float

@@ -13,6 +13,7 @@ import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
 import Auth from "./pages/Auth";
 import AITemplates from "./pages/AITemplates";
+import StandardLayout from "./pages/StandardLayout";
 import CampaignHistory from "./pages/CampaignHistory";
 
 export default function App() {
@@ -24,7 +25,8 @@ export default function App() {
           <Route index element={<Dashboard />} />
           <Route path="campaigns" element={<Campaigns />} />
           <Route path="templates">
-            <Route index element={<Navigate to="custom" replace />} />
+            <Route index element={<Navigate to="standard-layout" replace />} />
+            <Route path="standard-layout" element={<StandardLayout />} />
             <Route path="custom" element={<Templates />} />
             <Route path="feature" element={<AITemplates />} />
           </Route>
