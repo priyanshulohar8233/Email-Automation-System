@@ -390,6 +390,16 @@ def get_date_window(days: int = 30):
     start_date = end_date - timedelta(days=days)
     return start_date, end_date
 
+
+def _dialect_name(db: Session) -> str:
+    try:
+        bind = db.get_bind()
+        if bind and bind.dialect:
+            return bind.dialect.name
+    except Exception:
+        pass
+    return ""
+
 def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all", start_date: datetime = None, end_date: datetime = None):
     """
     SaaS Grade Single Source of Truth for all metrics.
@@ -468,122 +478,158 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
 
 def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, company_name: str | list = "all"):
     """
-    Deep dive analytics synced with Dashboard math.
+    Deep dive analytics synced with Dashboard math and compatible with both
+    PostgreSQL and SQLite fallback mode.
     """
-    from .models import EmailEvent, EventType, Email, Campaign, ActivityLog
-    from datetime import datetime, timedelta, timezone
-    from sqlalchemy import func, case, distinct
-    
-    now = datetime.now(timezone.utc)
+    from .models import EmailEvent, EventType, Email, Campaign
+
     s, e = get_date_window(days)
-    
+
     # 1. Current Metrics (KPIs)
-    m = get_unified_metrics(db, days=days, campaign_name=campaign_name, company_name=company_name, start_date=s, end_date=e)
-    
+    m = get_unified_metrics(
+        db,
+        days=days,
+        campaign_name=campaign_name,
+        company_name=company_name,
+        start_date=s,
+        end_date=e,
+    )
+
     # 2. Growth Logic (Identical to compute_stats)
     if days == 7:
         prev_start = s - timedelta(days=7)
         prev_end = s
     elif days == 30:
-        prev_start = (s - timedelta(days=30))
+        prev_start = s - timedelta(days=30)
         prev_end = s
     else:
         prev_start = s - timedelta(days=days)
         prev_end = s
-    p = get_unified_metrics(db, campaign_name=campaign_name, company_name=company_name, start_date=prev_start, end_date=prev_end)
-    
+
+    p = get_unified_metrics(
+        db,
+        campaign_name=campaign_name,
+        company_name=company_name,
+        start_date=prev_start,
+        end_date=prev_end,
+    )
+
     def calc_growth(cur, prev):
-        if prev == 0: return 100.0 if cur > 0 else 0.0
+        if prev == 0:
+            return 100.0 if cur > 0 else 0.0
         return round(((cur - prev) / prev) * 100, 1)
 
-    # 3. Time Series Data (Performance Chart)
-    performance = []
-    
-    daily_stats = db.query(
-        func.date_trunc('day', EmailEvent.timestamp).label('day'),
-        func.count(distinct(case(((EmailEvent.event_type == EventType.OPENED), EmailEvent.email_id), else_=None))).label('opens'),
-        func.count(distinct(case(((EmailEvent.event_type == EventType.CLICKED), EmailEvent.email_id), else_=None))).label('clicks')
+    # 3. Pull raw event rows once and aggregate in Python to keep the query
+    # compatible with both PostgreSQL and SQLite.
+    event_query = db.query(
+        EmailEvent.timestamp,
+        EmailEvent.event_type,
+        EmailEvent.email_id,
+        EmailEvent.device,
+        EmailEvent.country,
+        EmailEvent.city,
     ).filter(
         EmailEvent.timestamp >= s,
-        EmailEvent.timestamp < e
+        EmailEvent.timestamp < e,
     )
-    
+
     if campaign_name != "all" or (company_name and company_name != "all"):
-        daily_stats = daily_stats.join(Email, EmailEvent.email_id == Email.id).join(Campaign, Email.campaign_id == Campaign.id)
+        event_query = event_query.join(Email, EmailEvent.email_id == Email.id).join(
+            Campaign, Email.campaign_id == Campaign.id
+        )
         if campaign_name != "all":
-            daily_stats = daily_stats.filter(Campaign.name == campaign_name)
+            event_query = event_query.filter(Campaign.name == campaign_name)
         if company_name and company_name != "all":
             companies = [company_name] if isinstance(company_name, str) else company_name
-            daily_stats = daily_stats.filter(Campaign.company.in_(companies))
-            
-    results = daily_stats.group_by(func.date_trunc('day', EmailEvent.timestamp)).all()
-    stats_map = {r.day.date(): {"opens": r.opens, "clicks": r.clicks} for r in results}
-    
-    # Populate intervals (Days or Months depending on range)
+            event_query = event_query.filter(Campaign.company.in_(companies))
+
+    event_rows = event_query.all()
+
+    def performance_label(ts):
+        if days == 7:
+            return ts.strftime("%a")
+        if days <= 31:
+            return ts.strftime("%d")
+        return ts.strftime("%m/%d")
+
+    bucket_map: dict[str, dict[str, set[int]]] = {}
+    device_counts: dict[str, int] = {}
+    location_counts: dict[tuple[str, str], int] = {}
+
+    for row in event_rows:
+        ts = row.timestamp
+        if ts is None:
+            continue
+
+        label = performance_label(ts)
+        bucket = bucket_map.setdefault(label, {"opens": set(), "clicks": set()})
+        if row.event_type == EventType.OPENED:
+            bucket["opens"].add(row.email_id)
+        elif row.event_type == EventType.CLICKED:
+            bucket["clicks"].add(row.email_id)
+
+        device_name = row.device or "Desktop"
+        device_counts[device_name] = device_counts.get(device_name, 0) + 1
+
+        if row.event_type == EventType.OPENED:
+            country = row.country or "Unknown"
+            city = row.city or "Unknown"
+            key = (country, city)
+            location_counts[key] = location_counts.get(key, 0) + 1
+
+    performance = []
     if days == 7:
         for i in range(7):
             d = s + timedelta(days=i)
-            day_stats = stats_map.get(d.date(), {"opens": 0, "clicks": 0})
-            performance.append({"time": d.strftime('%a'), "opens": day_stats["opens"], "clicks": day_stats["clicks"]})
+            label = d.strftime("%a")
+            bucket = bucket_map.get(label, {"opens": set(), "clicks": set()})
+            performance.append(
+                {"time": label, "opens": len(bucket["opens"]), "clicks": len(bucket["clicks"])}
+            )
     elif days <= 31:
-         for i in range(days):
+        for i in range(days):
             d = s + timedelta(days=i)
-            if d > e: break
-            day_stats = stats_map.get(d.date(), {"opens": 0, "clicks": 0})
-            performance.append({"time": d.strftime('%d'), "opens": day_stats["opens"], "clicks": day_stats["clicks"]})
+            if d >= e:
+                break
+            label = d.strftime("%d")
+            bucket = bucket_map.get(label, {"opens": set(), "clicks": set()})
+            performance.append(
+                {"time": label, "opens": len(bucket["opens"]), "clicks": len(bucket["clicks"])}
+            )
     else:
-        for r in results:
-            performance.append({"time": r.day.strftime('%m/%d'), "opens": r.opens, "clicks": r.clicks})
+        ordered_labels = []
+        seen_labels = set()
+        for row in sorted(event_rows, key=lambda item: item.timestamp or s):
+            if not row.timestamp:
+                continue
+            label = row.timestamp.strftime("%m/%d")
+            if label not in seen_labels:
+                seen_labels.add(label)
+                ordered_labels.append(label)
+        for label in ordered_labels:
+            bucket = bucket_map.get(label, {"opens": set(), "clicks": set()})
+            performance.append(
+                {"time": label, "opens": len(bucket["opens"]), "clicks": len(bucket["clicks"])}
+            )
 
     # 4. Device Distribution
-    device_query = db.query(
-        EmailEvent.device, 
-        func.count(EmailEvent.id).label("count")
-    ).filter(EmailEvent.timestamp >= s, EmailEvent.timestamp < e)
-    
-    if campaign_name != "all" or (company_name and company_name != "all"):
-        device_query = device_query.join(Email, EmailEvent.email_id == Email.id).join(Campaign, Email.campaign_id == Campaign.id)
-        if campaign_name != "all":
-            device_query = device_query.filter(Campaign.name == campaign_name)
-        if company_name and company_name != "all":
-            companies = [company_name] if isinstance(company_name, str) else company_name
-            device_query = device_query.filter(Campaign.company.in_(companies))
-    
-    device_results = device_query.group_by(EmailEvent.device).all()
-    device_data = [{"name": r[0] or "Unknown", "value": r[1]} for r in device_results]
+    device_data = [{"name": name, "value": count} for name, count in device_counts.items()]
     if not device_data:
         device_data = [{"name": "Desktop", "value": 0}, {"name": "Mobile", "value": 0}]
 
     # 5. Top Locations
-    location_query = db.query(
-        EmailEvent.country, 
-        EmailEvent.city,
-        func.count(EmailEvent.id).label("opens")
-    ).filter(
-        EmailEvent.event_type == EventType.OPENED,
-        EmailEvent.timestamp >= s,
-        EmailEvent.timestamp < e
-    )
-    
-    if campaign_name != "all" or (company_name and company_name != "all"):
-        location_query = location_query.join(Email, EmailEvent.email_id == Email.id).join(Campaign, Email.campaign_id == Campaign.id)
-        if campaign_name != "all":
-            location_query = location_query.filter(Campaign.name == campaign_name)
-        if company_name and company_name != "all":
-            companies = [company_name] if isinstance(company_name, str) else company_name
-            location_query = location_query.filter(Campaign.company.in_(companies))
-        
-    location_results = location_query.group_by(EmailEvent.country, EmailEvent.city).order_by(func.count(EmailEvent.id).desc()).limit(5).all()
-    
-    total_opens = m.get("opens", 1) or 1
-    locations_data = [
-        {
-            "country": r[0] or "Unknown", 
-            "city": r[1] or "Unknown", 
-            "opens": r[2],
-            "rate": round((r[2] / total_opens) * 100, 1)
-        } for r in location_results
-    ]
+    total_opens = m.get("opens", 0) or 1
+    sorted_locations = sorted(location_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+    locations_data = []
+    for (country, city), opens in sorted_locations:
+        locations_data.append(
+            {
+                "country": country,
+                "city": city,
+                "opens": opens,
+                "rate": round((opens / total_opens) * 100, 1),
+            }
+        )
 
     # Return exactly what the frontend expects
     return {
@@ -596,6 +642,7 @@ def get_analytics(db: Session, campaign_name: str = "all", days: int = 30, compa
         "deliveredEmailsGrowth": calc_growth(m["delivered"], p["delivered"]),
         "openRateGrowth": calc_growth(m["openRate"], p["openRate"]),
         "clickRateGrowth": calc_growth(m["clickRate"], p["clickRate"]),
+        "spamRateGrowth": calc_growth(m["spamRate"], p["spamRate"]),
         "performanceData": performance,
         "deviceData": device_data,
         "locationsData": locations_data,
@@ -779,15 +826,8 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
     print(f"DEBUG: Running chart query for {days} days...")
     results = query.group_by(cast(Email.sent_at, Date)).all()
     
-    # SaaS Grade: Mock data curve if DB is empty
     if not results:
-        import random
-        mock_data = []
-        base = 150
-        for i, b in enumerate(buckets):
-            val = base + (i * 10) + random.randint(-20, 20)
-            mock_data.append({"day": b["label"], "emails": val})
-        return mock_data
+        return [{"day": b["label"], "emails": 0} for b in buckets]
 
     # Map real results into buckets
     chart_data = []
@@ -828,7 +868,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
     
     if company_name and company_name != "all":
         companies = [company_name] if isinstance(company_name, str) else company_name
-        query = query.filter(Contact.company.in_(companies))
+        query = query.filter(Campaign.company.in_(companies))
         
     events = query.filter(EmailEvent.timestamp >= start_date, EmailEvent.timestamp < end_date).order_by(EmailEvent.timestamp.desc()).limit(limit * 5).all() # Fetch more for grouping
     
@@ -852,14 +892,15 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
         # Smart Company Extraction Logic
         email_str = ev.email.recipient_email
         domain = email_str.split("@")[-1].lower() if "@" in email_str else ""
-        
-        if domain in PERSONAL_PROVIDERS:
-            contact_company = "Personal Email"
-        elif domain:
-            company_base = domain.rsplit(".", 1)[0]
-            contact_company = company_base.capitalize()
-        else:
-            contact_company = "Unknown"
+        contact_company = ev_data[2]
+        if not contact_company:
+            if domain in PERSONAL_PROVIDERS:
+                contact_company = "Personal Email"
+            elif domain:
+                company_base = domain.rsplit(".", 1)[0]
+                contact_company = company_base.capitalize()
+            else:
+                contact_company = "Unknown"
             
         # Country deduction
         country = "Unknown"
@@ -951,27 +992,6 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
     final_grouped = list(grouped.values())
     final_grouped.sort(key=lambda x: x["latest_timestamp"], reverse=True)
     
-    if not final_grouped:
-        # SaaS Grade: Provide mock data if DB is empty to prevent "No Data" during initial setup
-        from datetime import datetime, timedelta, timezone
-        now = datetime.now(timezone.utc)
-        return [
-            {
-                "id": 9991, "email_id": 101, "recipient": "john.doe@techcorp.com", "recipient_name": "John Doe",
-                "company": "Tech Corp", "subject": "Platform Introduction", "sender": "A Making Company",
-                "location": "New York, USA", "country": "USA", "latest_type": "sent", "latest_timestamp": (now - timedelta(minutes=15)).isoformat().replace("+00:00", "Z"),
-                "events": [{"type": "sent", "timestamp": (now - timedelta(minutes=15)).isoformat().replace("+00:00", "Z")}]
-            },
-            {
-                "id": 9992, "email_id": 102, "recipient": "jane.smith@global.in", "recipient_name": "Jane Smith",
-                "company": "Global Solutions", "subject": "Q1 Proposal", "sender": "MP Consultant LLC",
-                "location": "Mumbai, India", "country": "India", "latest_type": "opened", "latest_timestamp": (now - timedelta(hours=2)).isoformat().replace("+00:00", "Z"),
-                "events": [
-                    {"type": "sent", "timestamp": (now - timedelta(hours=3)).isoformat().replace("+00:00", "Z")},
-                    {"type": "opened", "timestamp": (now - timedelta(hours=2)).isoformat().replace("+00:00", "Z")}
-                ]
-            }
-        ]
     return final_grouped[:limit]
 
 def get_emails_per_company(db: Session, days: int = 30, company_name: str | list = "all"):
@@ -1195,7 +1215,8 @@ def process_scheduled_queue(db: Session, background_tasks):
     Fix: Triggers existing emails instead of recreating them.
     """
     if not redis_client:
-        return {"status": "error", "message": "Redis not connected"}
+        processed = check_due_campaigns(db, background_tasks=background_tasks)
+        return {"status": "ok", "processed": processed, "source": "database-fallback"}
 
     now_ts = int(datetime.now(timezone.utc).timestamp())
     
@@ -1227,7 +1248,10 @@ def process_scheduled_queue(db: Session, background_tasks):
                 db.commit()
 
                 # Trigger execution of existing PENDING emails
-                trigger_campaign_emails(db, camp.id, background_tasks)
+                if background_tasks:
+                    trigger_campaign_emails(db, camp.id, background_tasks)
+                else:
+                    execute_campaign_sync(db, camp.id)
                 
                 redis_client.zrem("scheduled_campaigns", camp_id)
                 processed += 1
@@ -1238,6 +1262,23 @@ def process_scheduled_queue(db: Session, background_tasks):
         return {"status": "ok", "processed": processed}
     finally:
         redis_client.delete(lock_key)
+
+
+def scheduler_pulse():
+    """
+    Fire-and-forget scheduler pulse that manages its own DB session. This keeps
+    dashboard/activity requests from passing a request-scoped Session object
+    into FastAPI background tasks.
+    """
+    from .database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        process_scheduled_queue(db, None)
+    except Exception as exc:
+        debug.debug_log(f"SCHEDULER_PULSE_ERROR: {exc}")
+    finally:
+        db.close()
 
 
 def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str | list = "all"):
@@ -1263,7 +1304,33 @@ def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str
         rows = []
     
     if not rows:
-        return []
+        fallback_rows = recent_events(
+            db,
+            days=days,
+            limit=limit,
+            company_name=company_name,
+        )
+        converted = []
+        for row in fallback_rows:
+            converted.append({
+                "id": row.get("id"),
+                "email_id": row.get("email_id"),
+                "recipient_email": row.get("recipient") or row.get("email") or "",
+                "recipient_name": row.get("recipient_name") or "",
+                "sender": row.get("sender") or "",
+                "company": row.get("company") or "",
+                "status": (row.get("latest_type") or "SENT").upper(),
+                "status_history": [
+                    {
+                        "status": (event.get("type") or "SENT").upper(),
+                        "time": event.get("timestamp"),
+                    }
+                    for event in row.get("events", [])
+                ],
+                "country": row.get("country") or "Unknown",
+                "timestamp": row.get("latest_timestamp") or row.get("timestamp") or "",
+            })
+        return converted
 
     seen = {}
     for row in rows:
@@ -1314,8 +1381,67 @@ def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str
     return result
 
 def process_sendgrid_webhook(db: Session, events: List[dict]):
-    # ... (existing logic)
-    pass
+    """
+    Processes a list of SendGrid webhook events.
+    This definition intentionally stays as the final definition in the file so
+    the real implementation is not overwritten by an empty stub.
+    """
+    from .models import Email
+
+    event_mapping = {
+        "PROCESSED": EventType.SENT,
+        "DELIVERED": EventType.DELIVERED,
+        "OPEN": EventType.OPENED,
+        "CLICK": EventType.CLICKED,
+        "BOUNCE": EventType.BOUNCED,
+        "SPAMREPORT": EventType.SPAM_REPORT,
+        "UNSUBSCRIBE": EventType.UNSUBSCRIBED,
+        "DEFERRED": EventType.DEFERRED,
+        "DROPPED": EventType.DROPPED,
+    }
+
+    for event in events:
+        email_id = event.get("email_id")
+        to_email = event.get("email")
+        type_str = str(event.get("event", "")).upper()
+        etype = event_mapping.get(type_str)
+
+        if not etype:
+            debug.debug_log(f"WEBHOOK: Unknown SendGrid event type: {type_str}")
+            continue
+
+        email_rec = None
+        if email_id:
+            email_rec = db.query(Email).get(email_id)
+        if not email_rec and to_email:
+            email_rec = (
+                db.query(Email)
+                .filter(Email.recipient_email == to_email)
+                .order_by(Email.sent_at.desc())
+                .first()
+            )
+
+        if not email_rec:
+            debug.debug_log(f"WEBHOOK: Could not find email for event: {event}")
+            continue
+
+        log_event(
+            db,
+            email_rec.id,
+            etype,
+            ip=event.get("ip"),
+            ua=event.get("useragent"),
+            url=event.get("url"),
+        )
+
+        if etype == EventType.BOUNCED:
+            email_rec.bounce_reason = event.get("reason")
+        if event.get("status"):
+            email_rec.delivery_status = event.get("status")
+
+        db.commit()
+
+    return {"status": "success"}
 
 def push_to_email_queue(email_id: int, subject: str, body: str, attachments: list = None, queue: str = "marketing"):
     """
@@ -1496,12 +1622,6 @@ def trigger_campaign_emails(db: Session, campaign_id: int, background_tasks):
         Email.campaign_id == campaign_id,
         Email.status == EmailStatus.PENDING
     ).all()
-    
-    for e in pending_emails:
-        background_tasks.add_task(send_email_fn, e.id, e.subject, e.body)
-    
-    # Note: Completion for background_tasks is handled by check_and_complete_campaign
-    # called within log_event/send_email outcomes.
     
     if not pending_emails:
         return 0
@@ -2156,6 +2276,7 @@ def check_reputation_guard(db: Session):
     Internal circuit breaker to pause all running campaigns if reputation is critical.
     """
     health = get_system_health(db)
+    bounce_rate = health["reputation"]["bounce_rate"]
     if health["reputation"]["status"] == "Critical (High Bounces)":
         # Professional Safeguard: Pause all running campaigns
         from .models import Campaign, CampaignStatus

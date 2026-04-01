@@ -12,7 +12,8 @@ from .schemas import (
     AIGenerateRequest, TestEmailRequest, DashboardStats, AutomationCreate, 
     AutomationResponse, ContactResponse, ContactCreate, BulkContactsRequest, 
     SegmentCreate, SegmentResponse, ContactProfileResponse, AIChatRequest,
-    ContactCompanyUpdate, ActivityLogResponse, CampaignStatusResponse
+    ContactCompanyUpdate, ActivityLogResponse, CampaignStatusResponse,
+    GenerateBrandedEmailRequest
 )
 from .models import Email, EmailStatus, EventType, ActivityLog
 from .config import settings
@@ -258,6 +259,27 @@ def list_campaign_names(db: Session = Depends(get_db)):
     results = db.query(Campaign.name).distinct().all()
     return [r[0] for r in results]
 
+@router.get("/companies")
+def list_companies(db: Session = Depends(get_db)):
+    from .models import Campaign, Contact
+
+    companies = set()
+
+    for (name,) in db.query(Campaign.company).distinct().all():
+        if name and str(name).strip() and str(name).strip().lower() != "unknown":
+            companies.add(str(name).strip())
+
+    try:
+        for (name,) in db.query(Contact.company).distinct().all():
+            if name and str(name).strip() and str(name).strip().lower() != "unknown":
+                companies.add(str(name).strip())
+    except Exception:
+        # Contact.company may not be populated in all environments; keep the
+        # endpoint resilient and still return campaign-backed companies.
+        pass
+
+    return sorted(companies)
+
 @router.get("/analytics/realtime")
 def get_realtime_analytics(response: Response, campaign: str = "all", company: str | None = None, limit: int = 10, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
@@ -289,7 +311,7 @@ def campaign_status(days: int = 30, company: Optional[str] = "all", db: Session 
 @router.get("/dashboard/stats", response_model=DashboardStats)
 def dashboard_stats(response: Response, background_tasks: BackgroundTasks, days: str = "30", time_range: str = "month", campaign: str = "all", company: str | None = None, db: Session = Depends(get_db)):
     # SaaS Grade: Proactive Scheduling Pulse
-    background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
+    background_tasks.add_task(services.scheduler_pulse)
     
     try:
         parsed_days = int(days) if days and str(days).isdigit() else 30
@@ -326,7 +348,7 @@ def dashboard_stats(response: Response, background_tasks: BackgroundTasks, days:
 @router.get("/dashboard/email-stats")
 def get_email_stats(response: Response, background_tasks: BackgroundTasks, days: str = "7", company: str | None = None, db: Session = Depends(get_db)):
     # SaaS Grade: Proactive Scheduling Pulse
-    background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
+    background_tasks.add_task(services.scheduler_pulse)
 
     try:
         parsed_days = int(days) if days and str(days).isdigit() else 7
@@ -502,7 +524,7 @@ def get_activity_log(background_tasks: BackgroundTasks, days: int = 30, company:
     Supports filtering by days and company.
     """
     # SaaS Grade: Proactive Scheduling Pulse
-    background_tasks.add_task(services.process_scheduled_queue, db, background_tasks)
+    background_tasks.add_task(services.scheduler_pulse)
     
     try:
         company_list = company.split(",") if company and company != "all" else "all"

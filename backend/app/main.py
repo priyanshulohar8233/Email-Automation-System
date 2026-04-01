@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 import traceback
-from .database import engine, Base
+from .database import engine, Base, ACTIVE_DATABASE_LABEL
 from .routes import router
 
 # Selective DB init (lazy)
@@ -113,7 +113,8 @@ def health_check():
         "service": "email-automation-api",
         "timestamp": str(datetime.now(timezone.utc)),
         "version": "2.0.2",
-        "db_connected": engine is not None
+        "db_connected": engine is not None,
+        "database": ACTIVE_DATABASE_LABEL,
     }
 
 @app.get("/")
