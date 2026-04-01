@@ -836,7 +836,7 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
 
 
 
-def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: str = "all", company_name: str | list = "all"):
+def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_name: str = "all", company_name: str | list = "all"):
     from datetime import datetime, timedelta, timezone
     from .models import Contact
     start_date, end_date = get_date_window(days)
@@ -859,7 +859,16 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
         companies = [company_name] if isinstance(company_name, str) else company_name
         query = query.filter(Campaign.company.in_(companies))
         
-    events = query.filter(EmailEvent.timestamp >= start_date, EmailEvent.timestamp < end_date).order_by(EmailEvent.timestamp.desc()).limit(limit * 5).all() # Fetch more for grouping
+    events_query = query.filter(
+        EmailEvent.timestamp >= start_date,
+        EmailEvent.timestamp < end_date
+    ).order_by(EmailEvent.timestamp.desc())
+
+    fetch_limit = limit * 5 if limit else None
+    if fetch_limit:
+        events_query = events_query.limit(fetch_limit)
+
+    events = events_query.all()  # Fetch more for grouping when a limit is provided
     
     PERSONAL_PROVIDERS = {"gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "aol.com", "protonmail.com"}
     TLD_COUNTRY_MAP = {"in": "India", "uk": "United Kingdom", "us": "USA", "au": "Australia", "de": "Germany", "fr": "France", "ca": "Canada"}
@@ -981,7 +990,7 @@ def recent_events(db: Session, days: int = 30, limit: int = 20, campaign_name: s
     final_grouped = list(grouped.values())
     final_grouped.sort(key=lambda x: x["latest_timestamp"], reverse=True)
     
-    return final_grouped[:limit]
+    return final_grouped[:limit] if limit else final_grouped
 
 def get_emails_per_company(db: Session, days: int = 30, company_name: str | list = "all"):
     """
@@ -1270,7 +1279,7 @@ def scheduler_pulse():
         db.close()
 
 
-def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str | list = "all"):
+def get_activity(db: Session, limit: int | None = None, days: int = 30, company_name: str | list = "all"):
     """
     Returns grouped activity: one row per (email_id), ordered by latest event.
     Supports filtering by days and company.
@@ -1287,7 +1296,10 @@ def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str
             companies = [company_name] if isinstance(company_name, str) else company_name
             query = query.filter(ActivityLog.company.in_(companies))
             
-        rows = query.order_by(ActivityLog.timestamp.desc()).limit(limit * 2).all()
+        rows_query = query.order_by(ActivityLog.timestamp.desc())
+        if limit:
+            rows_query = rows_query.limit(limit * 2)
+        rows = rows_query.all()
     except Exception as e:
         debug.debug_log(f"DB ERROR in get_activity: {e}")
         rows = []
@@ -1334,7 +1346,9 @@ def get_activity(db: Session, limit: int = 20, days: int = 30, company_name: str
     # Simplified priority for sorting timeline
     priority = {"CLICKED": 4, "OPENED": 3, "DELIVERED": 2, "SENT": 1, "BOUNCED": 0}
 
-    for row in list(seen.values())[:limit]:
+    deduped_rows = list(seen.values())[:limit] if limit else list(seen.values())
+
+    for row in deduped_rows:
         try:
             history_raw = json.loads(row.status_history or "[]")
             history_objs = []

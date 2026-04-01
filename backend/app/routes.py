@@ -518,7 +518,7 @@ def email_events_webhook(payload: dict, db: Session = Depends(get_db)):
     return services.process_webhook_event(db, payload)
 
 @router.get("/activity")
-def get_activity_log(background_tasks: BackgroundTasks, days: int = 30, company: str = "all", limit: int = 20, db: Session = Depends(get_db)):
+def get_activity_log(background_tasks: BackgroundTasks, days: int = 30, company: str = "all", limit: Optional[int] = None, db: Session = Depends(get_db)):
     """
     Consolidated Activity API with Service-layer logic.
     Supports filtering by days and company.
