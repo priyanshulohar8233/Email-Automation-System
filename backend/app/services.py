@@ -357,7 +357,7 @@ def get_date_window(days: int = 30):
     """
     Returns (start_date, end_date) consistent with the Dashboard charts.
     - 7 days: Current Week (Monday 00:00:00 to Sunday 23:59:59)
-    - 30 days: Current Month (1st to last day)
+    - 30 days: Rolling last 30 days
     - 90 days: Last 90 days from now
     - 365 days: Current Year (Jan 1st to Dec 31st)
     """
@@ -373,10 +373,9 @@ def get_date_window(days: int = 30):
         return start_date, end_date
         
     if days == 30:
-        # Month View: Full current month
-        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        last_day = calendar.monthrange(now.year, now.month)[1]
-        end_date = (start_date + timedelta(days=last_day-1)).replace(hour=23, minute=59, second=59) + timedelta(seconds=1)
+        # Month View: Rolling last 30 days to avoid zeroing out data on month boundaries.
+        end_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date = end_date - timedelta(days=30)
         return start_date, end_date
         
     if days == 365:
@@ -665,7 +664,7 @@ def compute_stats(db: Session, days: int = 30, campaign_name: str = "all", compa
         prev_start = s - timedelta(days=7)
         prev_end = s
     elif days == 30:
-        prev_start = (s - timedelta(days=1)).replace(day=1)
+        prev_start = s - timedelta(days=30)
         prev_end = s
     else:
         prev_start = s - timedelta(days=days)
@@ -742,29 +741,19 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
             })
             
     elif days == 30:
-        # Month View: 3-day intervals of current month
-        start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        last_day = calendar.monthrange(now.year, now.month)[1]
-        end_date = (start_date + timedelta(days=last_day-1)).replace(hour=23, minute=59, second=59) + timedelta(seconds=1)
-        
-        # New 3-day grouping logic: 1-3, 4-6, ..., 25-27, 28-30/31
-        intervals = [(1, 3), (4, 6), (7, 9), (10, 12), (13, 15), (16, 18), (19, 21), (22, 24), (25, 27), (28, last_day)]
-        for s, e in intervals:
-            b_start = start_date.replace(day=s)
-            # b_end is the start of the day AFTER 'e'
-            if e == last_day:
-                if now.month == 12:
-                    b_end = start_date.replace(year=now.year + 1, month=1, day=1)
-                else:
-                    b_end = start_date.replace(month=now.month + 1, day=1)
-            else:
-                b_end = start_date.replace(day=e+1)
-            
+        # Month View: rolling 30 days grouped into 3-day intervals.
+        end_date = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date = end_date - timedelta(days=30)
+
+        cursor = start_date
+        while cursor < end_date:
+            bucket_end = min(cursor + timedelta(days=3), end_date)
             buckets.append({
-                "label": f"{s}-{e}",
-                "start": b_start,
-                "end": b_end
+                "label": cursor.strftime('%d %b'),
+                "start": cursor,
+                "end": bucket_end
             })
+            cursor = bucket_end
             
     elif days == 90:
         # Quarter View: 10-day grouping (10, 20, ..., 90)
