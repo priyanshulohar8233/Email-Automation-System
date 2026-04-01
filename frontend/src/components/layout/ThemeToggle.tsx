@@ -1,6 +1,5 @@
 import { Sun, Moon } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
-import React from "react";
+import { useState } from "react";
 
 export function ThemeToggle() {
     const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -12,9 +11,7 @@ export function ThemeToggle() {
         return false;
     });
 
-    const isFirstRender = useRef(true);
-
-    const toggleTheme = (event: React.MouseEvent, dark: boolean) => {
+    const toggleTheme = (dark: boolean) => {
         if (dark === isDarkMode) return;
 
         // Apply no-transition to prevent micro-lag during the state swap
@@ -45,12 +42,6 @@ export function ThemeToggle() {
             return;
         }
 
-        // Calculate click coordinates for the radial reveal
-        const x = event.clientX;
-        const y = event.clientY;
-        document.documentElement.style.setProperty('--x', `${x}px`);
-        document.documentElement.style.setProperty('--y', `${y}px`);
-
         const transition = (document as any).startViewTransition(updateTheme);
         transition.finished.finally(cleanup);
     };
@@ -67,7 +58,7 @@ export function ThemeToggle() {
             />
 
             <button
-                onClick={(e) => toggleTheme(e, true)}
+                onClick={() => toggleTheme(true)}
                 className={`relative z-10 w-9 h-7 flex items-center justify-center transition-all duration-500 ${isDarkMode ? 'text-white' : 'text-muted-foreground dark:text-slate-500 hover:text-foreground dark:hover:text-slate-300'}`}
                 title="Dark Mode"
             >
@@ -75,7 +66,7 @@ export function ThemeToggle() {
             </button>
 
             <button
-                onClick={(e) => toggleTheme(e, false)}
+                onClick={() => toggleTheme(false)}
                 className={`relative z-10 w-9 h-7 flex items-center justify-center transition-all duration-500 ${!isDarkMode ? 'text-white' : 'text-muted-foreground dark:text-slate-500 hover:text-foreground dark:hover:text-slate-300'}`}
                 title="Light Mode"
             >

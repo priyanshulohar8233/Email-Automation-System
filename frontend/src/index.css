@@ -68,19 +68,27 @@
   }
 }
 
-/* View Transitions for radial reveal */
+/* View Transitions for smooth theme fade */
+::view-transition-group(root) {
+  animation-duration: 420ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 ::view-transition-old(root),
 ::view-transition-new(root) {
-  animation: none;
   mix-blend-mode: normal;
+  transform-origin: center;
+  will-change: opacity, filter, transform;
 }
 
 ::view-transition-old(root) {
   z-index: 1;
+  animation: 280ms ease-out both theme-fade-out;
 }
 
 ::view-transition-new(root) {
   z-index: 9999;
+  animation: 420ms cubic-bezier(0.22, 1, 0.36, 1) both theme-fade-in;
 }
 
 .dark::view-transition-old(root) {
@@ -91,19 +99,44 @@
   z-index: 1;
 }
 
-::view-transition-new(root) {
-  animation: 800ms cubic-bezier(0.4, 0, 0.2, 1) both reveal-animation;
-}
-
 .dark::view-transition-old(root) {
-  animation: 800ms cubic-bezier(0.4, 0, 0.2, 1) both reveal-animation;
+  animation: 280ms ease-out both theme-fade-out;
 }
 
-@keyframes reveal-animation {
+@keyframes theme-fade-out {
   from {
-    clip-path: circle(0px at var(--x) var(--y));
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
   }
   to {
-    clip-path: circle(125% at var(--x) var(--y));
+    opacity: 0;
+    filter: blur(8px);
+    transform: scale(1.015);
   }
-}
+}
+
+@keyframes theme-fade-in {
+  from {
+    opacity: 0;
+    filter: blur(12px);
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+  }
+
+  ::view-transition-group(root),
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 0.01ms !important;
+  }
+}
