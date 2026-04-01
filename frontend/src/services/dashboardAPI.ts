@@ -21,6 +21,24 @@ export interface DashboardStats {
     vsLabel?: string;
 }
 
+export interface AnalyticsResponse {
+    deliveredEmails: number;
+    openRate: number;
+    clickRate: number;
+    spamRate: number;
+    bounceRate: number;
+    unread: number;
+    deliveredEmailsGrowth: number;
+    openRateGrowth: number;
+    clickRateGrowth: number;
+    spamRateGrowth: number;
+    performanceData: Array<{ time: string; opens: number; clicks: number }>;
+    deviceData: Array<{ name: string; value: number }>;
+    locationsData: Array<{ city: string; country: string; opens: number; rate: number }>;
+    linkData: Array<{ url: string; clicks: number }>;
+    recentActivity: any[];
+}
+
 // Helper function to add timeout to fetch calls
 const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout: number = 30000): Promise<Response> => {
     const controller = new AbortController();
@@ -55,6 +73,46 @@ const BASE_URL = import.meta.env.VITE_API_URL || import.meta.env.NEXT_PUBLIC_API
 const API_URL = BASE_URL.endsWith("/") ? BASE_URL.slice(0, -1) : BASE_URL;
 
 export const dashboardAPI = {
+    getAnalytics: async (
+        days: number = 30,
+        campaign: string = "all",
+        company: string = "all",
+        signal?: AbortSignal,
+        range: string = "month"
+    ): Promise<AnalyticsResponse> => {
+        let url = `${API_URL}/api/analytics?campaign=${encodeURIComponent(campaign)}&time_range=${encodeURIComponent(range)}&days=${days}`;
+        if (company && company !== "all") url += `&company=${encodeURIComponent(company)}`;
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Analytics API Error [${response.status}]: ${response.statusText}`, errorText);
+            throw new Error(`Error fetching analytics: ${response.status} ${response.statusText}`);
+        }
+        return await response.json();
+    },
+    getCampaignNames: async (signal?: AbortSignal): Promise<string[]> => {
+        const response = await fetchWithTimeout(`${API_URL}/api/campaigns/names`, { signal, cache: 'no-store' });
+        if (!response.ok) throw new Error("Error fetching campaign names");
+        return await response.json();
+    },
+    getCompanies: async (signal?: AbortSignal): Promise<string[]> => {
+        const response = await fetchWithTimeout(`${API_URL}/api/companies`, { signal, cache: 'no-store' });
+        if (!response.ok) throw new Error("Error fetching companies");
+        return await response.json();
+    },
+    getRealtimeAnalytics: async (
+        days: number = 30,
+        campaign: string = "all",
+        company: string = "all",
+        limit: number = 10,
+        signal?: AbortSignal
+    ): Promise<any[]> => {
+        let url = `${API_URL}/api/analytics/realtime?days=${days}&limit=${limit}&campaign=${encodeURIComponent(campaign)}`;
+        if (company && company !== "all") url += `&company=${encodeURIComponent(company)}`;
+        const response = await fetchWithTimeout(url, { signal, cache: 'no-store' });
+        if (!response.ok) throw new Error("Error fetching realtime analytics");
+        return await response.json();
+    },
     getStats: async (days?: number, campaign: string = "all", company?: string, signal?: AbortSignal, range: string = "month"): Promise<DashboardStats> => {
         try {
             let url = `${API_URL}/api/dashboard/stats?campaign=${encodeURIComponent(campaign)}&time_range=${range}`;

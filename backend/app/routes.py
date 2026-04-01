@@ -249,7 +249,17 @@ def get_campaign_analytics(response: Response, campaign: str = "all", days: str 
             "deliveredEmails": 0,
             "openRate": 0,
             "clickRate": 0,
+            "spamRate": 0,
+            "bounceRate": 0,
+            "unread": 0,
+            "deliveredEmailsGrowth": 0,
+            "openRateGrowth": 0,
+            "clickRateGrowth": 0,
+            "spamRateGrowth": 0,
             "performanceData": [],
+            "deviceData": [],
+            "locationsData": [],
+            "linkData": [],
             "recentActivity": []
         }
 
@@ -281,11 +291,11 @@ def list_companies(db: Session = Depends(get_db)):
     return sorted(companies)
 
 @router.get("/analytics/realtime")
-def get_realtime_analytics(response: Response, campaign: str = "all", company: str | None = None, limit: int = 10, db: Session = Depends(get_db)):
+def get_realtime_analytics(response: Response, campaign: str = "all", company: str | None = None, days: int = 30, limit: int = 10, db: Session = Depends(get_db)):
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     try:
         company_list = company.split(",") if company and company != "all" else "all"
-        return services.recent_events(db, days=30, limit=limit, campaign_name=campaign, company_name=company_list)
+        return services.recent_events(db, days=days, limit=limit, campaign_name=campaign, company_name=company_list)
     except Exception as e:
         debug.debug_log(f"DB ERROR in realtime analytics: {e}")
         return []

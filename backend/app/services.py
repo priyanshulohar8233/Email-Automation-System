@@ -847,7 +847,8 @@ def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_
         EmailEvent, 
         Contact.name.label("contact_name"), 
         Contact.company.label("contact_company"),
-        Campaign.name.label("campaign_name")
+        Campaign.name.label("campaign_name"),
+        Campaign.company.label("campaign_company"),
     ).join(Email, EmailEvent.email_id == Email.id)\
      .outerjoin(Contact, Email.recipient_email == Contact.email)\
      .outerjoin(Campaign, Email.campaign_id == Campaign.id)
@@ -874,15 +875,58 @@ def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_
     TLD_COUNTRY_MAP = {"in": "India", "uk": "United Kingdom", "us": "USA", "au": "Australia", "de": "Germany", "fr": "France", "ca": "Canada"}
     
     result = []
+    if not events:
+        fallback_query = db.query(ActivityLog).filter(
+            ActivityLog.timestamp >= start_date,
+            ActivityLog.timestamp < end_date,
+        )
+
+        if campaign_name != "all":
+            campaign_ids = db.query(Campaign.id).filter(Campaign.name == campaign_name).subquery()
+            fallback_query = fallback_query.filter(ActivityLog.campaign_id.in_(campaign_ids))
+
+        if company_name and company_name != "all":
+            companies = [company_name] if isinstance(company_name, str) else company_name
+            fallback_query = fallback_query.filter(ActivityLog.company.in_(companies))
+
+        fallback_rows = fallback_query.order_by(ActivityLog.timestamp.desc())
+        if fetch_limit:
+            fallback_rows = fallback_rows.limit(fetch_limit)
+
+        for row in fallback_rows.all():
+            event_type = (row.status or "SENT").lower()
+            timestamp = row.timestamp.isoformat() if row.timestamp else ""
+            result.append({
+                "id": row.id,
+                "email_id": row.email_id or row.id,
+                "recipient": row.recipient_email or "",
+                "email": row.recipient_email or "",
+                "recipient_name": row.recipient_name or "Unknown",
+                "company": row.company or "Unknown",
+                "event_type": event_type,
+                "type": event_type,
+                "subject": "No Subject",
+                "sender": row.sender or "Unknown",
+                "timestamp": timestamp,
+                "location": row.country or "Unknown",
+                "country": row.country or "Unknown",
+                "metadata": {
+                    "browser": "Unknown",
+                    "os": "Unknown",
+                    "device": "Desktop",
+                    "location": row.country or "Unknown",
+                    "url": None,
+                }
+            })
+
     for ev_data in events:
-        ev = ev_data[0]
-        contact_name = ev_data[1]
+        ev, contact_name, contact_company, campaign_name, campaign_company = ev_data
         
         # Determine Sender (Multi-Company Sync)
-        sender_company = ev_data[0].email.campaign.company if ev_data[0].email.campaign else "MP Consultant LLC"
+        sender_company = campaign_company or "MP Consultant LLC"
         if not sender_company:
             # Fallback to legacy string matching if company record is empty
-            camp_name = (ev_data[3] or "").lower()
+            camp_name = (campaign_name or "").lower()
             if "making" in camp_name: sender_company = "A Making Company"
             elif "lumina" in camp_name: sender_company = "MP Lumina"
             else: sender_company = "MP Consultant LLC"
@@ -890,7 +934,6 @@ def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_
         # Smart Company Extraction Logic
         email_str = ev.email.recipient_email
         domain = email_str.split("@")[-1].lower() if "@" in email_str else ""
-        contact_company = ev_data[2]
         if not contact_company:
             if domain in PERSONAL_PROVIDERS:
                 contact_company = "Personal Email"
@@ -959,6 +1002,10 @@ def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_
                 "sender": r["sender"],
                 "location": r["location"],
                 "country": r["country"],
+                "email": r["email"],
+                "type": r["type"],
+                "timestamp": r["timestamp"],
+                "metadata": r["metadata"],
                 "latest_type": r["type"],
                 "latest_timestamp": r["timestamp"],
                 "events": []
@@ -981,6 +1028,9 @@ def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_
         if r["timestamp"] > grouped[key]["latest_timestamp"]:
              grouped[key]["latest_timestamp"] = r["timestamp"]
              grouped[key]["latest_type"] = r["type"]
+             grouped[key]["type"] = r["type"]
+             grouped[key]["timestamp"] = r["timestamp"]
+             grouped[key]["metadata"] = r["metadata"]
 
     # Final Polish: Sort events chronologically inside each group
     for group in grouped.values():

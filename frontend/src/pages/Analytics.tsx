@@ -17,22 +17,31 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { RealtimeFeed } from "@/components/dashboard/RealtimeFeed";
 import { DashboardProvider, useDashboard } from "@/context/DashboardContext";
+import { dashboardAPI, type AnalyticsResponse } from "@/services/dashboardAPI";
+
+const EMPTY_ANALYTICS_DATA: AnalyticsResponse = {
+  deliveredEmails: 0,
+  openRate: 0,
+  clickRate: 0,
+  spamRate: 0,
+  bounceRate: 0,
+  unread: 0,
+  deliveredEmailsGrowth: 0,
+  openRateGrowth: 0,
+  clickRateGrowth: 0,
+  spamRateGrowth: 0,
+  performanceData: [],
+  deviceData: [],
+  locationsData: [],
+  linkData: [],
+  recentActivity: [],
+};
 
 function AnalyticsContent() {
   const { timeRange, days, updateRange, selectedCompanies, setSelectedCompanies, companyFilter } = useDashboard();
   
-  const [analyticsData, setAnalyticsData] = useState<any>({
-    deliveredEmails: 0,
-    openRate: 0,
-    clickRate: 0,
-    spamRate: 0,
-    openRateGrowth: 0,
-    clickRateGrowth: 0,
-    performanceData: [],
-    deviceData: [],
-    locationsData: [],
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsResponse>(EMPTY_ANALYTICS_DATA);
+  const [, setIsLoading] = useState(true);
   
   // Local state for campaign (stays for granular override if needed, but defaults to 'all')
   const [campaign, setCampaign] = useState("all");
@@ -52,12 +61,12 @@ function AnalyticsContent() {
   useEffect(() => {
     async function fetchMeta() {
       try {
-        const [campRes, compRes] = await Promise.all([
-          fetch("/api/campaigns/names"),
-          fetch("/api/companies")
+        const [campaigns, companies] = await Promise.all([
+          dashboardAPI.getCampaignNames(),
+          dashboardAPI.getCompanies()
         ]);
-        if (campRes.ok) setAvailableCampaigns(await campRes.json());
-        if (compRes.ok) setAvailableCompanies(await compRes.json());
+        setAvailableCampaigns(campaigns);
+        setAvailableCompanies(companies);
       } catch (e) {
         console.error("Failed to fetch meta names", e);
       }
@@ -79,19 +88,12 @@ function AnalyticsContent() {
   const fetchAnalytics = async (signal?: AbortSignal, silently = false) => {
     try {
       if (!silently) setIsLoading(true);
-      
-      // SYNCED API CALL: Uses timeRange, companyFilter, and campaign
-      let url = `/api/analytics?campaign=${encodeURIComponent(campaign)}&time_range=${timeRange}&days=${days}`;
-      if (companyFilter && companyFilter !== "all") url += `&company=${encodeURIComponent(companyFilter)}`;
-      
-      const response = await fetch(url, { signal });
-      if (response.ok) {
-        const data = await response.json();
-        setAnalyticsData(data);
-      }
+      const data = await dashboardAPI.getAnalytics(days, campaign, companyFilter, signal, timeRange);
+      setAnalyticsData({ ...EMPTY_ANALYTICS_DATA, ...data });
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error("Failed to fetch analytics:", error);
+        if (!silently) setAnalyticsData(EMPTY_ANALYTICS_DATA);
       }
     } finally {
       if (!silently) setIsLoading(false);
@@ -330,7 +332,7 @@ function AnalyticsContent() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 h-[600px]">
-          <RealtimeFeed campaignName={campaign} companyName={companyFilter} />
+          <RealtimeFeed campaignName={campaign} companyName={companyFilter} days={days} />
         </div>
         <div className="lg:col-span-2 space-y-6">
           <Card>

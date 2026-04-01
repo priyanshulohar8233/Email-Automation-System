@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Mail, Check, Eye, MousePointer2, AlertCircle, RefreshCw, Globe, Smartphone, Monitor } from "lucide-react";
 import { formatIST, dayjs } from "@/lib/timeUtils";
+import { dashboardAPI } from "@/services/dashboardAPI";
 
 interface RealtimeEvent {
     id: number;
@@ -20,38 +21,56 @@ interface RealtimeEvent {
     };
 }
 
-export function RealtimeFeed({ campaignName = "all", companyName = "all" }: { campaignName?: string, companyName?: string }) {
+const normalizeRealtimeEvent = (event: any): RealtimeEvent => {
+    const fallbackLocation = event.location || event.country || "Unknown";
+    const metadata = event.metadata || {};
+
+    return {
+        id: event.id,
+        type: event.type || event.latest_type || "sent",
+        email: event.email || event.recipient || event.recipient_email || "",
+        recipient_name: event.recipient_name || "",
+        subject: event.subject || "No subject",
+        timestamp: event.timestamp || event.latest_timestamp || "",
+        metadata: {
+            browser: metadata.browser || "Unknown",
+            os: metadata.os || "Unknown",
+            device: metadata.device || "Desktop",
+            location: metadata.location || fallbackLocation,
+            url: metadata.url,
+        },
+    };
+};
+
+export function RealtimeFeed({ campaignName = "all", companyName = "all", days = 30 }: { campaignName?: string, companyName?: string, days?: number }) {
     const [events, setEvents] = useState<RealtimeEvent[]>([]);
     const [isPaused, setIsPaused] = useState(false);
     const [lastFetch, setLastFetch] = useState<Date>(new Date());
 
-    const fetchEvents = async () => {
+    const fetchEvents = async (signal?: AbortSignal) => {
         try {
-            let url = `/api/analytics/realtime?limit=10&campaign=${encodeURIComponent(campaignName)}`;
-            if (companyName && companyName !== "all") {
-                url += `&company=${encodeURIComponent(companyName)}`;
-            }
-            const response = await fetch(url);
-            if (response.ok) {
-                const data = await response.json();
-                setEvents(data);
-                setLastFetch(new Date());
-            }
+            const data = await dashboardAPI.getRealtimeAnalytics(days, campaignName, companyName, 10, signal);
+            setEvents(Array.isArray(data) ? data.map(normalizeRealtimeEvent) : []);
+            setLastFetch(new Date());
         } catch (error) {
             console.error("Realtime fetch failed:", error);
         }
     };
 
     useEffect(() => {
-        fetchEvents();
+        const controller = new AbortController();
+        fetchEvents(controller.signal);
         const interval = setInterval(() => {
-            if (!isPaused) fetchEvents();
+            if (!isPaused && document.visibilityState === 'visible') fetchEvents();
         }, 5000);
-        return () => clearInterval(interval);
-    }, [isPaused, campaignName, companyName]);
+        return () => {
+            controller.abort();
+            clearInterval(interval);
+        };
+    }, [days, isPaused, campaignName, companyName]);
 
     const getIcon = (type: string) => {
-        switch (type.toLowerCase()) {
+        switch ((type || "sent").toLowerCase()) {
             case "sent": return <Mail className="h-4 w-4 text-blue-500" />;
             case "delivered": return <Check className="h-4 w-4 text-emerald-500" />;
             case "opened": return <Eye className="h-4 w-4 text-indigo-500" />;
