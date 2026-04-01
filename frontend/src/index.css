@@ -66,6 +66,33 @@
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
 
+  .theme-toggle {
+    isolation: isolate;
+    transform: translateZ(0);
+    backface-visibility: hidden;
+  }
+
+  .theme-toggle::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: 12px;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgb(255 255 255 / 0.14), transparent 45%, rgb(99 102 241 / 0.08));
+    opacity: 0.7;
+    transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .dark .theme-toggle::after {
+    opacity: 0.9;
+    background: linear-gradient(135deg, rgb(255 255 255 / 0.08), transparent 45%, rgb(129 140 248 / 0.12));
+  }
+
+  .theme-toggle button {
+    backface-visibility: hidden;
+    transform: translateZ(0);
+  }
+
   * {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
   }
@@ -85,6 +112,7 @@
   animation: none;
   mix-blend-mode: normal;
   transform-origin: center;
+  backface-visibility: hidden;
   will-change: clip-path, opacity, filter, transform;
 }
 
@@ -95,7 +123,7 @@
 ::view-transition-new(root) {
   z-index: 2;
   isolation: isolate;
-  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.04);
+  box-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 32px 90px rgb(15 23 42 / 0.14);
 }
 
 @media (prefers-reduced-motion: reduce) {
