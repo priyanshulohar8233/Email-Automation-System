@@ -1,5 +1,14 @@
 import { Sun, Moon } from "lucide-react";
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
+
+type ViewTransitionHandle = {
+    ready: Promise<void>;
+    finished: Promise<void>;
+};
+
+type ThemeTransitionDocument = Document & {
+    startViewTransition?: (updateCallback: () => void) => ViewTransitionHandle;
+};
 
 export function ThemeToggle() {
     const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -11,11 +20,64 @@ export function ThemeToggle() {
         return false;
     });
 
-    const toggleTheme = (dark: boolean) => {
-        if (dark === isDarkMode) return;
+    const getTransitionOrigin = (event: MouseEvent<HTMLButtonElement>) => {
+        if (event.clientX !== 0 || event.clientY !== 0) {
+            return { x: event.clientX, y: event.clientY };
+        }
 
-        // Apply no-transition to prevent micro-lag during the state swap
-        document.documentElement.classList.add("no-transition");
+        const rect = event.currentTarget.getBoundingClientRect();
+        return {
+            x: rect.left + rect.width / 2,
+            y: rect.top + rect.height / 2,
+        };
+    };
+
+    const animateThemeReveal = (transition: ViewTransitionHandle, x: number, y: number) => {
+        transition.ready
+            .then(() => {
+                const endRadius = Math.hypot(
+                    Math.max(x, window.innerWidth - x),
+                    Math.max(y, window.innerHeight - y),
+                );
+
+                document.documentElement.animate(
+                    {
+                        opacity: [1, 0],
+                        filter: ["blur(0px)", "blur(2px)"],
+                    },
+                    {
+                        duration: 220,
+                        easing: "ease-out",
+                        fill: "both",
+                        pseudoElement: "::view-transition-old(root)",
+                    },
+                );
+
+                document.documentElement.animate(
+                    {
+                        clipPath: [
+                            `circle(0px at ${x}px ${y}px)`,
+                            `circle(${endRadius}px at ${x}px ${y}px)`,
+                        ],
+                        opacity: [0.45, 1],
+                        filter: ["brightness(1.08) saturate(1.04)", "brightness(1) saturate(1)"],
+                        transform: ["scale(0.985)", "scale(1)"],
+                    },
+                    {
+                        duration: 720,
+                        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+                        fill: "both",
+                        pseudoElement: "::view-transition-new(root)",
+                    },
+                );
+            })
+            .catch(() => {
+                // If the browser cancels the transition, the theme still updates normally.
+            });
+    };
+
+    const toggleTheme = (event: MouseEvent<HTMLButtonElement>, dark: boolean) => {
+        if (dark === isDarkMode) return;
 
         const updateTheme = () => {
             if (dark) {
@@ -28,28 +90,34 @@ export function ThemeToggle() {
             setIsDarkMode(dark);
         };
 
-        const cleanup = () => {
-            // Short delay to ensure the new state is painted before re-enabling transitions
-            setTimeout(() => {
-                document.documentElement.classList.remove("no-transition");
-            }, 50);
-        };
+        const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const transitionDocument = document as ThemeTransitionDocument;
+        const supportsViewTransition = typeof transitionDocument.startViewTransition === "function";
 
-        // Check for View Transitions API support
-        if (!(document as any).startViewTransition) {
+        if (prefersReducedMotion || !supportsViewTransition) {
             updateTheme();
-            cleanup();
             return;
         }
 
-        const transition = (document as any).startViewTransition(updateTheme);
+        // Freeze page-level transitions while the snapshot animation is running.
+        document.documentElement.classList.add("no-transition");
+        const { x, y } = getTransitionOrigin(event);
+
+        const cleanup = () => {
+            setTimeout(() => {
+                document.documentElement.classList.remove("no-transition");
+            }, 80);
+        };
+
+        const transition = transitionDocument.startViewTransition!(updateTheme);
+        animateThemeReveal(transition, x, y);
         transition.finished.finally(cleanup);
     };
 
     return (
         <div
             style={{ borderRadius: "14px" }}
-            className="flex items-center bg-card border border-border h-9 p-1 relative shadow-sm transition-colors duration-300"
+            className="theme-toggle flex items-center bg-card border border-border h-9 p-1 relative shadow-sm transition-colors duration-300"
         >
             {/* Sliding Highlight */}
             <div
@@ -58,7 +126,7 @@ export function ThemeToggle() {
             />
 
             <button
-                onClick={() => toggleTheme(true)}
+                onClick={(event) => toggleTheme(event, true)}
                 className={`relative z-10 w-9 h-7 flex items-center justify-center transition-all duration-500 ${isDarkMode ? 'text-white' : 'text-muted-foreground dark:text-slate-500 hover:text-foreground dark:hover:text-slate-300'}`}
                 title="Dark Mode"
             >
@@ -66,7 +134,7 @@ export function ThemeToggle() {
             </button>
 
             <button
-                onClick={() => toggleTheme(false)}
+                onClick={(event) => toggleTheme(event, false)}
                 className={`relative z-10 w-9 h-7 flex items-center justify-center transition-all duration-500 ${!isDarkMode ? 'text-white' : 'text-muted-foreground dark:text-slate-500 hover:text-foreground dark:hover:text-slate-300'}`}
                 title="Light Mode"
             >
