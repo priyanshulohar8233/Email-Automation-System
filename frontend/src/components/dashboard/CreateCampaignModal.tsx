@@ -28,7 +28,8 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
     const COMPANIES = [
         "A Making Company",
         "MP Consultant LLC",
-        "MP Lumina"
+        "MP Lumina",
+        "Matkotech"
     ];
 
     useEffect(() => {
@@ -168,7 +169,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="space-y-2">
                              <label className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Select Company</label>
-                             <div className="grid grid-cols-3 gap-2">
+                             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                                  {COMPANIES.map((c) => (
                                      <button
                                          key={c}

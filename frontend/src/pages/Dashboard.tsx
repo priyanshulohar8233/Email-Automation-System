@@ -21,7 +21,8 @@ function DashboardContent() {
   const COMPANIES = [
     "A Making Company",
     "MP Consultant LLC",
-    "MP Lumina"
+    "MP Lumina",
+    "Matkotech"
   ];
 
   const formatCompanyName = (name: string) => {

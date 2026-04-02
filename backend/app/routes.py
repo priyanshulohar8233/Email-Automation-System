@@ -274,6 +274,12 @@ def list_companies(db: Session = Depends(get_db)):
     from .models import Campaign, Contact
 
     companies = set()
+    default_companies = {
+        "A Making Company",
+        "MP Consultant LLC",
+        "MP Lumina",
+        "Matkotech",
+    }
 
     for (name,) in db.query(Campaign.company).distinct().all():
         if name and str(name).strip() and str(name).strip().lower() != "unknown":
@@ -288,6 +294,7 @@ def list_companies(db: Session = Depends(get_db)):
         # endpoint resilient and still return campaign-backed companies.
         pass
 
+    companies.update(default_companies)
     return sorted(companies)
 
 @router.get("/analytics/realtime")

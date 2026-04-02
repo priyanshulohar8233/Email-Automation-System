@@ -133,6 +133,7 @@ export default function Campaigns() {
       case 'A Making Company': return 'text-amber-400 bg-amber-400/10 border-amber-400/20';
       case 'MP Lumina': return 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20';
       case 'MP Consultant LLC': return 'text-indigo-400 bg-indigo-400/10 border-indigo-400/20';
+      case 'Matkotech': return 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20';
       default: return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
     }
   };

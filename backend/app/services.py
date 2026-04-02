@@ -971,6 +971,7 @@ def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_
             "email": email_str, # Alias for frontend compatibility
             "recipient_name": contact_name or "Unknown",
             "company": contact_company,
+            "campaign_name": campaign_name or "",
             "event_type": ev_type,
             "type": ev_type,
             "subject": ev.email.subject or "No Subject",
@@ -998,6 +999,7 @@ def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_
                 "recipient": r["recipient"],
                 "recipient_name": r["recipient_name"],
                 "company": r["company"],
+                "campaign_name": r.get("campaign_name", ""),
                 "subject": r["subject"],
                 "sender": r["sender"],
                 "location": r["location"],
@@ -1177,7 +1179,7 @@ def create_campaign(db: Session, data, background_tasks=None):
     debug.debug_log(f"Campaign Payload: {data.dict()}")
 
     # 7 & 8. Ensure company field matches allowed values
-    ALLOWED_COMPANIES = ["MP Lumina", "MP Consultant LLC", "A Making Company"]
+    ALLOWED_COMPANIES = ["MP Lumina", "MP Consultant LLC", "A Making Company", "Matkotech"]
     if data.company not in ALLOWED_COMPANIES:
         debug.debug_log(f"VALIDATION_ERROR: Invalid company '{data.company}'")
         data.company = "MP Consultant LLC" 
@@ -1397,6 +1399,22 @@ def get_activity(db: Session, limit: int | None = None, days: int = 30, company_
     priority = {"CLICKED": 4, "OPENED": 3, "DELIVERED": 2, "SENT": 1, "BOUNCED": 0}
 
     deduped_rows = list(seen.values())[:limit] if limit else list(seen.values())
+    campaign_ids = {row.campaign_id for row in deduped_rows if getattr(row, "campaign_id", None)}
+    email_ids = {row.email_id for row in deduped_rows if getattr(row, "email_id", None)}
+
+    campaign_name_map = {}
+    if campaign_ids:
+        campaign_name_map = {
+            campaign_id: campaign_name
+            for campaign_id, campaign_name in db.query(Campaign.id, Campaign.name).filter(Campaign.id.in_(campaign_ids)).all()
+        }
+
+    subject_map = {}
+    if email_ids:
+        subject_map = {
+            email_id: subject
+            for email_id, subject in db.query(Email.id, Email.subject).filter(Email.id.in_(email_ids)).all()
+        }
 
     for row in deduped_rows:
         try:
@@ -1426,6 +1444,8 @@ def get_activity(db: Session, limit: int | None = None, days: int = 30, company_
             "recipient_name": row.recipient_name or "",
             "sender": row.sender or "",
             "company": row.company or "",
+            "campaign_name": campaign_name_map.get(row.campaign_id, ""),
+            "subject": subject_map.get(row.email_id, "No Subject"),
             "status": row.status.upper() if row.status else "SENT",
             "status_history": history_sorted,
             "country": row.country or "Unknown",

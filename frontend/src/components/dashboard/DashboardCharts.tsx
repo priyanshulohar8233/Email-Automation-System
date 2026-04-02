@@ -23,6 +23,7 @@ const COMPANY_COLORS: Record<string, string> = {
   "MP Consultant LLC": "#FFC107", // Yellow
   "MP Lumina": "#7B61FF",         // Purple
   "A Making Company": "#FF4D4F",  // Red
+  "Matkotech": "#22C55E",         // Green
 };
 
 const CustomTooltip = ({ active, payload, label }: any) => {
