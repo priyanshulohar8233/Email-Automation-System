@@ -2573,13 +2573,28 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
             "secondary": "#334155",
             "logo": "https://img.icons8.com/color/96/business-group.png",
             "signature": """
-                <div style="margin-top: 40px; padding-top: 20px; border-top: 2px solid #0f172a; font-family: 'Georgia', serif;">
-                    <div style="font-weight: bold; font-size: 18px; color: #0f172a; margin-bottom: 2px;">Robert Sterling</div>
-                    <div style="font-size: 14px; color: #334155; font-style: italic; margin-bottom: 10px;">Senior Management Consultant</div>
-                    <div style="font-size: 12px; color: #64748b; line-height: 1.5;">
-                        <b>MP Consultant Group</b><br/>
-                        1221 Avenue of the Americas, New York, NY<br/>
-                        Office: +1 (212) 555-0198
+                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-family: 'Segoe UI', Tahoma, sans-serif;">
+                    <div style="font-size: 32px; line-height: 1; color: #374151; margin-bottom: 10px;">Cheers,</div>
+                    <div style="font-size: 34px; font-weight: 700; letter-spacing: 1px; color: #6b7280; margin-bottom: 6px; text-transform: uppercase;">MARGI CHHAPPAN</div>
+                    <div style="font-size: 34px; font-style: italic; color: #111827; margin-bottom: 14px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
+                    <div style="font-size: 34px; color: #111827; margin-bottom: 6px;">
+                        <span style="color:#93c5fd;">&#9993;</span>
+                        <span style="color:#f97316;"> :</span>
+                        <a href="mailto:margi@mpconsulting.com" style="color:#2563eb; text-decoration:none;">margi@mpconsulting.com</a>
+                    </div>
+                    <div style="font-size: 38px; color: #1f2937; margin-bottom: 10px;">
+                        <span>📞</span>
+                        <span style="color:#f97316;"> :</span>
+                        <span>847-550-4472</span>
+                    </div>
+                    <div style="margin: 10px 0 16px 0;">
+                        <a href="#" style="display:inline-block; width:28px; height:28px; line-height:28px; text-align:center; border-radius:4px; background:#0b4a8b; color:#fff; text-decoration:none; font-weight:700; margin-right:4px;">f</a>
+                        <a href="#" style="display:inline-block; width:28px; height:28px; line-height:28px; text-align:center; border-radius:4px; background:#0e76a8; color:#fff; text-decoration:none; font-weight:700; margin-right:4px;">in</a>
+                        <a href="#" style="display:inline-block; width:28px; height:28px; line-height:28px; text-align:center; border-radius:4px; background:#111827; color:#f59e0b; text-decoration:none; font-weight:700;">◎</a>
+                    </div>
+                    <div style="font-size: 31px; color: #6b7280; line-height: 1.5; border-top: 1px solid #e5e7eb; padding-top: 10px;">
+                        <b style="text-transform: uppercase;">CONFIDENTIALITY NOTE:</b>
+                        This electronic mail may contain information that is confidential or privileged and exempt from disclosure under applicable law. The information is intended only for the use of the recipient(s) named in this email. If you are not an intended recipient, be aware that any disclosure, copying, distribution or use of the contents of this information is without authorization and is prohibited. If you receive this electronic mail in error, please notify us by return electronic mail and delete this mail immediately. Thank you for your cooperation.
                     </div>
                 </div>
             """
@@ -2589,15 +2604,17 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
             "secondary": "#ea580c",
             "logo": "https://img.icons8.com/color/96/factory.png",
             "signature": """
-                <div style="margin-top: 40px; background-color: #fff7ed; padding: 20px; border-radius: 8px; border-left: 4px solid #f97316; font-family: 'Roboto', sans-serif;">
-                    <div style="display: inline-block; font-weight: 900; font-size: 20px; color: #c2410c; letter-spacing: -0.02em;">A MAKING CO.</div>
-                    <div style="margin-top: 10px; height: 1px; background-color: #ffedd5; width: 100%;"></div>
-                    <div style="margin-top: 12px; font-size: 14px; color: #111827;">
-                        <b>James 'Forge' Miller</b> | Operations Director<br/>
-                        <span style="color: #f97316;">Build. Create. Scale.</span>
+                <div style="margin-top: 40px; padding: 18px 20px; border-radius: 10px; border: 1px solid #fed7aa; background: #fff7ed; font-family: 'Segoe UI', Tahoma, sans-serif;">
+                    <div style="font-size: 40px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 6px;">
+                        <span style="color:#ef4444;">A</span><span style="color:#ef4444;">m</span><span style="color:#ef4444;">c</span>
+                        <span style="color:#9ca3af; margin-left:6px;">making</span>
+                        <span style="color:#9ca3af; margin-left:6px;">company</span>
                     </div>
-                    <div style="margin-top: 8px; font-size: 11px; color: #9a3412; text-transform: uppercase; font-weight: bold;">
-                        ISO 9001 CERTIFIED MANUFACTURING
+                    <div style="font-size: 38px; font-weight: 700; color: #111827; margin-top: 10px;">Margi Chhappan</div>
+                    <div style="font-size: 35px; font-style: italic; color: #111827; margin-top: 4px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
+                    <div style="font-size: 41px; color: #111827; margin-top: 10px;">📞 847-550-4472</div>
+                    <div style="font-size: 39px; margin-top: 6px;">
+                        🌐 <a href="https://www.amakingcompany.com" style="color: #0b63ce; text-decoration: underline; font-weight: 700;">www.amakingcompany.com</a>
                     </div>
                 </div>
             """

@@ -35,9 +35,9 @@ const TEMPLATES: Template[] = [
     company: "Lumina Creative",
     description: "Modern, vibrant layout with indigo accents and a minimalist creative signature.",
     icon: <Sparkles className="h-5 w-5" />,
-    color: "bg-indigo-500",
-    accent: "text-indigo-600",
-    preview: "Modern | Indigo | Creative"
+    color: "bg-[#7B61FF]",
+    accent: "text-[#7B61FF]",
+    preview: "Modern | Purple | Creative"
   },
   {
     id: "consultant",
@@ -45,9 +45,9 @@ const TEMPLATES: Template[] = [
     company: "Sterling Group",
     description: "Professional, executive-grade layout with slate tones and a corporate serif signature.",
     icon: <Briefcase className="h-5 w-5" />,
-    color: "bg-slate-800",
-    accent: "text-slate-900",
-    preview: "Professional | Slate | Executive"
+    color: "bg-[#FFC107]",
+    accent: "text-[#FFC107]",
+    preview: "Professional | Yellow | Executive"
   },
   {
     id: "factory",
@@ -55,9 +55,9 @@ const TEMPLATES: Template[] = [
     company: "Industrial Scale",
     description: "Bold, industrial layout with orange accents and a strong, high-contrast signature.",
     icon: <Factory className="h-5 w-5" />,
-    color: "bg-orange-500",
-    accent: "text-orange-600",
-    preview: "Industrial | Orange | Bold"
+    color: "bg-[#FF4D4F]",
+    accent: "text-[#FF4D4F]",
+    preview: "Industrial | Red | Bold"
   },
   {
     id: "matkotech",
@@ -65,8 +65,8 @@ const TEMPLATES: Template[] = [
     company: "Matkotech Technologies",
     description: "Green performance layout with crisp product signature tailored for modern IT outreach.",
     icon: <Rocket className="h-5 w-5" />,
-    color: "bg-emerald-500",
-    accent: "text-emerald-600",
+    color: "bg-[#22C55E]",
+    accent: "text-[#22C55E]",
     preview: "Tech | Green | Performance"
   }
 ];
