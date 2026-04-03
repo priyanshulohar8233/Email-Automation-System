@@ -88,7 +88,6 @@ export default function StandardLayout() {
   const [generatedHtml, setGeneratedHtml] = useState("");
   const [generatedSubject, setGeneratedSubject] = useState("");
   const [generatedBodyText, setGeneratedBodyText] = useState("");
-  const [recipientPlaceholder, setRecipientPlaceholder] = useState("[Recipient Name]");
   const [previewInGmailStyle, setPreviewInGmailStyle] = useState(false);
   const [testEmail, setTestEmail] = useState("");
   const [isSendingTest, setIsSendingTest] = useState(false);
@@ -339,7 +338,6 @@ export default function StandardLayout() {
     }
 
     const imageSource = imagePreview || imageUrl;
-    const greeting = `Dear ${recipientPlaceholder || "[Recipient Name]"},`;
     const bodyHtml = formatBodyTextToHtml(generatedBodyText);
     const imageHtml = imageSource
       ? `<div style="margin:18px 0 6px 0;"><img src="${imageSource}" alt="Email visual" style="display:block;margin:0 auto;width:${imageWidthPercent}%;max-width:${imageWidthPercent}%;height:${imageHeightPx}px;object-fit:cover;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 8px 20px rgba(15, 23, 42, 0.08);" /></div>`
@@ -354,7 +352,7 @@ export default function StandardLayout() {
             <div style="font-size:16px;font-weight:700;color:#0f172a;">${escapeHtml(templateMeta.templateName)}</div>
           </div>
         </div>
-        <p style="margin:0 0 18px 0;font-size:15px;line-height:1.8;color:#0f172a;font-weight:600;">${escapeHtml(greeting)}</p>
+        <p style="margin:0 0 18px 0;font-size:15px;line-height:1.8;color:#0f172a;font-weight:600;">Dear [Recipient Name],</p>
         <div style="font-size:15px;min-height:120px;">${bodyHtml}</div>
         ${imageHtml}
         ${templateMeta.signatureHtml}
@@ -372,19 +370,7 @@ export default function StandardLayout() {
     imageUrl,
     imageWidthPercent,
     imageHeightPx,
-    recipientPlaceholder,
   ]);
-
-  const handleDownloadHtml = () => {
-    if (!composedHtml) return;
-    const blob = new Blob([composedHtml], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${(generatedSubject || selectedTemplate?.name || "standard-layout").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.html`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
 
   const handleSendTestEmail = async () => {
     if (!composedHtml || !generatedSubject.trim()) return;
@@ -1022,18 +1008,7 @@ export default function StandardLayout() {
                         className="h-9 gap-2 text-xs font-bold border-border"
                       >
                         <Eye className="h-3.5 w-3.5" />
-                        {previewInGmailStyle ? "Raw Preview" : "Preview in Gmail Style"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleDownloadHtml}
-                        disabled={!composedHtml}
-                        style={{ borderRadius: "10px" }}
-                        className="h-9 gap-2 text-xs font-bold border-border"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Download HTML
+                        {previewInGmailStyle ? "Close Preview" : "Preview"}
                       </Button>
                       <Button 
                         variant="outline" 
@@ -1044,31 +1019,7 @@ export default function StandardLayout() {
                         className="h-9 gap-2 text-xs font-bold border-border"
                       >
                         {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
-                        {copied ? "Copied" : "Copy HTML"}
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handleScheduleSend}
-                        disabled={!composedHtml || isSending || recipients.length === 0}
-                        style={{ borderRadius: "10px" }}
-                        className="h-9 gap-2 text-xs font-bold border-border"
-                        title={recipients.length === 0 ? "Upload recipient sheet first" : ""}
-                      >
-                        <Calendar className="h-3.5 w-3.5" />
-                        Schedule
-                      </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={handleSendNow}
-                        disabled={!composedHtml || isSending || recipients.length === 0}
-                        style={{ borderRadius: "10px" }}
-                        className="h-9 gap-2 text-xs font-bold border-border"
-                        title={recipients.length === 0 ? "Upload recipient sheet first" : ""}
-                      >
-                        {isSending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
-                        Send Now
+                        {copied ? "Copied" : "Copy"}
                       </Button>
                       <Button 
                         onClick={handleUseInCampaign}
@@ -1088,22 +1039,12 @@ export default function StandardLayout() {
                       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)] gap-6 items-start">
                         <div className="rounded-2xl border border-border bg-card/90 shadow-sm p-5 space-y-4">
                           <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Subject</label>
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Subject Line</label>
                             <Input
                               value={generatedSubject}
                               onChange={(e) => setGeneratedSubject(e.target.value)}
                               style={{ borderRadius: "12px" }}
                               placeholder="Subject line"
-                              className="bg-muted/30 border-border h-11 text-sm"
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Recipient Greeting</label>
-                            <Input
-                              value={recipientPlaceholder}
-                              onChange={(e) => setRecipientPlaceholder(e.target.value)}
-                              style={{ borderRadius: "12px" }}
-                              placeholder="[Recipient Name]"
                               className="bg-muted/30 border-border h-11 text-sm"
                             />
                           </div>
@@ -1140,14 +1081,9 @@ export default function StandardLayout() {
                             </Button>
                           </div>
                         </div>
-                        <div className="space-y-3">
-                          <div className={cn(
-                            "transition-all duration-300",
-                            previewInGmailStyle
-                              ? "rounded-[28px] border border-border bg-[#f6f8fc] p-4 md:p-6 shadow-inner"
-                              : "rounded-2xl border border-border bg-transparent p-0"
-                          )}>
-                            {previewInGmailStyle && (
+                        {previewInGmailStyle && (
+                          <div className="space-y-3">
+                            <div className="rounded-[28px] border border-border bg-[#f6f8fc] p-4 md:p-6 shadow-inner transition-all duration-300">
                               <div className="mb-4 rounded-2xl border border-[#d7dce5] bg-white px-4 py-3 shadow-sm">
                                 <div className="flex items-center justify-between gap-3 text-[#5f6368]">
                                   <div>
@@ -1155,24 +1091,19 @@ export default function StandardLayout() {
                                     <p className="text-xs">to me</p>
                                   </div>
                                   <Badge variant="outline" className="border-[#d7dce5] bg-[#f8f9fa] text-[#5f6368]">
-                                    Gmail Style
+                                    Preview
                                   </Badge>
                                 </div>
                               </div>
-                            )}
-                            <div className="flex justify-center">
-                              <div
-                                className={cn(
-                                  "overflow-hidden",
-                                  previewInGmailStyle
-                                    ? "w-full max-w-[760px] rounded-none border-0 bg-white shadow-none"
-                                    : "w-full max-w-[760px] rounded-xl border border-border bg-card shadow-2xl"
-                                )}
-                                dangerouslySetInnerHTML={{ __html: composedHtml }}
-                              />
+                              <div className="flex justify-center">
+                                <div
+                                  className="w-full max-w-[760px] overflow-hidden rounded-none border-0 bg-white shadow-none"
+                                  dangerouslySetInnerHTML={{ __html: composedHtml }}
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                    </div>
                  ) : (
