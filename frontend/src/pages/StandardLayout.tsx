@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import * as XLSX from "xlsx";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,8 @@ import {
   ChevronRight, Download, Users, Link, Paperclip, 
   Image as ImageIcon, Upload, Trash2, Calendar, Clock, 
   Plus, FileText, AlertCircle, CheckCircle2, Layout, 
-  Smartphone, Monitor, Globe, Building2, Briefcase, Factory, Rocket
+  Smartphone, Monitor, Globe, Building2, Briefcase, Factory, Rocket,
+  Eye, TestTube2
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
@@ -26,6 +27,14 @@ interface Template {
   color: string;
   accent: string;
   preview: string;
+}
+
+interface GeneratedTemplateMeta {
+  logoUrl: string;
+  primaryColor: string;
+  secondaryColor: string;
+  signatureHtml: string;
+  templateName: string;
 }
 
 const TEMPLATES: Template[] = [
@@ -78,6 +87,12 @@ export default function StandardLayout() {
   const [generating, setGenerating] = useState(false);
   const [generatedHtml, setGeneratedHtml] = useState("");
   const [generatedSubject, setGeneratedSubject] = useState("");
+  const [generatedBodyText, setGeneratedBodyText] = useState("");
+  const [recipientPlaceholder, setRecipientPlaceholder] = useState("[Recipient Name]");
+  const [previewInGmailStyle, setPreviewInGmailStyle] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
+  const [isSendingTest, setIsSendingTest] = useState(false);
+  const [templateMeta, setTemplateMeta] = useState<GeneratedTemplateMeta | null>(null);
   const [imageUrl, setImageUrl] = useState("");
   const [localImage, setLocalImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -284,6 +299,130 @@ export default function StandardLayout() {
       reader.readAsDataURL(file);
     });
 
+  const escapeHtml = (value: string) =>
+    value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+
+  const formatBodyTextToHtml = (rawText: string) => {
+    const lines = rawText.split(/\r?\n/).map((line) => line.trim());
+    const paragraphs: string[] = [];
+    let current: string[] = [];
+
+    lines.forEach((line) => {
+      if (line) {
+        current.push(line);
+      } else if (current.length) {
+        paragraphs.push(current.join(" "));
+        current = [];
+      }
+    });
+
+    if (current.length) {
+      paragraphs.push(current.join(" "));
+    }
+
+    return paragraphs
+      .map(
+        (paragraph) =>
+          `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.82; color:#334155;">${escapeHtml(paragraph)}</p>`
+      )
+      .join("");
+  };
+
+  const composedHtml = useMemo(() => {
+    if (!templateMeta || !generatedBodyText.trim()) {
+      return generatedHtml;
+    }
+
+    const imageSource = imagePreview || imageUrl;
+    const greeting = `Dear ${recipientPlaceholder || "[Recipient Name]"},`;
+    const bodyHtml = formatBodyTextToHtml(generatedBodyText);
+    const imageHtml = imageSource
+      ? `<div style="margin:18px 0 6px 0;"><img src="${imageSource}" alt="Email visual" style="display:block;margin:0 auto;width:${imageWidthPercent}%;max-width:${imageWidthPercent}%;height:${imageHeightPx}px;object-fit:cover;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 8px 20px rgba(15, 23, 42, 0.08);" /></div>`
+      : "";
+
+    return `
+      <div style="max-width:680px;margin:0 auto;font-family:'Segoe UI',Arial,sans-serif;color:#334155;line-height:1.7;background:#ffffff;padding:28px 32px;border-radius:12px;border:1px solid #e2e8f0;">
+        <div style="display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;margin-bottom:22px;">
+          <img src="${templateMeta.logoUrl}" width="42" height="42" alt="${escapeHtml(templateMeta.templateName)}" />
+          <div>
+            <div style="font-size:11px;color:#64748b;letter-spacing:0.08em;text-transform:uppercase;">MailFlow Standard Layout</div>
+            <div style="font-size:16px;font-weight:700;color:#0f172a;">${escapeHtml(templateMeta.templateName)}</div>
+          </div>
+        </div>
+        <p style="margin:0 0 18px 0;font-size:15px;line-height:1.8;color:#0f172a;font-weight:600;">${escapeHtml(greeting)}</p>
+        <div style="font-size:15px;min-height:120px;">${bodyHtml}</div>
+        ${imageHtml}
+        ${templateMeta.signatureHtml}
+        <div style="margin-top:24px;font-size:11px;color:#64748b;text-align:center;border-top:1px solid #e2e8f0;padding-top:14px;">
+          Sent via MailFlow AI Engine. To unsubscribe,
+          <a href="#" style="color:${templateMeta.primaryColor};text-decoration:none;font-weight:700;">click here</a>.
+        </div>
+      </div>
+    `;
+  }, [
+    templateMeta,
+    generatedBodyText,
+    generatedHtml,
+    imagePreview,
+    imageUrl,
+    imageWidthPercent,
+    imageHeightPx,
+    recipientPlaceholder,
+  ]);
+
+  const handleDownloadHtml = () => {
+    if (!composedHtml) return;
+    const blob = new Blob([composedHtml], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${(generatedSubject || selectedTemplate?.name || "standard-layout").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.html`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleSendTestEmail = async () => {
+    if (!composedHtml || !generatedSubject.trim()) return;
+    if (!testEmail.trim()) {
+      alert("Please enter a test email address.");
+      return;
+    }
+
+    setIsSendingTest(true);
+    try {
+      const encodedLocalAttachments = await Promise.all(localAttachments.map(fileToDataUrl));
+      const urlAttachments = collectAttachmentLinks();
+      const attachmentsPayload = [...urlAttachments, ...encodedLocalAttachments];
+      const response = await fetch("/api/templates/test-send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipient: testEmail.trim(),
+          subject: generatedSubject.trim(),
+          body: composedHtml,
+          attachments: attachmentsPayload,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to send test email.");
+      }
+
+      setSendSuccess(`Test email sent to ${testEmail.trim()}!`);
+      setTimeout(() => setSendSuccess(null), 3000);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to send test email.");
+    } finally {
+      setIsSendingTest(false);
+    }
+  };
+
   const handleGenerate = async () => {
     if (!topic || !selectedTemplate) return;
     setGenerating(true);
@@ -311,31 +450,40 @@ export default function StandardLayout() {
 
       if (res.ok) {
         const data = await res.json();
-        const sizedHtml = data.html ? applyImageSizingToHtml(data.html) : "";
-        setGeneratedHtml(sizedHtml);
-        setGeneratedSubject(data.subject);
+        setGeneratedHtml(data.html || "");
+        setGeneratedSubject(data.subject || "");
+        setGeneratedBodyText(data.body_text || "");
+        setTemplateMeta({
+          logoUrl: data.logo_url || "",
+          primaryColor: data.primary_color || "#6366f1",
+          secondaryColor: data.secondary_color || "#4f46e5",
+          signatureHtml: data.signature_html || "",
+          templateName: data.template_name || selectedTemplate.name,
+        });
       } else {
         throw new Error("Failed to generate email");
       }
     } catch (error) {
       console.error("Generation failed:", error);
       setGeneratedHtml("<div style='padding: 20px; color: #ef4444;'>Failed to generate email. Please check your AI API configuration.</div>");
+      setGeneratedBodyText("");
+      setTemplateMeta(null);
     } finally {
       setGenerating(false);
     }
   };
 
   const handleCopy = () => {
-    if (!generatedHtml) return;
-    navigator.clipboard.writeText(generatedHtml);
+    if (!composedHtml) return;
+    navigator.clipboard.writeText(composedHtml);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleUseInCampaign = async () => {
-    if (!generatedHtml) return;
+    if (!composedHtml) return;
     localStorage.setItem("ai_draft_subject", generatedSubject);
-    localStorage.setItem("ai_draft_body", applyImageSizingToHtml(generatedHtml));
+    localStorage.setItem("ai_draft_body", composedHtml);
     if (recipients.length > 0) {
       localStorage.setItem("ai_draft_recipients", JSON.stringify(recipients));
       localStorage.setItem("ai_draft_filename", uploadedFileName || "standard_layout_recipients.xlsx");
@@ -352,7 +500,7 @@ export default function StandardLayout() {
   };
 
   const handleSendNow = async () => {
-    if (!generatedHtml) return;
+    if (!composedHtml) return;
     if (recipients.length === 0) {
       alert("Please upload recipient sheet first.");
       return;
@@ -368,7 +516,7 @@ export default function StandardLayout() {
         body: JSON.stringify({
           campaign_id: 1,
           subject: generatedSubject,
-          body: applyImageSizingToHtml(generatedHtml),
+          body: composedHtml,
           recipients: recipients.map((r) => r.email),
           scheduled_at: null,
           attachments: attachmentsPayload
@@ -386,7 +534,7 @@ export default function StandardLayout() {
   };
 
   const handleScheduleSend = async () => {
-    if (!generatedHtml) return;
+    if (!composedHtml) return;
     if (recipients.length === 0) {
       alert("Please upload recipient sheet first.");
       return;
@@ -409,7 +557,7 @@ export default function StandardLayout() {
         body: JSON.stringify({
           campaign_id: 1,
           subject: generatedSubject,
-          body: applyImageSizingToHtml(generatedHtml),
+          body: composedHtml,
           recipients: recipients.map((r) => r.email),
           scheduled_at: toUTC(scheduledLocal),
           attachments: attachmentsPayload,
@@ -468,6 +616,9 @@ export default function StandardLayout() {
                         setSelectedTemplate(tpl);
                         setTopic("");
                         setGeneratedHtml("");
+                        setGeneratedBodyText("");
+                        setGeneratedSubject("");
+                        setTemplateMeta(null);
                         setShowGenerator(true);
                    }}
                 >
@@ -480,6 +631,9 @@ export default function StandardLayout() {
                         setSelectedTemplate(tpl);
                         setTopic("");
                         setGeneratedHtml("");
+                        setGeneratedBodyText("");
+                        setGeneratedSubject("");
+                        setTemplateMeta(null);
                         setShowGenerator(true);
                    }}
                 >
@@ -859,11 +1013,33 @@ export default function StandardLayout() {
                       <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">Branded HTML Preview</CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPreviewInGmailStyle((prev) => !prev)}
+                        disabled={!composedHtml}
+                        style={{ borderRadius: "10px" }}
+                        className="h-9 gap-2 text-xs font-bold border-border"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        {previewInGmailStyle ? "Raw Preview" : "Preview in Gmail Style"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDownloadHtml}
+                        disabled={!composedHtml}
+                        style={{ borderRadius: "10px" }}
+                        className="h-9 gap-2 text-xs font-bold border-border"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Download HTML
+                      </Button>
                       <Button 
                         variant="outline" 
                         size="sm" 
                         onClick={handleCopy}
-                        disabled={!generatedHtml}
+                        disabled={!composedHtml}
                         style={{ borderRadius: "10px" }}
                         className="h-9 gap-2 text-xs font-bold border-border"
                       >
@@ -874,7 +1050,7 @@ export default function StandardLayout() {
                         variant="outline" 
                         size="sm" 
                         onClick={handleScheduleSend}
-                        disabled={!generatedHtml || isSending || recipients.length === 0}
+                        disabled={!composedHtml || isSending || recipients.length === 0}
                         style={{ borderRadius: "10px" }}
                         className="h-9 gap-2 text-xs font-bold border-border"
                         title={recipients.length === 0 ? "Upload recipient sheet first" : ""}
@@ -886,7 +1062,7 @@ export default function StandardLayout() {
                         variant="outline" 
                         size="sm" 
                         onClick={handleSendNow}
-                        disabled={!generatedHtml || isSending || recipients.length === 0}
+                        disabled={!composedHtml || isSending || recipients.length === 0}
                         style={{ borderRadius: "10px" }}
                         className="h-9 gap-2 text-xs font-bold border-border"
                         title={recipients.length === 0 ? "Upload recipient sheet first" : ""}
@@ -896,7 +1072,7 @@ export default function StandardLayout() {
                       </Button>
                       <Button 
                         onClick={handleUseInCampaign}
-                        disabled={!generatedHtml}
+                        disabled={!composedHtml}
                         style={{ borderRadius: "10px" }}
                         className="h-9 gap-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white border-transparent"
                       >
@@ -907,13 +1083,97 @@ export default function StandardLayout() {
                  </div>
               </CardHeader>
               <CardContent className="p-0 flex-1 overflow-y-auto bg-muted/50 scrollbar-hide">
-                 {generatedHtml ? (
-                   <div className="p-8 flex justify-center">
-                      <div 
-                        className="bg-card rounded-xl shadow-2xl overflow-hidden border border-border"
-                        style={{ width: '100%', maxWidth: '650px' }}
-                        dangerouslySetInnerHTML={{ __html: generatedHtml }} 
-                      />
+                 {composedHtml ? (
+                   <div className="p-6 md:p-8 space-y-6">
+                      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)] gap-6 items-start">
+                        <div className="rounded-2xl border border-border bg-card/90 shadow-sm p-5 space-y-4">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Subject</label>
+                            <Input
+                              value={generatedSubject}
+                              onChange={(e) => setGeneratedSubject(e.target.value)}
+                              style={{ borderRadius: "12px" }}
+                              placeholder="Subject line"
+                              className="bg-muted/30 border-border h-11 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Recipient Greeting</label>
+                            <Input
+                              value={recipientPlaceholder}
+                              onChange={(e) => setRecipientPlaceholder(e.target.value)}
+                              style={{ borderRadius: "12px" }}
+                              placeholder="[Recipient Name]"
+                              className="bg-muted/30 border-border h-11 text-sm"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Body</label>
+                            <textarea
+                              value={generatedBodyText}
+                              onChange={(e) => setGeneratedBodyText(e.target.value)}
+                              style={{ borderRadius: "14px" }}
+                              className="w-full min-h-[250px] bg-muted/30 border border-border p-4 text-sm leading-7 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-y text-foreground"
+                              placeholder="Generated email body"
+                            />
+                          </div>
+                          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
+                            <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Send Test Email</label>
+                            <Input
+                              type="email"
+                              value={testEmail}
+                              onChange={(e) => setTestEmail(e.target.value)}
+                              style={{ borderRadius: "12px" }}
+                              placeholder="yourname@example.com"
+                              className="bg-background border-border h-11 text-sm"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={handleSendTestEmail}
+                              disabled={!composedHtml || isSendingTest}
+                              className="w-full h-10 text-xs font-bold gap-2"
+                              style={{ borderRadius: "12px" }}
+                            >
+                              {isSendingTest ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <TestTube2 className="h-3.5 w-3.5" />}
+                              {isSendingTest ? "Sending Test..." : "Send Test Email"}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div className={cn(
+                            "transition-all duration-300",
+                            previewInGmailStyle
+                              ? "rounded-[28px] border border-border bg-[#f6f8fc] p-4 md:p-6 shadow-inner"
+                              : "rounded-2xl border border-border bg-transparent p-0"
+                          )}>
+                            {previewInGmailStyle && (
+                              <div className="mb-4 rounded-2xl border border-[#d7dce5] bg-white px-4 py-3 shadow-sm">
+                                <div className="flex items-center justify-between gap-3 text-[#5f6368]">
+                                  <div>
+                                    <p className="text-base font-semibold text-[#202124]">{generatedSubject || "Professional Email Preview"}</p>
+                                    <p className="text-xs">to me</p>
+                                  </div>
+                                  <Badge variant="outline" className="border-[#d7dce5] bg-[#f8f9fa] text-[#5f6368]">
+                                    Gmail Style
+                                  </Badge>
+                                </div>
+                              </div>
+                            )}
+                            <div className="flex justify-center">
+                              <div
+                                className={cn(
+                                  "overflow-hidden",
+                                  previewInGmailStyle
+                                    ? "w-full max-w-[760px] rounded-none border-0 bg-white shadow-none"
+                                    : "w-full max-w-[760px] rounded-xl border border-border bg-card shadow-2xl"
+                                )}
+                                dangerouslySetInnerHTML={{ __html: composedHtml }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
                    </div>
                  ) : (
                    <div className="h-full flex flex-col items-center justify-center text-center p-12 space-y-4">

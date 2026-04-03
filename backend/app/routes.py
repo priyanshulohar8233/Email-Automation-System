@@ -685,8 +685,8 @@ def test_send_template(req: TestEmailRequest, db: Session = Depends(get_db)):
             body_html=req.body,
             smtp_host=s.smtp_host,
             smtp_port=s.smtp_port,
-            smtp_user=s.smtp_user,
-            smtp_pass=s.smtp_pass,
+            smtp_user=s.smtp_username,
+            smtp_pass=s.smtp_password,
             attachments=req.attachments
         )
         return {"status": "success"}

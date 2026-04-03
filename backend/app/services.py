@@ -83,8 +83,35 @@ def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_p
     if reply_to:
         message["Reply-To"] = reply_to
 
-    # Create plain-text version
+    import base64
     import re
+    from email.mime.image import MIMEImage
+
+    # Gmail strips data-uri images in many cases, so inline them as CID parts.
+    inline_images = []
+
+    def replace_data_image(match):
+        data_uri = match.group(1)
+        try:
+            header, encoded = data_uri.split(",", 1)
+            mime_type = header.split(";")[0].replace("data:", "").strip() or "image/png"
+            extension = mime_type.split("/")[-1] if "/" in mime_type else "png"
+            cid = f"inline-image-{len(inline_images) + 1}"
+            inline_images.append(
+                {
+                    "cid": cid,
+                    "bytes": base64.b64decode(encoded),
+                    "mime_type": mime_type,
+                    "extension": extension,
+                }
+            )
+            return f'src="cid:{cid}"'
+        except Exception:
+            return match.group(0)
+
+    body_html = re.sub(r'src="(data:image/[^"]+)"', replace_data_image, body_html)
+
+    # Create plain-text version
     body_text = re.sub('<[^<]+?>', '', body_html)
     
     part1 = MIMEText(body_text, "plain")
@@ -92,6 +119,21 @@ def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_p
 
     alt_part.attach(part1)
     alt_part.attach(part2)
+
+    for inline_image in inline_images:
+        maintype, subtype = (
+            inline_image["mime_type"].split("/", 1)
+            if "/" in inline_image["mime_type"]
+            else ("image", inline_image["extension"])
+        )
+        image_part = MIMEImage(inline_image["bytes"], _subtype=subtype)
+        image_part.add_header("Content-ID", f"<{inline_image['cid']}>")
+        image_part.add_header(
+            "Content-Disposition",
+            "inline",
+            filename=f"{inline_image['cid']}.{inline_image['extension']}",
+        )
+        message.attach(image_part)
 
     # Process Attachments
     if attachments:
@@ -2589,27 +2631,27 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
             paragraphs = ["Thank you for your time. I would be glad to share more details based on your priorities."]
 
         return "".join(
-            f'<p style="margin:0 0 14px 0; font-size:15px; line-height:1.72; color:#dbe6ff;">{html_lib.escape(p)}</p>'
+            f'<p style="margin:0 0 14px 0; font-size:15px; line-height:1.82; color:#334155;">{html_lib.escape(p)}</p>'
             for p in paragraphs
         )
 
-    # 2. Branded signatures with professional and consistent sizing.
+    # 2. Branded signatures with a clean professional email style.
     layouts = {
         "MP Lumina": {
             "primary": "#7B61FF",
             "secondary": "#4F46E5",
             "logo": "https://img.icons8.com/fluency/96/sparkling.png",
             "signature": """
-                <div style="margin-top: 28px; padding: 16px; border: 1px solid #2a3155; border-radius: 12px; background: #131d37; font-family: 'Inter', 'Segoe UI', sans-serif;">
+                <div style="margin-top: 28px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-family: 'Segoe UI', Tahoma, sans-serif;">
                     <table cellpadding="0" cellspacing="0" border="0">
                         <tr>
                             <td style="vertical-align: top; padding-right: 12px;">
                                 <img src="https://img.icons8.com/fluency/48/sparkling.png" width="40" height="40" alt="MP Lumina" />
                             </td>
-                            <td style="border-left: 2px solid #7B61FF; padding-left: 12px;">
-                                <div style="font-weight: 700; font-size: 15px; color: #f8fafc;">Sarah Jenkins</div>
-                                <div style="font-size: 12px; color: #a5b4fc; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px;">Head of Creative Strategy</div>
-                                <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">MP Lumina</div>
+                            <td style="border-left: 3px solid #7B61FF; padding-left: 12px;">
+                                <div style="font-weight: 700; font-size: 16px; color: #0f172a;">Sarah Jenkins</div>
+                                <div style="font-size: 12px; color: #7B61FF; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px;">Head of Creative Strategy</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 4px;">MP Lumina</div>
                                 <a href="https://www.mplumina.com" style="display:inline-block; margin-top: 6px; color: #7B61FF; text-decoration:none; font-size:12px; font-weight:700;">www.mplumina.com</a>
                             </td>
                         </tr>
@@ -2622,16 +2664,16 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
             "secondary": "#F59E0B",
             "logo": "https://img.icons8.com/color/96/business-group.png",
             "signature": """
-                <div style="margin-top: 28px; padding: 18px; border: 1px solid #2a3155; border-radius: 12px; background: #131d37; font-family: 'Segoe UI', Tahoma, sans-serif;">
-                    <div style="font-size: 14px; color: #e2e8f0; margin-bottom: 8px;">Cheers,</div>
-                    <div style="font-size: 17px; font-weight: 800; letter-spacing: 0.04em; color: #f8fafc; text-transform: uppercase;">MARGI CHHAPPAN</div>
-                    <div style="font-size: 16px; font-style: italic; color: #e2e8f0; margin-top: 4px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
-                    <div style="font-size: 15px; color: #f8fafc; margin-top: 12px;">
+                <div style="margin-top: 28px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-family: 'Segoe UI', Tahoma, sans-serif;">
+                    <div style="font-size: 15px; color: #334155; margin-bottom: 8px;">Cheers,</div>
+                    <div style="font-size: 18px; font-weight: 800; letter-spacing: 0.04em; color: #0f172a; text-transform: uppercase;">MARGI CHHAPPAN</div>
+                    <div style="font-size: 16px; font-style: italic; color: #475569; margin-top: 4px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
+                    <div style="font-size: 15px; color: #0f172a; margin-top: 12px;">
                         <span style="color:#93c5fd;">&#9993;</span>
                         <span style="color:#f59e0b;"> :</span>
                         <a href="mailto:margi@mpconsulting.com" style="color:#60a5fa; text-decoration:none;">margi@mpconsulting.com</a>
                     </div>
-                    <div style="font-size: 15px; color: #f8fafc; margin-top: 6px;">
+                    <div style="font-size: 15px; color: #0f172a; margin-top: 6px;">
                         <span>📞</span>
                         <span style="color:#f59e0b;"> :</span>
                         <span>847-550-4472</span>
@@ -2641,8 +2683,8 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
                         <a href="#" style="display:inline-block; width:24px; height:24px; line-height:24px; text-align:center; border-radius:4px; background:#0e76a8; color:#fff; text-decoration:none; font-size:11px; font-weight:700; margin-right:4px;">in</a>
                         <a href="#" style="display:inline-block; width:24px; height:24px; line-height:24px; text-align:center; border-radius:4px; background:#111827; color:#f59e0b; text-decoration:none; font-size:12px; font-weight:700;">◎</a>
                     </div>
-                    <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #2a3155; font-size: 11px; line-height: 1.5; color: #94a3b8;">
-                        <b style="text-transform: uppercase; color:#cbd5e1;">Confidentiality Note:</b>
+                    <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 11px; line-height: 1.5; color: #64748b;">
+                        <b style="text-transform: uppercase; color:#475569;">Confidentiality Note:</b>
                         This electronic mail may contain confidential information intended only for the recipient(s) named in this email.
                     </div>
                 </div>
@@ -2653,14 +2695,14 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
             "secondary": "#F97316",
             "logo": "https://img.icons8.com/color/96/factory.png",
             "signature": """
-                <div style="margin-top: 28px; padding: 18px; border: 1px solid #3b2a2f; border-radius: 12px; background: linear-gradient(180deg, #25151a, #1a1f33); font-family: 'Segoe UI', Tahoma, sans-serif;">
+                <div style="margin-top: 28px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-family: 'Segoe UI', Tahoma, sans-serif;">
                     <div style="font-size: 18px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 8px;">
                         <span style="color:#ef4444;">A</span><span style="color:#ef4444;">m</span><span style="color:#ef4444;">c</span>
-                        <span style="color:#cbd5e1; margin-left:6px;">making company</span>
+                        <span style="color:#64748b; margin-left:6px;">making company</span>
                     </div>
-                    <div style="font-size: 16px; font-weight: 700; color: #f8fafc;">Margi Chhappan</div>
-                    <div style="font-size: 15px; font-style: italic; color: #e2e8f0; margin-top: 4px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
-                    <div style="font-size: 15px; color: #f8fafc; margin-top: 10px;">📞 847-550-4472</div>
+                    <div style="font-size: 16px; font-weight: 700; color: #0f172a;">Margi Chhappan</div>
+                    <div style="font-size: 15px; font-style: italic; color: #475569; margin-top: 4px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
+                    <div style="font-size: 15px; color: #0f172a; margin-top: 10px;">📞 847-550-4472</div>
                     <div style="font-size: 15px; margin-top: 6px;">
                         🌐 <a href="https://www.amakingcompany.com" style="color: #60a5fa; text-decoration: underline; font-weight: 700;">www.amakingcompany.com</a>
                     </div>
@@ -2672,17 +2714,17 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
             "secondary": "#16A34A",
             "logo": "https://img.icons8.com/fluency/96/artificial-intelligence.png",
             "signature": """
-                <div style="margin-top: 28px; padding: 16px; border: 1px solid #214032; border-radius: 12px; background: #112a21; font-family: 'Segoe UI', sans-serif;">
+                <div style="margin-top: 28px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-family: 'Segoe UI', sans-serif;">
                     <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">
                         <tr>
                             <td style="vertical-align: top; padding-right: 12px;">
                                 <img src="https://img.icons8.com/fluency/48/artificial-intelligence.png" width="40" height="40" alt="Matkotech" />
                             </td>
-                            <td style="border-left: 2px solid #22C55E; padding-left: 12px;">
-                                <div style="font-weight: 700; font-size: 15px; color: #f0fdf4;">Matkotech Growth Desk</div>
-                                <div style="font-size: 12px; color: #86efac; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px;">AI Outreach & Automation</div>
-                                <div style="font-size: 12px; color: #bbf7d0; margin-top: 4px;">Build Faster. Scale Smarter.</div>
-                                <a href="https://matkotech.com/" style="display:inline-block; margin-top: 6px; color: #4ade80; text-decoration:none; font-size:12px; font-weight:700;">https://matkotech.com/</a>
+                            <td style="border-left: 3px solid #22C55E; padding-left: 12px;">
+                                <div style="font-weight: 700; font-size: 15px; color: #0f172a;">Matkotech Growth Desk</div>
+                                <div style="font-size: 12px; color: #16A34A; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px;">AI Outreach & Automation</div>
+                                <div style="font-size: 12px; color: #475569; margin-top: 4px;">Build Faster. Scale Smarter.</div>
+                                <a href="https://matkotech.com/" style="display:inline-block; margin-top: 6px; color: #16A34A; text-decoration:none; font-size:12px; font-weight:700;">https://matkotech.com/</a>
                             </td>
                         </tr>
                     </table>
@@ -2701,20 +2743,24 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
     if image:
         image_html = (
             f'<div style="margin: 18px 0 6px 0;">'
-            f'<img src="{image}" style="width:100%; max-width:600px; border-radius:12px; border:1px solid #2a3155; '
-            f'box-shadow:0 10px 24px rgba(2, 6, 23, 0.35); object-fit:cover;" />'
+            f'<img src="{image}" style="width:100%; max-width:600px; border-radius:12px; border:1px solid #e2e8f0; '
+            f'box-shadow:0 8px 20px rgba(15, 23, 42, 0.08); object-fit:cover;" />'
             f"</div>"
         )
 
+    greeting_html = '<p style="margin:0 0 18px 0; font-size:15px; line-height:1.8; color:#0f172a; font-weight:600;">Dear [Recipient Name],</p>'
+
     html_content = f"""
-    <div style="max-width: 640px; margin: 0 auto; font-family: 'Inter', 'Segoe UI', Tahoma, sans-serif; color: #e2e8f0; line-height: 1.65; background: linear-gradient(180deg, #0f172a 0%, #111b34 100%); padding: 30px; border-radius: 16px; border: 1px solid #253152;">
-        <div style="display:flex; align-items:center; gap:12px; padding-bottom: 16px; border-bottom: 1px solid #2a3155; margin-bottom: 22px;">
+    <div style="max-width: 680px; margin: 0 auto; font-family: 'Segoe UI', Arial, sans-serif; color: #334155; line-height: 1.7; background: #ffffff; padding: 28px 32px; border-radius: 12px; border: 1px solid #e2e8f0;">
+        <div style="display:flex; align-items:center; gap:12px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; margin-bottom: 22px;">
             <img src="{config['logo']}" width="42" height="42" alt="{template_name}" />
             <div>
-                <div style="font-size:13px; color:#93a4c2; letter-spacing:0.06em; text-transform:uppercase;">MailFlow Standard Layout</div>
-                <div style="font-size:16px; font-weight:700; color:#f8fafc;">{html_lib.escape(template_name)}</div>
+                <div style="font-size:11px; color:#64748b; letter-spacing:0.08em; text-transform:uppercase;">MailFlow Standard Layout</div>
+                <div style="font-size:16px; font-weight:700; color:#0f172a;">{html_lib.escape(template_name)}</div>
             </div>
         </div>
+
+        {greeting_html}
 
         <div style="font-size: 15px; min-height: 120px;">
             {formatted_body}
@@ -2724,11 +2770,20 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
 
         {config['signature']}
 
-        <div style="margin-top: 24px; font-size: 11px; color: #8ea1c4; text-align: center; border-top: 1px solid #2a3155; padding-top: 14px;">
+        <div style="margin-top: 24px; font-size: 11px; color: #64748b; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 14px;">
             Sent via MailFlow AI Engine. To unsubscribe,
             <a href="#" style="color: {config['primary']}; text-decoration: none; font-weight: 700;">click here</a>.
         </div>
     </div>
     """
 
-    return {"html": html_content, "subject": subject, "body_text": body_text}
+    return {
+        "html": html_content,
+        "subject": subject,
+        "body_text": body_text,
+        "signature_html": config["signature"],
+        "logo_url": config["logo"],
+        "primary_color": config["primary"],
+        "secondary_color": config["secondary"],
+        "template_name": template_name,
+    }
