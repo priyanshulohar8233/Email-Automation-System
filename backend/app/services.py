@@ -2095,6 +2095,20 @@ def generate_ai_template(topic: str, tone: str) -> dict:
     else:
         print("DEBUG: Using Local Fallback Generator (No API Key)")
 
+    variation_id = random.randint(1000, 9999)
+    angle_hint = random.choice([
+        "relationship-first value framing",
+        "ROI-oriented executive summary",
+        "problem-solution storytelling",
+        "concise operational update with CTA",
+    ])
+    subject_flavor = random.choice([
+        "Strategic Brief",
+        "Growth Update",
+        "Execution Note",
+        "Priority Action",
+    ])
+
     # Fallback / Local Generation Logic (if no API Key or for quick testing)
     def fallback_generation(topic: str, tone: str) -> dict:
         topic_lower = topic.lower()
@@ -2194,6 +2208,12 @@ def generate_ai_template(topic: str, tone: str) -> dict:
         else:
             body = f"Dear [Recipient Name],\n\nI hope you are well. I am writing to discuss {topic}.\n\nBest regards,\n[Your Name]"
 
+        subject = f"{subject_flavor}: {subject}"
+        body = body + "\n\nP.S. " + random.choice([
+            "Happy to tailor this further for your role and priorities.",
+            "I can also share a condensed version for quick executive review.",
+            "If helpful, I can send a role-specific follow-up in the next step.",
+        ])
         return {"subject": subject, "body": body}
 
     if not api_key:
@@ -2205,6 +2225,10 @@ def generate_ai_template(topic: str, tone: str) -> dict:
         
         prompt = (
             f"Write a professional, high-impact email about '{topic}' tailored for a recipient at the '{tone}' level.\n\n"
+            f"UNIQUENESS REQUIREMENT:\n"
+            f"- Variation ID: {variation_id}\n"
+            f"- Writing Angle: {angle_hint}\n"
+            f"- Produce a fresh variant with distinct phrasing and structure.\n\n"
             f"STRUCTURE (MANDATORY):\n"
             f"- Salutation: 'Dear [Recipient Name],'\n"
             f"- Body: 3-4 professional paragraphs using standard punctuation and formal tone.\n"
@@ -2220,10 +2244,10 @@ def generate_ai_template(topic: str, tone: str) -> dict:
         response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
-                {"role": "system", "content": "You are a master executive communicator. Write structured, professional emails in plain text. Use 'Best regards,' for sign-offs. Use standard punctuation. Output pure JSON."},
+                {"role": "system", "content": "You are a master executive communicator. Write structured, professional emails in plain text. Use 'Best regards,' for sign-offs. Use standard punctuation. Always generate a fresh, non-repetitive variant and output pure JSON."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.7,
+            temperature=0.9,
             max_tokens=800
         )
         content = response.choices[0].message.content.strip()
@@ -2544,7 +2568,7 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
                 </div>
             """
         },
-        "MP Consultant": {
+        "MP Consultant LLC": {
             "primary": "#0f172a",
             "secondary": "#334155",
             "logo": "https://img.icons8.com/color/96/business-group.png",
@@ -2577,8 +2601,35 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
                     </div>
                 </div>
             """
+        },
+        "Matkotech": {
+            "primary": "#16a34a",
+            "secondary": "#15803d",
+            "logo": "https://img.icons8.com/fluency/96/artificial-intelligence.png",
+            "signature": """
+                <div style="margin-top: 40px; padding: 20px; border-radius: 12px; border: 1px solid #dcfce7; background: linear-gradient(180deg, #f0fdf4, #ecfdf5); font-family: 'Segoe UI', sans-serif;">
+                    <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+                        <tr>
+                            <td style="vertical-align: top; padding-right: 14px;">
+                                <img src="https://img.icons8.com/fluency/48/artificial-intelligence.png" width="46" height="46" alt="Matkotech" />
+                            </td>
+                            <td style="border-left: 2px solid #16a34a; padding-left: 14px;">
+                                <div style="font-weight: 800; font-size: 16px; color: #14532d;">Matkotech Growth Desk</div>
+                                <div style="font-size: 12px; color: #166534; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px;">AI Outreach & Automation</div>
+                                <div style="font-size: 12px; color: #4b5563; margin-top: 6px;">Matkotech | Build Faster. Scale Smarter.</div>
+                                <div style="margin-top: 8px;">
+                                    <a href="https://matkotech.com/" style="text-decoration: none; color: #16a34a; font-size: 12px; font-weight: 700;">https://matkotech.com/</a>
+                                </div>
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            """
         }
     }
+
+    # Backward compatibility for older template key used in some UIs.
+    layouts["MP Consultant"] = layouts["MP Consultant LLC"]
     
     config = layouts.get(template_name, layouts["MP Lumina"])
     

@@ -1,14 +1,17 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import * as XLSX from "xlsx";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { 
   Sparkles, Check, Send, Copy, RefreshCw, Wand2, Type, Mail, 
   ChevronRight, Download, Users, Link, Paperclip, 
   Image as ImageIcon, Upload, Trash2, Calendar, Clock, 
   Plus, FileText, AlertCircle, CheckCircle2, Layout, 
-  Smartphone, Monitor, Globe, Building2, Briefcase, Factory
+  Smartphone, Monitor, Globe, Building2, Briefcase, Factory, Rocket
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
@@ -38,7 +41,7 @@ const TEMPLATES: Template[] = [
   },
   {
     id: "consultant",
-    name: "MP Consultant",
+    name: "MP Consultant LLC",
     company: "Sterling Group",
     description: "Professional, executive-grade layout with slate tones and a corporate serif signature.",
     icon: <Briefcase className="h-5 w-5" />,
@@ -55,6 +58,16 @@ const TEMPLATES: Template[] = [
     color: "bg-orange-500",
     accent: "text-orange-600",
     preview: "Industrial | Orange | Bold"
+  },
+  {
+    id: "matkotech",
+    name: "Matkotech",
+    company: "Matkotech Technologies",
+    description: "Green performance layout with crisp product signature tailored for modern IT outreach.",
+    icon: <Rocket className="h-5 w-5" />,
+    color: "bg-emerald-500",
+    accent: "text-emerald-600",
+    preview: "Tech | Green | Performance"
   }
 ];
 
@@ -66,7 +79,13 @@ export default function StandardLayout() {
   const [generatedHtml, setGeneratedHtml] = useState("");
   const [generatedSubject, setGeneratedSubject] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [localImage, setLocalImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState("");
   const [attachment, setAttachment] = useState("");
+  const [recipients, setRecipients] = useState<Array<{ name?: string; email: string }>>([]);
+  const [uploadedFileName, setUploadedFileName] = useState("");
+  const [validCount, setValidCount] = useState(0);
+  const [invalidCount, setInvalidCount] = useState(0);
   const [showSeniorityMenu, setShowSeniorityMenu] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -86,18 +105,113 @@ export default function StandardLayout() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (imagePreview) URL.revokeObjectURL(imagePreview);
+    };
+  }, [imagePreview]);
+
+  const downloadSampleSheet = () => {
+    const sampleRows = [
+      { name: "Priyanshu", email: "priyanshu@example.com", role: "CEO" },
+      { name: "Anita", email: "anita@example.com", role: "CTO" },
+      { name: "Rohit", email: "rohit@example.com", role: "Manager" },
+    ];
+    const worksheet = XLSX.utils.json_to_sheet(sampleRows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Recipients");
+    XLSX.writeFile(workbook, "mailflow_standard_layout_sample.xlsx");
+  };
+
+  const handleSheetUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setUploadedFileName(file.name);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const workbook = XLSX.read(e.target?.result, { type: "binary" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json<any>(sheet);
+
+        const keys = rows.length > 0 ? Object.keys(rows[0]) : [];
+        const emailKey = keys.find((k) => k.toLowerCase().includes("email"));
+        if (!emailKey) {
+          alert("Email column not found in sheet.");
+          return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        let valid = 0;
+        let invalid = 0;
+
+        const parsed = rows
+          .map((row) => {
+            const email = String(row[emailKey] || "").trim();
+            if (!email) return null;
+            const isValid = emailRegex.test(email);
+            if (isValid) valid += 1;
+            else invalid += 1;
+            return isValid
+              ? {
+                  name: row.name || row.Name || email.split("@")[0],
+                  email,
+                }
+              : null;
+          })
+          .filter(Boolean) as Array<{ name?: string; email: string }>;
+
+        setRecipients(parsed);
+        setValidCount(valid);
+        setInvalidCount(invalid);
+      } catch (error) {
+        console.error(error);
+        alert("Sheet parse failed. Please use a valid Excel file.");
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const clearSheetData = () => {
+    setRecipients([]);
+    setValidCount(0);
+    setInvalidCount(0);
+    setUploadedFileName("");
+    const input = document.getElementById("standard-sheet-upload") as HTMLInputElement | null;
+    if (input) input.value = "";
+  };
+
+  const handleLocalImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    setLocalImage(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
   const handleGenerate = async () => {
     if (!topic || !selectedTemplate) return;
     setGenerating(true);
     try {
+      const variationAngles = [
+        "relationship-first tone",
+        "ROI-driven pitch",
+        "problem-solution structure",
+        "concise executive memo style",
+      ];
+      const chosenAngle = variationAngles[Math.floor(Math.random() * variationAngles.length)];
+      const dynamicPrompt = `${topic}\n\nCreate a fresh variant using ${chosenAngle}.`;
+
       const res = await fetch("/api/generate-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           template: selectedTemplate.name,
-          description: topic,
+          description: dynamicPrompt,
           seniority: seniority,
-          image: imageUrl,
+          image: imageUrl || imagePreview,
           attachment: attachment
         })
       });
@@ -128,11 +242,19 @@ export default function StandardLayout() {
     if (!generatedHtml) return;
     localStorage.setItem("ai_draft_subject", generatedSubject);
     localStorage.setItem("ai_draft_body", generatedHtml); // We pass the HTML now
+    if (recipients.length > 0) {
+      localStorage.setItem("ai_draft_recipients", JSON.stringify(recipients));
+      localStorage.setItem("ai_draft_filename", uploadedFileName || "standard_layout_recipients.xlsx");
+    }
     navigate("/campaigns");
   };
 
   const handleSendNow = async () => {
     if (!generatedHtml) return;
+    if (recipients.length === 0) {
+      alert("Please upload recipient sheet first.");
+      return;
+    }
     setIsSending(true);
     try {
       const res = await fetch("/api/send-campaign", {
@@ -142,7 +264,7 @@ export default function StandardLayout() {
           campaign_id: 1,
           subject: generatedSubject,
           body: generatedHtml,
-          recipients: ["test@example.com"], // Fallback for quick send
+          recipients: recipients.map((r) => r.email),
           scheduled_at: null
         })
       });
@@ -157,6 +279,44 @@ export default function StandardLayout() {
     }
   };
 
+  const handleScheduleSend = async () => {
+    if (!generatedHtml) return;
+    if (recipients.length === 0) {
+      alert("Please upload recipient sheet first.");
+      return;
+    }
+
+    const scheduledLocal = window.prompt(
+      "Enter schedule time (YYYY-MM-DDTHH:MM)",
+      new Date(Date.now() + 60 * 60 * 1000).toISOString().slice(0, 16)
+    );
+    if (!scheduledLocal) return;
+
+    setIsSending(true);
+    try {
+      const res = await fetch("/api/send-campaign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          campaign_id: 1,
+          subject: generatedSubject,
+          body: generatedHtml,
+          recipients: recipients.map((r) => r.email),
+          scheduled_at: toUTC(scheduledLocal),
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to schedule campaign");
+      setSendSuccess("Campaign scheduled successfully!");
+      setTimeout(() => setSendSuccess(null), 3000);
+    } catch (error) {
+      console.error(error);
+      alert("Failed to schedule campaign.");
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   if (!showGenerator) {
     return (
       <div className="flex flex-col gap-8 pb-10 animate-in fade-in duration-500">
@@ -165,7 +325,7 @@ export default function StandardLayout() {
           subtitle="Select a pre-branded company layout to generate professional AI emails instantly."
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
           {TEMPLATES.map((tpl) => (
             <Card 
               key={tpl.id} 
@@ -226,7 +386,7 @@ export default function StandardLayout() {
 
   return (
     <div className="flex flex-col gap-8 pb-10 animate-in slide-in-from-right duration-500">
-      <div className="flex items-center justify-between border-b border-border pb-8">
+      <div className="flex items-center justify-between border-b border-border pb-8 gap-4">
         <div className="flex items-center gap-4">
           <Button 
             variant="outline" 
@@ -245,7 +405,37 @@ export default function StandardLayout() {
              <p className="text-muted-foreground text-sm font-medium mt-1">Branded AI email creation for {selectedTemplate?.company}</p>
           </div>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            style={{ borderRadius: "12px" }}
+            className="h-10 px-4 text-xs font-bold gap-2 border-border"
+            onClick={downloadSampleSheet}
+          >
+            <Download className="h-4 w-4" />
+            Download Sample
+          </Button>
+          <label>
+            <input
+              id="standard-sheet-upload"
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleSheetUpload}
+            />
+            <Button
+              asChild
+              style={{ borderRadius: "12px" }}
+              className="h-10 px-4 text-xs font-bold gap-2 bg-indigo-600 hover:bg-indigo-700 text-white"
+            >
+              <span>
+                <Upload className="h-4 w-4" />
+                Upload Excel Sheet
+              </span>
+            </Button>
+          </label>
+          <ThemeToggle />
+        </div>
       </div>
 
       <div className="flex min-h-[600px] gap-6">
@@ -303,9 +493,9 @@ export default function StandardLayout() {
               </div>
 
               <div className="space-y-3">
-                 <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Include Image (URL)</label>
+                 <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground/70">Include Image (URL or Upload)</label>
                  <div className="relative">
-                   <Input 
+                   <Input
                      value={imageUrl}
                      onChange={(e) => setImageUrl(e.target.value)}
                      style={{ borderRadius: "14px" }}
@@ -314,6 +504,48 @@ export default function StandardLayout() {
                    />
                    <ImageIcon className="h-4 w-4 absolute left-4 top-4 text-muted-foreground" />
                  </div>
+                 <label>
+                   <input
+                     type="file"
+                     accept="image/*"
+                     className="hidden"
+                     onChange={handleLocalImageUpload}
+                   />
+                   <Button
+                     asChild
+                     variant="outline"
+                     style={{ borderRadius: "12px" }}
+                     className="h-10 w-full text-xs font-bold gap-2 border-border"
+                   >
+                     <span>
+                       <Upload className="h-3.5 w-3.5" />
+                       Upload Image
+                     </span>
+                   </Button>
+                 </label>
+                 {(imagePreview || imageUrl) && (
+                   <div className="p-2 rounded-xl bg-muted/30 border border-border">
+                     <img
+                       src={imagePreview || imageUrl}
+                       alt="Selected media"
+                       className="w-full h-28 object-cover rounded-lg"
+                     />
+                     <Button
+                       type="button"
+                       variant="ghost"
+                       className="mt-2 h-8 px-2 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                       onClick={() => {
+                         setImageUrl("");
+                         setLocalImage(null);
+                         if (imagePreview) URL.revokeObjectURL(imagePreview);
+                         setImagePreview("");
+                       }}
+                     >
+                       <Trash2 className="h-3.5 w-3.5 mr-1" />
+                       Remove Image
+                     </Button>
+                   </div>
+                 )}
               </div>
 
               <div className="space-y-3">
@@ -328,6 +560,40 @@ export default function StandardLayout() {
                    />
                    <Paperclip className="h-4 w-4 absolute left-4 top-4 text-muted-foreground" />
                  </div>
+              </div>
+
+              <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Recipient Sheet</p>
+                  {uploadedFileName ? (
+                    <Badge variant="outline" className="text-[10px] border-emerald-500/20 bg-emerald-500/10 text-emerald-600">
+                      Ready
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px]">Pending</Badge>
+                  )}
+                </div>
+                {uploadedFileName ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold text-foreground truncate">{uploadedFileName}</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {validCount} valid emails {invalidCount > 0 ? `| ${invalidCount} invalid skipped` : ""}
+                    </p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-8 px-2 text-[10px] font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                      onClick={clearSheetData}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Clear Sheet
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">
+                    Upload an Excel sheet to enable Send Now and Campaign handoff.
+                  </p>
+                )}
               </div>
            </div>
 
@@ -366,10 +632,11 @@ export default function StandardLayout() {
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        onClick={() => alert("Schedule modal coming soon!")}
-                        disabled={!generatedHtml}
+                        onClick={handleScheduleSend}
+                        disabled={!generatedHtml || isSending || recipients.length === 0}
                         style={{ borderRadius: "10px" }}
                         className="h-9 gap-2 text-xs font-bold border-border"
+                        title={recipients.length === 0 ? "Upload recipient sheet first" : ""}
                       >
                         <Calendar className="h-3.5 w-3.5" />
                         Schedule
@@ -378,9 +645,10 @@ export default function StandardLayout() {
                         variant="outline" 
                         size="sm" 
                         onClick={handleSendNow}
-                        disabled={!generatedHtml || isSending}
+                        disabled={!generatedHtml || isSending || recipients.length === 0}
                         style={{ borderRadius: "10px" }}
                         className="h-9 gap-2 text-xs font-bold border-border"
+                        title={recipients.length === 0 ? "Upload recipient sheet first" : ""}
                       >
                         {isSending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
                         Send Now
@@ -391,7 +659,7 @@ export default function StandardLayout() {
                         style={{ borderRadius: "10px" }}
                         className="h-9 gap-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white border-transparent"
                       >
-                        Use in Campaign
+                        Campaign
                         <ChevronRight className="h-3.5 w-3.5" />
                       </Button>
                     </div>
