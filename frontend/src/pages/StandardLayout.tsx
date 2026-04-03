@@ -81,7 +81,12 @@ export default function StandardLayout() {
   const [imageUrl, setImageUrl] = useState("");
   const [localImage, setLocalImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [imageSizePreset, setImageSizePreset] = useState<"small" | "medium" | "large" | "custom">("medium");
+  const [imageWidthPercent, setImageWidthPercent] = useState<number>(70);
+  const [imageHeightPx, setImageHeightPx] = useState<number>(280);
   const [attachment, setAttachment] = useState("");
+  const [attachmentLinks, setAttachmentLinks] = useState<string[]>([]);
+  const [localAttachments, setLocalAttachments] = useState<File[]>([]);
   const [recipients, setRecipients] = useState<Array<{ name?: string; email: string }>>([]);
   const [uploadedFileName, setUploadedFileName] = useState("");
   const [validCount, setValidCount] = useState(0);
@@ -191,6 +196,94 @@ export default function StandardLayout() {
     setImagePreview(URL.createObjectURL(file));
   };
 
+  const setImagePreset = (preset: "small" | "medium" | "large") => {
+    setImageSizePreset(preset);
+    if (preset === "small") {
+      setImageWidthPercent(45);
+      setImageHeightPx(180);
+    } else if (preset === "medium") {
+      setImageWidthPercent(70);
+      setImageHeightPx(280);
+    } else {
+      setImageWidthPercent(90);
+      setImageHeightPx(360);
+    }
+  };
+
+  const applyImageSizingToHtml = (html: string) => {
+    return html.replace(
+      /style="([^"]*max-width:\s*600px[^"]*)"/,
+      `style="$1 width:${imageWidthPercent}%;max-width:${imageWidthPercent}%;height:${imageHeightPx}px;object-fit:cover;display:block;margin:20px auto;border-radius:12px;"`
+    );
+  };
+
+  const addAttachmentUrl = () => {
+    const value = attachment.trim();
+    if (!value) return;
+    if (!/^https?:\/\//i.test(value) && !/^data:/i.test(value)) {
+      alert("Attachment URL should start with http(s)://");
+      return;
+    }
+    if (attachmentLinks.includes(value)) {
+      setAttachment("");
+      return;
+    }
+    setAttachmentLinks((prev) => [...prev, value]);
+    setAttachment("");
+  };
+
+  const collectAttachmentLinks = () => {
+    const value = attachment.trim();
+    if (!value) return attachmentLinks;
+    if (!/^https?:\/\//i.test(value) && !/^data:/i.test(value)) {
+      return attachmentLinks;
+    }
+    if (attachmentLinks.includes(value)) {
+      return attachmentLinks;
+    }
+    return [...attachmentLinks, value];
+  };
+
+  const removeAttachmentUrl = (index: number) => {
+    setAttachmentLinks((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAttachmentUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+    setLocalAttachments((prev) => [...prev, ...files]);
+    event.currentTarget.value = "";
+  };
+
+  const removeLocalAttachment = (index: number) => {
+    setLocalAttachments((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const fileToDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        if (!result.startsWith("data:") || !result.includes(";base64,")) {
+          resolve(result);
+          return;
+        }
+        const encodedName = encodeURIComponent(file.name);
+        const [header, payload] = result.split(",", 2);
+        if (!payload) {
+          resolve(result);
+          return;
+        }
+        if (header.includes("name=")) {
+          resolve(result);
+          return;
+        }
+        resolve(`${header.replace(";base64", `;name=${encodedName};base64`)},${payload}`);
+      };
+      reader.onerror = () => reject(new Error(`Failed to read ${file.name}`));
+      reader.readAsDataURL(file);
+    });
+
   const handleGenerate = async () => {
     if (!topic || !selectedTemplate) return;
     setGenerating(true);
@@ -212,13 +305,14 @@ export default function StandardLayout() {
           description: dynamicPrompt,
           seniority: seniority,
           image: imageUrl || imagePreview,
-          attachment: attachment
+          attachment: collectAttachmentLinks()[0] || null
         })
       });
 
       if (res.ok) {
         const data = await res.json();
-        setGeneratedHtml(data.html);
+        const sizedHtml = data.html ? applyImageSizingToHtml(data.html) : "";
+        setGeneratedHtml(sizedHtml);
         setGeneratedSubject(data.subject);
       } else {
         throw new Error("Failed to generate email");
@@ -238,13 +332,21 @@ export default function StandardLayout() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleUseInCampaign = () => {
+  const handleUseInCampaign = async () => {
     if (!generatedHtml) return;
     localStorage.setItem("ai_draft_subject", generatedSubject);
-    localStorage.setItem("ai_draft_body", generatedHtml); // We pass the HTML now
+    localStorage.setItem("ai_draft_body", applyImageSizingToHtml(generatedHtml));
     if (recipients.length > 0) {
       localStorage.setItem("ai_draft_recipients", JSON.stringify(recipients));
       localStorage.setItem("ai_draft_filename", uploadedFileName || "standard_layout_recipients.xlsx");
+    }
+    const encodedLocalAttachments = await Promise.all(localAttachments.map(fileToDataUrl));
+    const urlAttachments = collectAttachmentLinks();
+    const attachmentsPayload = [...urlAttachments, ...encodedLocalAttachments];
+    if (attachmentsPayload.length > 0) {
+      localStorage.setItem("ai_draft_attachments", JSON.stringify(attachmentsPayload));
+    } else {
+      localStorage.removeItem("ai_draft_attachments");
     }
     navigate("/campaigns");
   };
@@ -257,15 +359,19 @@ export default function StandardLayout() {
     }
     setIsSending(true);
     try {
+      const encodedLocalAttachments = await Promise.all(localAttachments.map(fileToDataUrl));
+      const urlAttachments = collectAttachmentLinks();
+      const attachmentsPayload = [...urlAttachments, ...encodedLocalAttachments];
       const res = await fetch("/api/send-campaign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           campaign_id: 1,
           subject: generatedSubject,
-          body: generatedHtml,
+          body: applyImageSizingToHtml(generatedHtml),
           recipients: recipients.map((r) => r.email),
-          scheduled_at: null
+          scheduled_at: null,
+          attachments: attachmentsPayload
         })
       });
       if (res.ok) {
@@ -294,15 +400,19 @@ export default function StandardLayout() {
 
     setIsSending(true);
     try {
+      const encodedLocalAttachments = await Promise.all(localAttachments.map(fileToDataUrl));
+      const urlAttachments = collectAttachmentLinks();
+      const attachmentsPayload = [...urlAttachments, ...encodedLocalAttachments];
       const res = await fetch("/api/send-campaign", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           campaign_id: 1,
           subject: generatedSubject,
-          body: generatedHtml,
+          body: applyImageSizingToHtml(generatedHtml),
           recipients: recipients.map((r) => r.email),
           scheduled_at: toUTC(scheduledLocal),
+          attachments: attachmentsPayload,
         }),
       });
 
@@ -530,6 +640,73 @@ export default function StandardLayout() {
                        alt="Selected media"
                        className="w-full h-28 object-cover rounded-lg"
                      />
+                     <div className="mt-2 grid grid-cols-4 gap-2">
+                       <Button
+                         type="button"
+                         variant={imageSizePreset === "small" ? "default" : "outline"}
+                         className="h-8 text-[10px] font-bold"
+                         onClick={() => setImagePreset("small")}
+                       >
+                         Small
+                       </Button>
+                       <Button
+                         type="button"
+                         variant={imageSizePreset === "medium" ? "default" : "outline"}
+                         className="h-8 text-[10px] font-bold"
+                         onClick={() => setImagePreset("medium")}
+                       >
+                         Medium
+                       </Button>
+                       <Button
+                         type="button"
+                         variant={imageSizePreset === "large" ? "default" : "outline"}
+                         className="h-8 text-[10px] font-bold"
+                         onClick={() => setImagePreset("large")}
+                       >
+                         Large
+                       </Button>
+                       <Button
+                         type="button"
+                         variant={imageSizePreset === "custom" ? "default" : "outline"}
+                         className="h-8 text-[10px] font-bold"
+                         onClick={() => setImageSizePreset("custom")}
+                       >
+                         Custom
+                       </Button>
+                     </div>
+                     <div className="mt-2 rounded-lg border border-border/60 bg-card/40 p-2 space-y-2">
+                       <div className="flex items-center justify-between gap-2">
+                         <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Width</span>
+                         <span className="text-[10px] font-semibold text-foreground">{imageWidthPercent}%</span>
+                       </div>
+                       <input
+                         type="range"
+                         min={30}
+                         max={100}
+                         value={imageWidthPercent}
+                         onChange={(e) => {
+                           setImageSizePreset("custom");
+                           setImageWidthPercent(Number(e.target.value));
+                         }}
+                         className="w-full"
+                       />
+                       <div className="flex items-center justify-between gap-2">
+                         <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Height</span>
+                         <span className="text-[10px] font-semibold text-foreground">{imageHeightPx}px</span>
+                       </div>
+                       <input
+                         type="range"
+                         min={120}
+                         max={520}
+                         step={10}
+                         value={imageHeightPx}
+                         onChange={(e) => {
+                           setImageSizePreset("custom");
+                           setImageHeightPx(Number(e.target.value));
+                         }}
+                         className="w-full"
+                       />
+                     </div>
                      <Button
                        type="button"
                        variant="ghost"
@@ -539,6 +716,7 @@ export default function StandardLayout() {
                          setLocalImage(null);
                          if (imagePreview) URL.revokeObjectURL(imagePreview);
                          setImagePreview("");
+                         setImagePreset("medium");
                        }}
                      >
                        <Trash2 className="h-3.5 w-3.5 mr-1" />
@@ -555,11 +733,74 @@ export default function StandardLayout() {
                      value={attachment}
                      onChange={(e) => setAttachment(e.target.value)}
                      style={{ borderRadius: "14px" }}
-                     placeholder="e.g. Q4_Strategy_Guide.pdf"
+                     placeholder="https://.../Q4_Strategy_Guide.pdf"
                      className="bg-muted/30 border-border h-12 text-sm pl-10"
                    />
                    <Paperclip className="h-4 w-4 absolute left-4 top-4 text-muted-foreground" />
                  </div>
+                 <div className="grid grid-cols-2 gap-2">
+                   <Button
+                     type="button"
+                     variant="outline"
+                     className="h-10 text-xs font-bold"
+                     onClick={addAttachmentUrl}
+                   >
+                     Add URL
+                   </Button>
+                   <label>
+                     <input
+                       type="file"
+                       multiple
+                       accept=".pdf,.xlsx,.xls,.csv,.doc,.docx,.ppt,.pptx,.txt,.zip,.rar,.png,.jpg,.jpeg"
+                       className="hidden"
+                       onChange={handleAttachmentUpload}
+                     />
+                     <Button
+                       asChild
+                       variant="outline"
+                       className="h-10 w-full text-xs font-bold"
+                     >
+                       <span>Upload File(s)</span>
+                     </Button>
+                   </label>
+                 </div>
+                 {(attachmentLinks.length > 0 || localAttachments.length > 0) && (
+                   <div className="rounded-xl border border-border bg-muted/20 p-2 space-y-2">
+                     {attachmentLinks.map((url, idx) => (
+                       <div key={`url-${idx}`} className="flex items-center gap-2 rounded-lg bg-card/70 px-2 py-2">
+                         <Paperclip className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                         <span className="text-[11px] font-medium text-foreground truncate flex-1">{url}</span>
+                         <button
+                           type="button"
+                           onClick={() => removeAttachmentUrl(idx)}
+                           className="p-1 rounded hover:bg-red-500/10 text-red-500"
+                           title="Delete"
+                         >
+                           <Trash2 className="h-3.5 w-3.5" />
+                         </button>
+                       </div>
+                     ))}
+                     {localAttachments.map((file, idx) => (
+                       <div key={`file-${idx}`} className="flex items-center gap-2 rounded-lg bg-card/70 px-2 py-2">
+                         <FileText className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                         <span className="text-[11px] font-medium text-foreground truncate flex-1">
+                           {file.name}
+                         </span>
+                         <span className="text-[10px] text-muted-foreground shrink-0">
+                           {(file.size / 1024).toFixed(1)} KB
+                         </span>
+                         <button
+                           type="button"
+                           onClick={() => removeLocalAttachment(idx)}
+                           className="p-1 rounded hover:bg-red-500/10 text-red-500"
+                           title="Delete"
+                         >
+                           <Trash2 className="h-3.5 w-3.5" />
+                         </button>
+                       </div>
+                     ))}
+                   </div>
+                 )}
               </div>
 
               <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
@@ -669,7 +910,7 @@ export default function StandardLayout() {
                  {generatedHtml ? (
                    <div className="p-8 flex justify-center">
                       <div 
-                        className="bg-white rounded-xl shadow-2xl overflow-hidden border border-border"
+                        className="bg-card rounded-xl shadow-2xl overflow-hidden border border-border"
                         style={{ width: '100%', maxWidth: '650px' }}
                         dangerouslySetInnerHTML={{ __html: generatedHtml }} 
                       />

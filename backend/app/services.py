@@ -95,29 +95,57 @@ def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_p
 
     # Process Attachments
     if attachments:
-        for attachment in attachments:
+        import mimetypes
+        from urllib.parse import unquote, urlparse
+
+        for idx, attachment in enumerate(attachments):
             try:
+                content = None
+                filename = None
+                mime_type = "application/octet-stream"
+
                 if attachment.startswith('http'):
                     response = requests.get(attachment, timeout=10)
+                    response.raise_for_status()
                     content = response.content
-                    filename = attachment.split('/')[-1] or 'attachment'
+                    parsed = urlparse(attachment)
+                    filename = unquote((parsed.path or "").split("/")[-1]) or f"attachment_{idx + 1}"
+                    mime_type = (response.headers.get("Content-Type") or mimetypes.guess_type(filename)[0] or "application/octet-stream").split(";")[0].strip()
                 elif attachment.startswith('data:'):
                     import base64
                     header, encoded = attachment.split(",", 1)
                     content = base64.b64decode(encoded)
-                    filename = 'image_attachment'
-                    # Try to guess extension from header
-                    if 'image/png' in header: filename += '.png'
-                    elif 'image/jpeg' in header: filename += '.jpg'
+                    header_meta = header[5:] if header.startswith("data:") else ""
+                    parts = header_meta.split(";")
+                    if parts and "/" in parts[0]:
+                        mime_type = parts[0].split(";")[0].strip()
+
+                    for part_meta in parts[1:]:
+                        if part_meta.startswith("name="):
+                            filename = unquote(part_meta.split("=", 1)[1].strip("\"' "))
+                            break
+
+                    if not filename:
+                        ext = mimetypes.guess_extension(mime_type) or ""
+                        filename = f"attachment_{idx + 1}{ext}"
                 else:
                     continue
 
-                part = MIMEBase("application", "octet-stream")
+                if not filename:
+                    filename = f"attachment_{idx + 1}"
+
+                if "/" in mime_type:
+                    maintype, subtype = mime_type.split("/", 1)
+                    subtype = subtype.split(";")[0].strip()
+                else:
+                    maintype, subtype = "application", "octet-stream"
+
+                part = MIMEBase(maintype, subtype)
                 part.set_payload(content)
                 encoders.encode_base64(part)
                 part.add_header(
                     "Content-Disposition",
-                    f"attachment; filename={filename}",
+                    f'attachment; filename="{filename}"',
                 )
                 message.attach(part)
             except Exception as e:
@@ -2537,144 +2565,170 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
     """
     Generates an AI email and wraps it in a specific company branding/signature layout.
     """
-    # 1. Generate the core content (subject and body) using existing AI logic
+    import html as html_lib
+
+    # 1. Generate core content
     ai_result = generate_ai_template(description, seniority)
     subject = ai_result.get("subject", "Generated Email")
     body_text = ai_result.get("body", "")
-    
-    # 2. Define Branded Layouts
+
+    def _format_body(raw_text: str) -> str:
+        lines = [line.strip() for line in str(raw_text or "").splitlines()]
+        paragraphs = []
+        chunk = []
+        for line in lines:
+            if line:
+                chunk.append(line)
+            elif chunk:
+                paragraphs.append(" ".join(chunk))
+                chunk = []
+        if chunk:
+            paragraphs.append(" ".join(chunk))
+
+        if not paragraphs:
+            paragraphs = ["Thank you for your time. I would be glad to share more details based on your priorities."]
+
+        return "".join(
+            f'<p style="margin:0 0 14px 0; font-size:15px; line-height:1.72; color:#dbe6ff;">{html_lib.escape(p)}</p>'
+            for p in paragraphs
+        )
+
+    # 2. Branded signatures with professional and consistent sizing.
     layouts = {
         "MP Lumina": {
-            "primary": "#6366f1",
-            "secondary": "#4f46e5",
+            "primary": "#7B61FF",
+            "secondary": "#4F46E5",
             "logo": "https://img.icons8.com/fluency/96/sparkling.png",
             "signature": """
-                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #f3f4f6; font-family: 'Inter', sans-serif;">
+                <div style="margin-top: 28px; padding: 16px; border: 1px solid #2a3155; border-radius: 12px; background: #131d37; font-family: 'Inter', 'Segoe UI', sans-serif;">
                     <table cellpadding="0" cellspacing="0" border="0">
                         <tr>
-                            <td style="vertical-align: top; padding-right: 15px;">
-                                <img src="https://img.icons8.com/fluency/48/sparkling.png" width="48" height="48" alt="Lumina" />
+                            <td style="vertical-align: top; padding-right: 12px;">
+                                <img src="https://img.icons8.com/fluency/48/sparkling.png" width="40" height="40" alt="MP Lumina" />
                             </td>
-                            <td style="border-left: 2px solid #6366f1; padding-left: 15px;">
-                                <div style="font-weight: 800; font-size: 16px; color: #111827;">Sarah Jenkins</div>
-                                <div style="font-size: 13px; color: #6366f1; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;">Head of Creative Strategy</div>
-                                <div style="font-size: 12px; color: #6b7280;">MP Lumina | Illuminating Brands</div>
-                                <div style="margin-top: 8px;">
-                                    <a href="#" style="text-decoration: none; color: #6366f1; font-size: 12px; font-weight: 600;">www.mplumina.com</a>
-                                </div>
+                            <td style="border-left: 2px solid #7B61FF; padding-left: 12px;">
+                                <div style="font-weight: 700; font-size: 15px; color: #f8fafc;">Sarah Jenkins</div>
+                                <div style="font-size: 12px; color: #a5b4fc; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin-top: 2px;">Head of Creative Strategy</div>
+                                <div style="font-size: 12px; color: #94a3b8; margin-top: 4px;">MP Lumina</div>
+                                <a href="https://www.mplumina.com" style="display:inline-block; margin-top: 6px; color: #7B61FF; text-decoration:none; font-size:12px; font-weight:700;">www.mplumina.com</a>
                             </td>
                         </tr>
                     </table>
                 </div>
-            """
+            """,
         },
         "MP Consultant LLC": {
-            "primary": "#0f172a",
-            "secondary": "#334155",
+            "primary": "#FFC107",
+            "secondary": "#F59E0B",
             "logo": "https://img.icons8.com/color/96/business-group.png",
             "signature": """
-                <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; font-family: 'Segoe UI', Tahoma, sans-serif;">
-                    <div style="font-size: 32px; line-height: 1; color: #374151; margin-bottom: 10px;">Cheers,</div>
-                    <div style="font-size: 34px; font-weight: 700; letter-spacing: 1px; color: #6b7280; margin-bottom: 6px; text-transform: uppercase;">MARGI CHHAPPAN</div>
-                    <div style="font-size: 34px; font-style: italic; color: #111827; margin-bottom: 14px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
-                    <div style="font-size: 34px; color: #111827; margin-bottom: 6px;">
+                <div style="margin-top: 28px; padding: 18px; border: 1px solid #2a3155; border-radius: 12px; background: #131d37; font-family: 'Segoe UI', Tahoma, sans-serif;">
+                    <div style="font-size: 14px; color: #e2e8f0; margin-bottom: 8px;">Cheers,</div>
+                    <div style="font-size: 17px; font-weight: 800; letter-spacing: 0.04em; color: #f8fafc; text-transform: uppercase;">MARGI CHHAPPAN</div>
+                    <div style="font-size: 16px; font-style: italic; color: #e2e8f0; margin-top: 4px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
+                    <div style="font-size: 15px; color: #f8fafc; margin-top: 12px;">
                         <span style="color:#93c5fd;">&#9993;</span>
-                        <span style="color:#f97316;"> :</span>
-                        <a href="mailto:margi@mpconsulting.com" style="color:#2563eb; text-decoration:none;">margi@mpconsulting.com</a>
+                        <span style="color:#f59e0b;"> :</span>
+                        <a href="mailto:margi@mpconsulting.com" style="color:#60a5fa; text-decoration:none;">margi@mpconsulting.com</a>
                     </div>
-                    <div style="font-size: 38px; color: #1f2937; margin-bottom: 10px;">
+                    <div style="font-size: 15px; color: #f8fafc; margin-top: 6px;">
                         <span>📞</span>
-                        <span style="color:#f97316;"> :</span>
+                        <span style="color:#f59e0b;"> :</span>
                         <span>847-550-4472</span>
                     </div>
-                    <div style="margin: 10px 0 16px 0;">
-                        <a href="#" style="display:inline-block; width:28px; height:28px; line-height:28px; text-align:center; border-radius:4px; background:#0b4a8b; color:#fff; text-decoration:none; font-weight:700; margin-right:4px;">f</a>
-                        <a href="#" style="display:inline-block; width:28px; height:28px; line-height:28px; text-align:center; border-radius:4px; background:#0e76a8; color:#fff; text-decoration:none; font-weight:700; margin-right:4px;">in</a>
-                        <a href="#" style="display:inline-block; width:28px; height:28px; line-height:28px; text-align:center; border-radius:4px; background:#111827; color:#f59e0b; text-decoration:none; font-weight:700;">◎</a>
+                    <div style="margin-top: 10px;">
+                        <a href="#" style="display:inline-block; width:24px; height:24px; line-height:24px; text-align:center; border-radius:4px; background:#0b4a8b; color:#fff; text-decoration:none; font-size:12px; font-weight:700; margin-right:4px;">f</a>
+                        <a href="#" style="display:inline-block; width:24px; height:24px; line-height:24px; text-align:center; border-radius:4px; background:#0e76a8; color:#fff; text-decoration:none; font-size:11px; font-weight:700; margin-right:4px;">in</a>
+                        <a href="#" style="display:inline-block; width:24px; height:24px; line-height:24px; text-align:center; border-radius:4px; background:#111827; color:#f59e0b; text-decoration:none; font-size:12px; font-weight:700;">◎</a>
                     </div>
-                    <div style="font-size: 31px; color: #6b7280; line-height: 1.5; border-top: 1px solid #e5e7eb; padding-top: 10px;">
-                        <b style="text-transform: uppercase;">CONFIDENTIALITY NOTE:</b>
-                        This electronic mail may contain information that is confidential or privileged and exempt from disclosure under applicable law. The information is intended only for the use of the recipient(s) named in this email. If you are not an intended recipient, be aware that any disclosure, copying, distribution or use of the contents of this information is without authorization and is prohibited. If you receive this electronic mail in error, please notify us by return electronic mail and delete this mail immediately. Thank you for your cooperation.
+                    <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #2a3155; font-size: 11px; line-height: 1.5; color: #94a3b8;">
+                        <b style="text-transform: uppercase; color:#cbd5e1;">Confidentiality Note:</b>
+                        This electronic mail may contain confidential information intended only for the recipient(s) named in this email.
                     </div>
                 </div>
-            """
+            """,
         },
         "A Making Company": {
-            "primary": "#f97316",
-            "secondary": "#ea580c",
+            "primary": "#FF4D4F",
+            "secondary": "#F97316",
             "logo": "https://img.icons8.com/color/96/factory.png",
             "signature": """
-                <div style="margin-top: 40px; padding: 18px 20px; border-radius: 10px; border: 1px solid #fed7aa; background: #fff7ed; font-family: 'Segoe UI', Tahoma, sans-serif;">
-                    <div style="font-size: 40px; font-weight: 900; letter-spacing: -0.02em; margin-bottom: 6px;">
+                <div style="margin-top: 28px; padding: 18px; border: 1px solid #3b2a2f; border-radius: 12px; background: linear-gradient(180deg, #25151a, #1a1f33); font-family: 'Segoe UI', Tahoma, sans-serif;">
+                    <div style="font-size: 18px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 8px;">
                         <span style="color:#ef4444;">A</span><span style="color:#ef4444;">m</span><span style="color:#ef4444;">c</span>
-                        <span style="color:#9ca3af; margin-left:6px;">making</span>
-                        <span style="color:#9ca3af; margin-left:6px;">company</span>
+                        <span style="color:#cbd5e1; margin-left:6px;">making company</span>
                     </div>
-                    <div style="font-size: 38px; font-weight: 700; color: #111827; margin-top: 10px;">Margi Chhappan</div>
-                    <div style="font-size: 35px; font-style: italic; color: #111827; margin-top: 4px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
-                    <div style="font-size: 41px; color: #111827; margin-top: 10px;">📞 847-550-4472</div>
-                    <div style="font-size: 39px; margin-top: 6px;">
-                        🌐 <a href="https://www.amakingcompany.com" style="color: #0b63ce; text-decoration: underline; font-weight: 700;">www.amakingcompany.com</a>
+                    <div style="font-size: 16px; font-weight: 700; color: #f8fafc;">Margi Chhappan</div>
+                    <div style="font-size: 15px; font-style: italic; color: #e2e8f0; margin-top: 4px; font-family: 'Times New Roman', serif;">Sr. Business Development Manager</div>
+                    <div style="font-size: 15px; color: #f8fafc; margin-top: 10px;">📞 847-550-4472</div>
+                    <div style="font-size: 15px; margin-top: 6px;">
+                        🌐 <a href="https://www.amakingcompany.com" style="color: #60a5fa; text-decoration: underline; font-weight: 700;">www.amakingcompany.com</a>
                     </div>
                 </div>
-            """
+            """,
         },
         "Matkotech": {
-            "primary": "#16a34a",
-            "secondary": "#15803d",
+            "primary": "#22C55E",
+            "secondary": "#16A34A",
             "logo": "https://img.icons8.com/fluency/96/artificial-intelligence.png",
             "signature": """
-                <div style="margin-top: 40px; padding: 20px; border-radius: 12px; border: 1px solid #dcfce7; background: linear-gradient(180deg, #f0fdf4, #ecfdf5); font-family: 'Segoe UI', sans-serif;">
+                <div style="margin-top: 28px; padding: 16px; border: 1px solid #214032; border-radius: 12px; background: #112a21; font-family: 'Segoe UI', sans-serif;">
                     <table cellpadding="0" cellspacing="0" border="0" style="width:100%;">
                         <tr>
-                            <td style="vertical-align: top; padding-right: 14px;">
-                                <img src="https://img.icons8.com/fluency/48/artificial-intelligence.png" width="46" height="46" alt="Matkotech" />
+                            <td style="vertical-align: top; padding-right: 12px;">
+                                <img src="https://img.icons8.com/fluency/48/artificial-intelligence.png" width="40" height="40" alt="Matkotech" />
                             </td>
-                            <td style="border-left: 2px solid #16a34a; padding-left: 14px;">
-                                <div style="font-weight: 800; font-size: 16px; color: #14532d;">Matkotech Growth Desk</div>
-                                <div style="font-size: 12px; color: #166534; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px;">AI Outreach & Automation</div>
-                                <div style="font-size: 12px; color: #4b5563; margin-top: 6px;">Matkotech | Build Faster. Scale Smarter.</div>
-                                <div style="margin-top: 8px;">
-                                    <a href="https://matkotech.com/" style="text-decoration: none; color: #16a34a; font-size: 12px; font-weight: 700;">https://matkotech.com/</a>
-                                </div>
+                            <td style="border-left: 2px solid #22C55E; padding-left: 12px;">
+                                <div style="font-weight: 700; font-size: 15px; color: #f0fdf4;">Matkotech Growth Desk</div>
+                                <div style="font-size: 12px; color: #86efac; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px;">AI Outreach & Automation</div>
+                                <div style="font-size: 12px; color: #bbf7d0; margin-top: 4px;">Build Faster. Scale Smarter.</div>
+                                <a href="https://matkotech.com/" style="display:inline-block; margin-top: 6px; color: #4ade80; text-decoration:none; font-size:12px; font-weight:700;">https://matkotech.com/</a>
                             </td>
                         </tr>
                     </table>
                 </div>
-            """
-        }
+            """,
+        },
     }
 
     # Backward compatibility for older template key used in some UIs.
     layouts["MP Consultant"] = layouts["MP Consultant LLC"]
-    
     config = layouts.get(template_name, layouts["MP Lumina"])
-    
-    # 3. Assemble HTML
-    formatted_body = body_text.replace('\n', '<br/>')
-    
+
+    formatted_body = _format_body(body_text)
+
     image_html = ""
     if image:
-        image_html = f'<div style="margin: 20px 0;"><img src="{image}" style="width: 100%; max-width: 600px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);" /></div>'
+        image_html = (
+            f'<div style="margin: 18px 0 6px 0;">'
+            f'<img src="{image}" style="width:100%; max-width:600px; border-radius:12px; border:1px solid #2a3155; '
+            f'box-shadow:0 10px 24px rgba(2, 6, 23, 0.35); object-fit:cover;" />'
+            f"</div>"
+        )
 
     html_content = f"""
-    <div style="max-width: 600px; margin: 0 auto; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color: #374151; line-height: 1.6; background-color: #ffffff; padding: 40px; border-radius: 16px; border: 1px solid #e5e7eb;">
-        <div style="padding-bottom: 20px; border-bottom: 1px solid #f3f4f6; margin-bottom: 30px;">
-            <img src="{config['logo']}" width="48" height="48" />
+    <div style="max-width: 640px; margin: 0 auto; font-family: 'Inter', 'Segoe UI', Tahoma, sans-serif; color: #e2e8f0; line-height: 1.65; background: linear-gradient(180deg, #0f172a 0%, #111b34 100%); padding: 30px; border-radius: 16px; border: 1px solid #253152;">
+        <div style="display:flex; align-items:center; gap:12px; padding-bottom: 16px; border-bottom: 1px solid #2a3155; margin-bottom: 22px;">
+            <img src="{config['logo']}" width="42" height="42" alt="{template_name}" />
+            <div>
+                <div style="font-size:13px; color:#93a4c2; letter-spacing:0.06em; text-transform:uppercase;">MailFlow Standard Layout</div>
+                <div style="font-size:16px; font-weight:700; color:#f8fafc;">{html_lib.escape(template_name)}</div>
+            </div>
         </div>
-        
-        <div style="font-size: 16px; min-height: 200px;">
+
+        <div style="font-size: 15px; min-height: 120px;">
             {formatted_body}
         </div>
-        
+
         {image_html}
-        
+
         {config['signature']}
-        
-        <div style="margin-top: 40px; font-size: 11px; color: #9ca3af; text-align: center; border-top: 1px solid #f3f4f6; padding-top: 20px;">
-            Sent via MailFlow AI Engine. To unsubscribe, <a href="#" style="color: {config['primary']}; text-decoration: none;">click here</a>.
+
+        <div style="margin-top: 24px; font-size: 11px; color: #8ea1c4; text-align: center; border-top: 1px solid #2a3155; padding-top: 14px;">
+            Sent via MailFlow AI Engine. To unsubscribe,
+            <a href="#" style="color: {config['primary']}; text-decoration: none; font-weight: 700;">click here</a>.
         </div>
     </div>
     """
-    
+
     return {"html": html_content, "subject": subject, "body_text": body_text}

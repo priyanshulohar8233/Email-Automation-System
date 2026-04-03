@@ -22,6 +22,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
     const [hasAIDraft, setHasAIDraft] = useState(false);
     const [isScheduled, setIsScheduled] = useState(false);
     const [scheduledAt, setScheduledAt] = useState("");
+    const [attachments, setAttachments] = useState<string[]>([]);
 
     const [recipients, setRecipients] = useState<string[]>([]);
 
@@ -37,6 +38,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
         const aiBody = localStorage.getItem("ai_draft_body");
         const aiRecipients = localStorage.getItem("ai_draft_recipients");
         const aiFileName = localStorage.getItem("ai_draft_filename");
+        const aiAttachments = localStorage.getItem("ai_draft_attachments");
 
         if (aiSubject || aiBody) {
             setSubject(aiSubject || "");
@@ -52,6 +54,17 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                     setRecipients(emails);
                 } catch (e) {
                     console.error("Failed to parse AI recipients", e);
+                }
+            }
+
+            if (aiAttachments) {
+                try {
+                    const parsed = JSON.parse(aiAttachments);
+                    if (Array.isArray(parsed)) {
+                        setAttachments(parsed.filter((item) => typeof item === "string"));
+                    }
+                } catch (e) {
+                    console.error("Failed to parse AI attachments", e);
                 }
             }
         }
@@ -102,7 +115,8 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                         subject: subject.trim(),
                         body: body.trim(),
                         recipients: finalRecipients,
-                        scheduled_at: isScheduled && scheduledAt ? toUTC(scheduledAt) : null
+                        scheduled_at: isScheduled && scheduledAt ? toUTC(scheduledAt) : null,
+                        attachments: attachments
                     }),
                 });
                 if (!sendRes.ok) {
@@ -120,6 +134,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
             localStorage.removeItem("ai_draft_subject");
             localStorage.removeItem("ai_draft_body");
             localStorage.removeItem("ai_draft_recipients");
+            localStorage.removeItem("ai_draft_attachments");
             onSuccess();
         } catch (err: any) {
             setError(err.message || "An error occurred. Please try again.");
