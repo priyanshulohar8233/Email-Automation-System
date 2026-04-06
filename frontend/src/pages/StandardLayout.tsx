@@ -11,7 +11,7 @@ import {
   ChevronRight, Download, Users, Link, Paperclip, 
   Image as ImageIcon, Upload, Trash2, Calendar, Clock, 
   Plus, FileText, AlertCircle, CheckCircle2, Layout, 
-  Smartphone, Monitor, Globe, Building2, Briefcase, Factory, Rocket,
+  Smartphone, Monitor, Globe, Building2, Factory, Rocket,
   Eye, TestTube2
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -27,6 +27,10 @@ interface Template {
   color: string;
   accent: string;
   preview: string;
+  logoSrc?: string;
+  cardClassName?: string;
+  heroClassName?: string;
+  badgeClassName?: string;
 }
 
 interface GeneratedTemplateMeta {
@@ -36,6 +40,33 @@ interface GeneratedTemplateMeta {
   signatureHtml: string;
   templateName: string;
 }
+
+const CONSULTANT_PREMIUM_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(`
+  <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="consultant-bg" x1="20" y1="18" x2="74" y2="78" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#12203D"/>
+        <stop offset="1" stop-color="#243A69"/>
+      </linearGradient>
+      <linearGradient id="consultant-ring" x1="18" y1="14" x2="80" y2="82" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#FFF4C7"/>
+        <stop offset="0.5" stop-color="#FFD54F"/>
+        <stop offset="1" stop-color="#C78C00"/>
+      </linearGradient>
+      <linearGradient id="consultant-text" x1="34" y1="28" x2="64" y2="66" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#FFF9E6"/>
+        <stop offset="1" stop-color="#F6C53B"/>
+      </linearGradient>
+    </defs>
+    <circle cx="48" cy="48" r="31" fill="url(#consultant-bg)"/>
+    <circle cx="48" cy="48" r="29" stroke="url(#consultant-ring)" stroke-width="2.5" opacity="0.95"/>
+    <circle cx="48" cy="48" r="23" stroke="url(#consultant-ring)" stroke-width="1.15" opacity="0.28"/>
+    <path d="M30 62V34H36L48 49L60 34H66V62H59V45L50 57H46L37 45V62H30Z" fill="url(#consultant-text)"/>
+    <path d="M68.5 33.5L72.5 29.5" stroke="#FFE39A" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+    <path d="M70 39H75" stroke="#FFE39A" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+    <path d="M21.5 33.5L25.5 29.5" stroke="#FFE39A" stroke-width="1.5" stroke-linecap="round" opacity="0.45"/>
+  </svg>
+`)}`;
 
 const TEMPLATES: Template[] = [
   {
@@ -53,10 +84,14 @@ const TEMPLATES: Template[] = [
     name: "MP Consultant LLC",
     company: "Sterling Group",
     description: "Professional, executive-grade layout with slate tones and a corporate serif signature.",
-    icon: <Briefcase className="h-5 w-5" />,
+    icon: null,
     color: "bg-[#FFC107]",
     accent: "text-[#FFC107]",
-    preview: "Professional | Yellow | Executive"
+    preview: "Professional | Yellow | Executive",
+    logoSrc: CONSULTANT_PREMIUM_LOGO,
+    cardClassName: "consultant-premium-card",
+    heroClassName: "consultant-premium-hero",
+    badgeClassName: "consultant-premium-badge",
   },
   {
     id: "factory",
@@ -573,14 +608,35 @@ export default function StandardLayout() {
           {TEMPLATES.map((tpl) => (
             <Card 
               key={tpl.id} 
-              className="group border-border hover:border-indigo-500 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 overflow-hidden flex flex-col"
+              className={cn(
+                "group border-border hover:border-indigo-500 transition-all duration-300 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-1 overflow-hidden flex flex-col",
+                tpl.cardClassName
+              )}
             >
-              <div className={cn("h-40 flex flex-col items-center justify-center relative overflow-hidden", tpl.color)}>
+              <div className={cn("h-40 flex flex-col items-center justify-center relative overflow-hidden", tpl.color, tpl.heroClassName)}>
                 <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-3 shadow-inner">
-                  {tpl.icon}
-                </div>
-                <Badge variant="secondary" className="bg-white/90 text-foreground border-none font-bold text-[10px] uppercase tracking-widest px-3">
+                {tpl.logoSrc ? (
+                  <div className="consultant-logo-shell">
+                    <span className="consultant-logo-glow" aria-hidden="true" />
+                    <span className="consultant-logo-shine" aria-hidden="true" />
+                    <img
+                      src={tpl.logoSrc}
+                      alt={`${tpl.name} logo`}
+                      className="consultant-logo-image"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-3 shadow-inner">
+                    {tpl.icon}
+                  </div>
+                )}
+                <Badge
+                  variant="secondary"
+                  className={cn(
+                    "bg-white/90 text-foreground border-none font-bold text-[10px] uppercase tracking-widest px-3",
+                    tpl.badgeClassName
+                  )}
+                >
                   {tpl.preview}
                 </Badge>
               </div>

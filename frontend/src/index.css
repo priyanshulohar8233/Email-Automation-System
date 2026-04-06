@@ -126,6 +126,161 @@
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 32px 90px rgb(15 23 42 / 0.14);
 }
 
+.consultant-premium-card {
+  position: relative;
+  isolation: isolate;
+  border-color: rgb(255 213 79 / 0.3);
+  box-shadow:
+    0 18px 42px rgb(0 0 0 / 0.2),
+    0 0 0 1px rgb(255 232 154 / 0.08);
+}
+
+.consultant-premium-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 34%, rgb(255 200 0 / 0.08));
+  opacity: 0.78;
+  transition: opacity 0.35s ease;
+}
+
+.consultant-premium-card:hover {
+  border-color: rgb(255 214 102 / 0.52);
+  transform: translateY(-6px);
+  box-shadow:
+    0 28px 60px rgb(0 0 0 / 0.3),
+    0 0 30px rgb(255 200 0 / 0.16);
+}
+
+.consultant-premium-card:hover::after {
+  opacity: 1;
+}
+
+.consultant-premium-hero {
+  justify-content: flex-start;
+  padding-top: 18px;
+}
+
+.consultant-logo-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 92px;
+  height: 92px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgb(255 255 255 / 0.18), rgb(255 255 255 / 0.05));
+  border: 1px solid rgb(255 255 255 / 0.12);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 10px 25px rgb(0 0 0 / 0.35),
+    0 0 20px rgb(255 200 0 / 0.4);
+  will-change: transform;
+  transform: translateZ(0);
+  transition:
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s ease,
+    filter 0.3s ease;
+  animation: consultant-float 4s ease-in-out infinite;
+}
+
+.consultant-logo-shell::before {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 16px;
+  border: 1px solid rgb(255 255 255 / 0.08);
+  pointer-events: none;
+}
+
+.consultant-logo-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 78px;
+  height: 78px;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(255 200 0 / 0.42), transparent 72%);
+  opacity: 0.78;
+  filter: blur(20px);
+  transform: translate(-50%, -50%);
+  animation: consultant-pulse 3.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.consultant-logo-shine {
+  position: absolute;
+  inset: -35%;
+  left: -120%;
+  width: 62%;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.28), transparent);
+  opacity: 0;
+  transform: skewX(-24deg);
+  transition: transform 0.7s ease, opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.consultant-logo-image {
+  position: relative;
+  z-index: 2;
+  width: 70px;
+  height: 70px;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 18px rgb(0 0 0 / 0.24));
+}
+
+.consultant-premium-card:hover .consultant-logo-shell {
+  transform: translateY(-6px) scale(1.06);
+  box-shadow:
+    0 20px 40px rgb(0 0 0 / 0.45),
+    0 0 30px rgb(255 200 0 / 0.6);
+}
+
+.consultant-premium-card:hover .consultant-logo-shine {
+  opacity: 1;
+  transform: translateX(245%) skewX(-24deg);
+}
+
+.consultant-premium-badge {
+  margin-top: 2px;
+  background: rgb(255 255 255 / 0.72) !important;
+  color: #6f5200 !important;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    0 10px 18px rgb(138 99 0 / 0.14);
+  backdrop-filter: blur(10px);
+}
+
+@keyframes consultant-float {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes consultant-pulse {
+  0%,
+  100% {
+    opacity: 0.66;
+    transform: translate(-50%, -50%) scale(0.96);
+  }
+  50% {
+    opacity: 0.96;
+    transform: translate(-50%, -50%) scale(1.08);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition-duration: 0.01ms !important;
@@ -135,5 +290,16 @@
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation-duration: 0.01ms !important;
+  }
+
+  .consultant-logo-shell,
+  .consultant-logo-glow {
+    animation: none !important;
+  }
+
+  .consultant-premium-card:hover,
+  .consultant-premium-card:hover .consultant-logo-shell,
+  .consultant-premium-card:hover .consultant-logo-shine {
+    transform: none !important;
   }
 }
