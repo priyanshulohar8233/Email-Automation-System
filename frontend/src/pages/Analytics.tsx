@@ -141,7 +141,7 @@ function AnalyticsContent() {
             <div
               style={{ borderRadius: "14px" }}
               onClick={() => setShowDateMenu(!showDateMenu)}
-              className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
+              className={`apple-filter-trigger flex items-center gap-2.5 h-10 px-4 cursor-pointer transition-all text-xs font-semibold w-fit whitespace-nowrap ${showDateMenu ? 'border-indigo-500 ring-1 ring-indigo-500/50 shadow-[0_18px_36px_rgba(79,70,229,0.12)]' : 'border-border/70'}`}
             >
               <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <span className="text-foreground transition-colors duration-300 capitalize">
@@ -153,7 +153,7 @@ function AnalyticsContent() {
             {showDateMenu && (
               <div
                 style={{ borderRadius: "14px" }}
-                className="absolute left-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-full w-max"
+                className="apple-floating-menu absolute left-0 mt-2 z-50 min-w-full w-max overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200"
               >
                 {(['week', 'month', 'quarter', 'year'] as const).map((r) => (
                   <div
@@ -177,7 +177,7 @@ function AnalyticsContent() {
             <div
               style={{ borderRadius: "14px" }}
               onClick={() => setShowCompanyMenu(!showCompanyMenu)}
-              className={`flex items-center gap-2.5 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-fit whitespace-nowrap ${showCompanyMenu ? 'border-emerald-500 ring-1 ring-emerald-500 shadow-sm' : 'border-border shadow-sm'}`}
+              className={`apple-filter-trigger flex items-center gap-2.5 h-10 px-4 cursor-pointer transition-all text-xs font-semibold w-fit whitespace-nowrap ${showCompanyMenu ? 'border-emerald-500 ring-1 ring-emerald-500/50 shadow-[0_18px_36px_rgba(16,185,129,0.12)]' : 'border-border/70'}`}
             >
               <Layers className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
               <span className="text-foreground transition-colors duration-300">
@@ -189,7 +189,7 @@ function AnalyticsContent() {
             {showCompanyMenu && (
               <div
                 style={{ borderRadius: "14px" }}
-                className="absolute right-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200 min-w-[200px]"
+                className="apple-floating-menu absolute right-0 mt-2 z-50 min-w-[200px] overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200"
               >
                 <div
                   onClick={() => {
@@ -222,7 +222,7 @@ function AnalyticsContent() {
             <div
               style={{ borderRadius: "14px" }}
               onClick={() => setShowCampaignMenu(!showCampaignMenu)}
-              className={`flex items-center gap-2 h-9 px-4 border cursor-pointer transition-all bg-card hover:bg-muted text-xs font-semibold w-full ${showCampaignMenu ? 'border-indigo-500 ring-1 ring-indigo-500 shadow-sm' : 'border-border shadow-sm'}`}
+              className={`apple-filter-trigger flex items-center gap-2 h-10 px-4 cursor-pointer transition-all text-xs font-semibold w-full ${showCampaignMenu ? 'border-indigo-500 ring-1 ring-indigo-500/50 shadow-[0_18px_36px_rgba(79,70,229,0.12)]' : 'border-border/70'}`}
             >
               <Activity className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-foreground flex-1 truncate transition-colors duration-300">
@@ -234,7 +234,7 @@ function AnalyticsContent() {
             {showCampaignMenu && (
               <div
                 style={{ borderRadius: "14px" }}
-                className="absolute left-0 right-0 mt-2 bg-card border border-border shadow-xl z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200"
+                className="apple-floating-menu absolute left-0 right-0 mt-2 z-50 overflow-hidden py-1 animate-in fade-in slide-in-from-top-2 duration-200"
               >
                 {[
                   { val: "all", label: "All Campaigns" },

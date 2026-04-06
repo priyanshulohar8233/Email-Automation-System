@@ -17,14 +17,20 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4 transition-colors duration-300">
-      <Card className="w-full max-w-md border-border bg-card">
+    <div className="apple-app-shell min-h-screen flex items-center justify-center bg-background p-4 transition-colors duration-300">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(99,102,241,0.16),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(56,189,248,0.12),transparent_24%)] pointer-events-none" />
+      <Card className="relative w-full max-w-md border-border/70 bg-card/85">
         <CardHeader className="space-y-1 items-center text-center">
-          <div className="flex items-center gap-2 text-indigo-600 mb-2">
-            <Zap className="h-8 w-8 fill-current" />
-            <span className="text-2xl font-bold tracking-tight text-foreground">MailFlow</span>
+          <div className="mb-3 flex items-center gap-3 text-indigo-600">
+            <div className="apple-icon-chip flex h-14 w-14 items-center justify-center rounded-[20px] border border-white/10 text-indigo-500">
+              <Zap className="h-7 w-7 fill-current" />
+            </div>
+            <div className="text-left">
+              <span className="block text-2xl font-semibold tracking-[-0.04em] text-foreground">MailFlow</span>
+              <span className="block text-[11px] font-semibold uppercase tracking-[0.24em] text-muted-foreground">Apple-grade outreach OS</span>
+            </div>
           </div>
-          <CardTitle className="text-2xl">{isLogin ? "Welcome back" : "Create an account"}</CardTitle>
+          <CardTitle className="text-[2rem]">{isLogin ? "Welcome back" : "Create an account"}</CardTitle>
           <CardDescription className="text-muted-foreground">
             {isLogin ? "Enter your email to sign in to your account" : "Enter your email below to create your account"}
           </CardDescription>
@@ -54,7 +60,7 @@ export default function Auth() {
                 <Input type="password" required className="bg-muted/50 border-border focus:bg-card" />
               </div>
             )}
-            <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white border-none shadow-md" type="submit">
+            <Button className="w-full" type="submit">
               {isLogin ? "Sign In" : "Create Account"}
             </Button>
           </form>

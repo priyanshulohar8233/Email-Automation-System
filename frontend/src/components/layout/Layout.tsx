@@ -3,11 +3,13 @@ import { Sidebar } from "./Sidebar";
 
 export default function Layout() {
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
+    <div className="apple-app-shell bg-background text-foreground transition-colors duration-300">
       <Sidebar />
-      <main className="pl-[260px] min-h-screen">
-        <div className="mx-auto max-w-[1440px] p-8">
-          <Outlet />
+      <main className="apple-main-shell min-h-screen pl-[284px]">
+        <div className="mx-auto max-w-[1540px] px-8 py-8 xl:px-10">
+          <div className="apple-page-shell">
+            <Outlet />
+          </div>
         </div>
       </main>
     </div>

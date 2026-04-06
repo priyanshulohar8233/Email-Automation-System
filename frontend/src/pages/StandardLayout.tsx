@@ -41,32 +41,116 @@ interface GeneratedTemplateMeta {
   templateName: string;
 }
 
-const CONSULTANT_PREMIUM_LOGO = `data:image/svg+xml;utf8,${encodeURIComponent(`
-  <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="consultant-bg" x1="20" y1="18" x2="74" y2="78" gradientUnits="userSpaceOnUse">
-        <stop stop-color="#12203D"/>
-        <stop offset="1" stop-color="#243A69"/>
-      </linearGradient>
-      <linearGradient id="consultant-ring" x1="18" y1="14" x2="80" y2="82" gradientUnits="userSpaceOnUse">
-        <stop stop-color="#FFF4C7"/>
-        <stop offset="0.5" stop-color="#FFD54F"/>
-        <stop offset="1" stop-color="#C78C00"/>
-      </linearGradient>
-      <linearGradient id="consultant-text" x1="34" y1="28" x2="64" y2="66" gradientUnits="userSpaceOnUse">
-        <stop stop-color="#FFF9E6"/>
-        <stop offset="1" stop-color="#F6C53B"/>
-      </linearGradient>
-    </defs>
-    <circle cx="48" cy="48" r="31" fill="url(#consultant-bg)"/>
-    <circle cx="48" cy="48" r="29" stroke="url(#consultant-ring)" stroke-width="2.5" opacity="0.95"/>
-    <circle cx="48" cy="48" r="23" stroke="url(#consultant-ring)" stroke-width="1.15" opacity="0.28"/>
-    <path d="M30 62V34H36L48 49L60 34H66V62H59V45L50 57H46L37 45V62H30Z" fill="url(#consultant-text)"/>
-    <path d="M68.5 33.5L72.5 29.5" stroke="#FFE39A" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
-    <path d="M70 39H75" stroke="#FFE39A" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
-    <path d="M21.5 33.5L25.5 29.5" stroke="#FFE39A" stroke-width="1.5" stroke-linecap="round" opacity="0.45"/>
-  </svg>
-`)}`;
+const createPremiumMonogramLogo = ({
+  monogram,
+  innerFrom,
+  innerTo,
+  ringFrom,
+  ringTo,
+  textFrom,
+  textTo,
+  accent,
+}: {
+  monogram: string;
+  innerFrom: string;
+  innerTo: string;
+  ringFrom: string;
+  ringTo: string;
+  textFrom: string;
+  textTo: string;
+  accent: string;
+}) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`
+    <svg width="104" height="104" viewBox="0 0 104 104" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="shell" x1="22" y1="20" x2="82" y2="86" gradientUnits="userSpaceOnUse">
+          <stop stop-color="${innerFrom}" />
+          <stop offset="1" stop-color="${innerTo}" />
+        </linearGradient>
+        <linearGradient id="ring" x1="18" y1="16" x2="86" y2="88" gradientUnits="userSpaceOnUse">
+          <stop stop-color="${ringFrom}" />
+          <stop offset="0.55" stop-color="${ringTo}" />
+          <stop offset="1" stop-color="${accent}" />
+        </linearGradient>
+        <linearGradient id="letter" x1="34" y1="30" x2="74" y2="74" gradientUnits="userSpaceOnUse">
+          <stop stop-color="${textFrom}" />
+          <stop offset="1" stop-color="${textTo}" />
+        </linearGradient>
+        <radialGradient id="coreGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(52 44) rotate(90) scale(30)">
+          <stop stop-color="${ringFrom}" stop-opacity="0.34" />
+          <stop offset="1" stop-color="${ringTo}" stop-opacity="0" />
+        </radialGradient>
+      </defs>
+
+      <rect x="10" y="10" width="84" height="84" rx="24" fill="url(#coreGlow)" opacity="0.5" />
+      <circle cx="52" cy="52" r="34" fill="url(#shell)" />
+      <circle cx="52" cy="52" r="31" stroke="url(#ring)" stroke-width="2.8" opacity="0.96" />
+      <circle cx="52" cy="52" r="24.5" stroke="url(#ring)" stroke-width="1.15" opacity="0.24" />
+      <circle cx="52" cy="52" r="19.5" stroke="${ringFrom}" stroke-width="0.7" opacity="0.24" />
+
+      <path d="M28 28H43" stroke="${ringFrom}" stroke-width="1.7" stroke-linecap="round" opacity="0.5" />
+      <path d="M76 32L81 27" stroke="${ringFrom}" stroke-width="1.7" stroke-linecap="round" opacity="0.56" />
+      <path d="M75 39H82" stroke="${ringFrom}" stroke-width="1.7" stroke-linecap="round" opacity="0.56" />
+      <path d="M22 44H28" stroke="${ringFrom}" stroke-width="1.5" stroke-linecap="round" opacity="0.34" />
+
+      <text
+        x="52"
+        y="61"
+        text-anchor="middle"
+        fill="url(#letter)"
+        font-family="Segoe UI, Arial, sans-serif"
+        font-size="${monogram.length > 2 ? 27 : 33}"
+        font-weight="800"
+        letter-spacing="${monogram.length > 2 ? "0.08em" : "0.03em"}"
+      >
+        ${monogram}
+      </text>
+    </svg>
+  `)}`;
+
+const LUMINA_PREMIUM_LOGO = createPremiumMonogramLogo({
+  monogram: "ML",
+  innerFrom: "#251B62",
+  innerTo: "#5A49F5",
+  ringFrom: "#E9E1FF",
+  ringTo: "#A795FF",
+  textFrom: "#FFFFFF",
+  textTo: "#C8BAFF",
+  accent: "#7B61FF",
+});
+
+const CONSULTANT_PREMIUM_LOGO = createPremiumMonogramLogo({
+  monogram: "MP",
+  innerFrom: "#12203D",
+  innerTo: "#243A69",
+  ringFrom: "#FFF4C7",
+  ringTo: "#FFD54F",
+  textFrom: "#FFF9E6",
+  textTo: "#F6C53B",
+  accent: "#C78C00",
+});
+
+const MAKING_PREMIUM_LOGO = createPremiumMonogramLogo({
+  monogram: "AM",
+  innerFrom: "#541D23",
+  innerTo: "#C63F4D",
+  ringFrom: "#FFE0CF",
+  ringTo: "#FF9A72",
+  textFrom: "#FFF7F2",
+  textTo: "#FFB18D",
+  accent: "#FF5E5B",
+});
+
+const MATKOTECH_PREMIUM_LOGO = createPremiumMonogramLogo({
+  monogram: "MT",
+  innerFrom: "#0E3B2A",
+  innerTo: "#1F8A54",
+  ringFrom: "#D8FFE8",
+  ringTo: "#7CE7A9",
+  textFrom: "#F4FFF8",
+  textTo: "#9AF4BF",
+  accent: "#22C55E",
+});
 
 const TEMPLATES: Template[] = [
   {
@@ -74,10 +158,14 @@ const TEMPLATES: Template[] = [
     name: "MP Lumina",
     company: "Lumina Creative",
     description: "Modern, vibrant layout with indigo accents and a minimalist creative signature.",
-    icon: <Sparkles className="h-5 w-5" />,
+    icon: null,
     color: "bg-[#7B61FF]",
     accent: "text-[#7B61FF]",
-    preview: "Modern | Purple | Creative"
+    preview: "Modern | Purple | Creative",
+    logoSrc: LUMINA_PREMIUM_LOGO,
+    cardClassName: "premium-template-card premium-template-card--lumina",
+    heroClassName: "premium-template-hero",
+    badgeClassName: "premium-template-badge",
   },
   {
     id: "consultant",
@@ -89,29 +177,37 @@ const TEMPLATES: Template[] = [
     accent: "text-[#FFC107]",
     preview: "Professional | Yellow | Executive",
     logoSrc: CONSULTANT_PREMIUM_LOGO,
-    cardClassName: "consultant-premium-card",
-    heroClassName: "consultant-premium-hero",
-    badgeClassName: "consultant-premium-badge",
+    cardClassName: "premium-template-card premium-template-card--consultant",
+    heroClassName: "premium-template-hero",
+    badgeClassName: "premium-template-badge",
   },
   {
     id: "factory",
     name: "A Making Company",
     company: "Industrial Scale",
     description: "Bold, industrial layout with orange accents and a strong, high-contrast signature.",
-    icon: <Factory className="h-5 w-5" />,
+    icon: null,
     color: "bg-[#FF4D4F]",
     accent: "text-[#FF4D4F]",
-    preview: "Industrial | Red | Bold"
+    preview: "Industrial | Red | Bold",
+    logoSrc: MAKING_PREMIUM_LOGO,
+    cardClassName: "premium-template-card premium-template-card--making",
+    heroClassName: "premium-template-hero",
+    badgeClassName: "premium-template-badge",
   },
   {
     id: "matkotech",
     name: "Matkotech",
     company: "Matkotech Technologies",
     description: "Green performance layout with crisp product signature tailored for modern IT outreach.",
-    icon: <Rocket className="h-5 w-5" />,
+    icon: null,
     color: "bg-[#22C55E]",
     accent: "text-[#22C55E]",
-    preview: "Tech | Green | Performance"
+    preview: "Tech | Green | Performance",
+    logoSrc: MATKOTECH_PREMIUM_LOGO,
+    cardClassName: "premium-template-card premium-template-card--matkotech",
+    heroClassName: "premium-template-hero",
+    badgeClassName: "premium-template-badge",
   }
 ];
 
@@ -615,16 +711,16 @@ export default function StandardLayout() {
             >
               <div className={cn("h-40 flex flex-col items-center justify-center relative overflow-hidden", tpl.color, tpl.heroClassName)}>
                 <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                {tpl.logoSrc ? (
-                  <div className="consultant-logo-shell">
-                    <span className="consultant-logo-glow" aria-hidden="true" />
-                    <span className="consultant-logo-shine" aria-hidden="true" />
-                    <img
-                      src={tpl.logoSrc}
-                      alt={`${tpl.name} logo`}
-                      className="consultant-logo-image"
-                    />
-                  </div>
+                         {tpl.logoSrc ? (
+                           <div className="premium-logo-shell">
+                             <span className="premium-logo-glow" aria-hidden="true" />
+                             <span className="premium-logo-shine" aria-hidden="true" />
+                             <img
+                               src={tpl.logoSrc}
+                               alt={`${tpl.name} logo`}
+                               className="premium-logo-image"
+                             />
+                           </div>
                 ) : (
                   <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-white mb-3 shadow-inner">
                     {tpl.icon}
