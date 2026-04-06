@@ -2662,7 +2662,7 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
         "MP Consultant LLC": {
             "primary": "#FFC107",
             "secondary": "#F59E0B",
-            "logo": "https://img.icons8.com/color/96/business-group.png",
+            "logo": "https://ci3.googleusercontent.com/mail-img-att/AGAZnRqphBtkM6Hj8e8PWFn7q3XWEDBogSeQY9ofcvC2fE_djCNUTZrFAbkjb5GudXj_zIt25nK8crJr3WXvabTGXgd3o9SqZjDt1iRgqG1QXJ6gc36ZL1eFuulFY0fYlbcZaOw3UF1nfL1L7WsTrHy1NLPPfwYG290A9WKwhgTb0FKxqtqPsRUx558LRGibIPgDXvst2mg2_wEar4yN-CVCU4yB-AF-wPq92ERd1eGa0MJighezO8hVwxJrpYLLhA9uJFVGkr8IRVzz0ZatMTfjWqQxoocB9NvnqRKG8FLqFnqcKIW_y_8MclAWfJGhueen99nuo2EALPjVAh7tglfNjPltMrdFt64oPfCxCM6ByqDKq7flMMEB92WXS0Z4jK1msJfAOQ0yxZ_TgJth6aYjj7735h4JGAKK5ZRr4Owt-l2vo7lSPG4whN04bJXdOvHcBsl8qIHfkw8ZHCvzFMUM-rhUezy6M5a_PmmKaylUEHGhaPv7Hglu5Pl6tosEdMPiPeF_AkKm_EKMNo10P-mhhZiyyqfJU9p334iPOtpr-xvhvpqY9LctruAw1M3-QKekbFT5IKti5T9DwJr_uzTtYdDrpcVXfuIR_-zx5_nQ_QEpjYMevw9Jy0RPeNjkUWEfYbfGZE23qv8DIy22zpbrlTE0YHKZUmKcag-d_JslrNpITQjIwdR2DIZ7GWfop_3epVx2y8QaKZ94qziJNAnJftDZFsIZXL4SYnCErkYpg8SpaBut5LIfO_zuuzSG9FJbpe5WOofLkdyxSHIpKq6ZUNUujCkUSGL9n5gtLIAe8q-8AlBD1ksklKoX18VBY_tE_Q-vmr8SP1vOP_Jb95IUn42AfKJoS9cUqCbtYNd-MSDpeibNzd6Q-MigZ6oGFbsVWzvqGDYvhIBhrhsfPjMrQTS3Mq8rm92BnohecfJImCmhGUOhS954yGqlp5j-sxIJjS4lyysubI3dHICiXr_NxxUaLbBJARYS5qCC5l7gHXAF6pMmp8y5CW4qYULEHVTXFgyxDI5QrzNRGipuM7eiL5SPxIkYF_5Cv6ibJHqcsXK6nVXK=s0-l75-ft",
             "signature": """
                 <div style="margin-top: 28px; padding-top: 18px; border-top: 1px solid #e2e8f0; font-family: 'Segoe UI', Tahoma, sans-serif;">
                     <div style="font-size: 15px; color: #334155; margin-bottom: 8px;">Cheers,</div>
@@ -2752,13 +2752,16 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
 
     html_content = f"""
     <div style="max-width: 680px; margin: 0 auto; font-family: 'Segoe UI', Arial, sans-serif; color: #334155; line-height: 1.7; background: #ffffff; padding: 28px 32px; border-radius: 12px; border: 1px solid #e2e8f0;">
-        <div style="display:flex; align-items:center; gap:12px; padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; margin-bottom: 22px;">
-            <img src="{config['logo']}" width="42" height="42" alt="{template_name}" />
-            <div>
-                <div style="font-size:11px; color:#64748b; letter-spacing:0.08em; text-transform:uppercase;">MailFlow Standard Layout</div>
-                <div style="font-size:16px; font-weight:700; color:#0f172a;">{html_lib.escape(template_name)}</div>
-            </div>
-        </div>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="padding-bottom: 16px; border-bottom: 1px solid #e2e8f0; margin-bottom: 22px; width: 100%;">
+            <tr>
+                <td style="vertical-align: middle; width: 40px;">
+                    <img src="{config['logo']}" width="40" height="40" style="display:block; border-radius:6px; object-fit: contain;" alt="{template_name} Logo">
+                </td>
+                <td style="padding-left:10px; vertical-align: middle; font-family: Arial, sans-serif; font-size:16px; font-weight:600; color:#0f172a;">
+                    {html_lib.escape(template_name)}
+                </td>
+            </tr>
+        </table>
 
         {greeting_html}
 
