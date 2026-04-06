@@ -9,18 +9,18 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, children }: PageHeaderProps) {
     return (
-        <div className="apple-page-header mb-8 flex flex-col gap-5 px-6 py-6 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1">
-                <h1 className="text-[2rem] font-semibold tracking-[-0.04em] text-foreground transition-colors duration-300">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
+            <div>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground transition-colors duration-300">
                     {title}
                 </h1>
                 {subtitle && (
-                    <p className="max-w-2xl text-[15px] font-medium text-muted-foreground transition-colors duration-300">
+                    <p className="text-muted-foreground transition-colors duration-300">
                         {subtitle}
                     </p>
                 )}
             </div>
-            <div className="apple-toolbar-shell flex items-center gap-3 self-start px-3 py-2 md:self-auto">
+            <div className="flex items-center gap-3">
                 {children}
                 <ThemeToggle />
             </div>
