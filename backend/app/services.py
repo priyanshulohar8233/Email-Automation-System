@@ -480,19 +480,36 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
     from sqlalchemy import func, distinct, case
     
     now = datetime.now(timezone.utc)
+
+def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all", company_name: str | list = "all", start_date: datetime = None, end_date: datetime = None):
+    """
+    SaaS Grade Single Source of Truth for all metrics.
+    Ensures calculations are identical across Dashboard and Analytics.
+    """
+    from datetime import datetime, timedelta, timezone
+    from sqlalchemy import func, distinct, case
+    
+    now = datetime.now(timezone.utc)
     if not start_date or not end_date:
         s, e = get_date_window(days)
         if not start_date: start_date = s
         if not end_date: end_date = e
     
     # 1. Base Query Filter
-    # SaaS Grade: Only count emails that have been actually 'sent' (sent_at is set)
+    # SaaS Grade: Count all attempted emails (sent, delivered, bounced, spam)
     query_emails = db.query(
         func.count(Email.id).label("total_attempts"),
         func.count(case(((Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED])), Email.id), else_=None)).label("delivered"),
         func.count(case(((Email.status == EmailStatus.BOUNCED), Email.id), else_=None)).label("bounces"),
         func.count(case(((Email.status == EmailStatus.SPAM), Email.id), else_=None)).label("spam")
-    ).filter(Email.sent_at != None, Email.sent_at >= start_date, Email.sent_at < end_date)
+    ).filter(
+        func.coalesce(Email.sent_at, Email.created_at) >= start_date, 
+        func.coalesce(Email.sent_at, Email.created_at) < end_date,
+        Email.status.in_([
+            EmailStatus.SENT, EmailStatus.DELIVERED, 
+            EmailStatus.BOUNCED, EmailStatus.SPAM
+        ])
+    )
     
     query_events = db.query(
         func.count(distinct(case(((EmailEvent.event_type == EventType.OPENED), EmailEvent.email_id), else_=None))).label("opens"),
@@ -523,7 +540,7 @@ def get_unified_metrics(db: Session, days: int = 30, campaign_name: str = "all",
     delivered = email_res.delivered or 0
     bounces = email_res.bounces or 0
     spam = email_res.spam or 0
-    total_sent = delivered + bounces + spam
+    total_sent = email_res.total_attempts or 0
     
     opens = event_res.opens or 0
     clicks = event_res.clicks or 0
@@ -870,22 +887,23 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
             })
 
     from .models import Contact
-    # Fetch aggregated counts by date
+    # Fetch aggregated counts by date using coalesce to handle immediate bounces
+    target_date = func.coalesce(Email.sent_at, Email.created_at)
     query = db.query(
-        cast(Email.sent_at, Date).label("d"),
+        cast(target_date, Date).label("d"),
         func.count(Email.id).label("c")
     ).filter(
-        Email.sent_at >= start_date,
-        Email.sent_at < end_date,
-        Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED])
+        target_date >= start_date,
+        target_date < end_date,
+        Email.status.in_([EmailStatus.SENT, EmailStatus.DELIVERED, EmailStatus.BOUNCED, EmailStatus.SPAM])
     )
-
-    if company_name and company_name != "all":
+    
+    if company_name != "all":
         companies = [company_name] if isinstance(company_name, str) else company_name
         query = query.join(Campaign, Email.campaign_id == Campaign.id).filter(Campaign.company.in_(companies))
 
     print(f"DEBUG: Running chart query for {days} days...")
-    results = query.group_by(cast(Email.sent_at, Date)).all()
+    results = query.group_by(cast(target_date, Date)).all()
     
     if not results:
         return [{"day": b["label"], "emails": 0} for b in buckets]
@@ -905,8 +923,6 @@ def emails_over_time(db: Session, days: int = 7, company_name: str | list = "all
         })
                         
     return chart_data
-
-
 
 def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_name: str = "all", company_name: str | list = "all"):
     from datetime import datetime, timedelta, timezone
@@ -1117,14 +1133,6 @@ def recent_events(db: Session, days: int = 30, limit: int | None = 20, campaign_
     return final_grouped[:limit] if limit else final_grouped
 
 def get_emails_per_company(db: Session, days: int = 30, company_name: str | list = "all"):
-    """
-    Returns company-wise executed email totals for the dashboard donut chart.
-
-    Important business rules:
-    - Do not count QUEUED/SCHEDULED/PENDING-only campaign rows.
-    - Count only real executed email attempts.
-    - Be resilient to stale campaign.status values by relying on email/activity data.
-    """
     from .models import Campaign, Email
 
     start_date, end_date = get_date_window(days)
@@ -1142,12 +1150,12 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
         func.count(Email.id).label("total")
     ).join(Email, Campaign.id == Email.campaign_id)
 
-    # Count only actually executed emails. This excludes queued/pending rows even if
-    # sent_at was prefilled by an earlier default or legacy migration.
     query = query.filter(Email.status.in_(executed_email_statuses))
+    
+    target_date = func.coalesce(Email.sent_at, Email.created_at)
     query = query.filter(
         or_(
-            and_(Email.sent_at.isnot(None), Email.sent_at >= start_date, Email.sent_at < end_date),
+            and_(target_date.isnot(None), target_date >= start_date, target_date < end_date),
             and_(Email.opened_at.isnot(None), Email.opened_at >= start_date, Email.opened_at < end_date),
             and_(Email.clicked_at.isnot(None), Email.clicked_at >= start_date, Email.clicked_at < end_date),
         )
@@ -1160,14 +1168,11 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
             query = query.filter(Campaign.company == company_name)
 
     results = query.group_by(Campaign.company).all()
-    # Remove 'Unknown' or Null companies as per user requirement
     data = [{"company": r[0], "total": int(r[1] or 0)} for r in results if r[0] and r[0].lower() != "unknown" and (r[1] or 0) > 0]
 
     if data:
         return data
 
-    # Fallback for legacy rows where email timestamps/statuses were not normalized
-    # but activity logs already contain the real execution history.
     activity_query = db.query(
         ActivityLog.company,
         func.count(distinct(ActivityLog.email_id)).label("total")
@@ -1183,7 +1188,6 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
             activity_query = activity_query.filter(ActivityLog.company == company_name)
 
     activity_rows = activity_query.group_by(ActivityLog.company).all()
-    # Remove 'Unknown' or Null companies as per user requirement
     return [{"company": r[0], "total": int(r[1] or 0)} for r in activity_rows if r[0] and r[0].lower() != "unknown" and (r[1] or 0) > 0]
 
 
