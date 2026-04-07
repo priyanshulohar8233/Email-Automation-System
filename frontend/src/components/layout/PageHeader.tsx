@@ -9,18 +9,18 @@ interface PageHeaderProps {
 
 export function PageHeader({ title, subtitle, children }: PageHeaderProps) {
     return (
-        <div className="page-header-shell mb-8 flex flex-col gap-5 rounded-[28px] px-6 py-6 md:flex-row md:items-center md:justify-between">
-            <div className="space-y-1.5">
-                <h1 className="text-[2rem] font-bold tracking-[-0.05em] text-foreground transition-colors duration-300">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
+            <div>
+                <h1 className="text-2xl font-bold tracking-tight text-foreground transition-colors duration-300">
                     {title}
                 </h1>
                 {subtitle && (
-                    <p className="max-w-2xl text-[15px] font-medium text-muted-foreground transition-colors duration-300">
+                    <p className="text-muted-foreground transition-colors duration-300">
                         {subtitle}
                     </p>
                 )}
             </div>
-            <div className="page-header-toolbar flex items-center gap-3 self-start rounded-[20px] px-3 py-2 md:self-auto">
+            <div className="flex items-center gap-3">
                 {children}
                 <ThemeToggle />
             </div>
