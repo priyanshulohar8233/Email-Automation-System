@@ -1179,8 +1179,18 @@ export default function StandardLayout() {
               <CardContent className="p-0 flex-1 overflow-y-auto bg-muted/50 scrollbar-hide">
                  {composedHtml ? (
                    <div className="p-6 md:p-8 space-y-6">
-                      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)] gap-6 items-start">
-                        <div className="rounded-2xl border border-border bg-card/90 shadow-sm p-5 space-y-4">
+                      <div
+                        className={`grid items-start gap-6 ${
+                          previewInGmailStyle
+                            ? "grid-cols-1 xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)]"
+                            : "grid-cols-1"
+                        }`}
+                      >
+                        <div
+                          className={`rounded-2xl border border-border bg-card/90 shadow-sm p-5 space-y-5 ${
+                            previewInGmailStyle ? "" : "w-full max-w-[1040px] mx-auto"
+                          }`}
+                        >
                           <div className="space-y-2">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Subject Line</label>
                             <Input
@@ -1188,7 +1198,7 @@ export default function StandardLayout() {
                               onChange={(e) => setGeneratedSubject(e.target.value)}
                               style={{ borderRadius: "12px" }}
                               placeholder="Subject line"
-                              className="bg-muted/30 border-border h-11 text-sm"
+                              className="bg-muted/30 border-border h-12 text-[15px] font-medium"
                             />
                           </div>
                           <div className="space-y-2">
@@ -1197,7 +1207,7 @@ export default function StandardLayout() {
                               value={generatedBodyText}
                               onChange={(e) => setGeneratedBodyText(e.target.value)}
                               style={{ borderRadius: "14px" }}
-                              className="w-full min-h-[250px] bg-muted/30 border border-border p-4 text-sm leading-7 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-y text-foreground"
+                              className="w-full min-h-[460px] bg-muted/30 border border-border p-4 text-[15px] leading-8 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-y text-foreground"
                               placeholder="Generated email body"
                             />
                           </div>
@@ -1225,7 +1235,7 @@ export default function StandardLayout() {
                           </div>
                         </div>
                         {previewInGmailStyle && (
-                          <div className="space-y-3">
+                          <div className="space-y-3 min-w-0">
                             <div className="rounded-[28px] border border-border bg-[#f6f8fc] p-4 md:p-6 shadow-inner transition-all duration-300">
                               <div className="mb-4 rounded-2xl border border-[#d7dce5] bg-white px-4 py-3 shadow-sm">
                                 <div className="flex items-center justify-between gap-3 text-[#5f6368]">
@@ -1240,7 +1250,7 @@ export default function StandardLayout() {
                               </div>
                               <div className="flex justify-center">
                                 <div
-                                  className="w-full max-w-[760px] overflow-hidden rounded-none border-0 bg-white shadow-none"
+                                  className="w-full max-w-[860px] overflow-hidden rounded-none border-0 bg-white shadow-none"
                                   dangerouslySetInnerHTML={{ __html: composedHtml }}
                                 />
                               </div>
