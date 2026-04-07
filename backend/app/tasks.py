@@ -44,12 +44,21 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         campaign_id = email_record.campaign_id
         debug_log(f"DEBUG: Processing email {email_id} to {to_addr}")
 
+        payload = services.unpack_email_payload(body)
+        resolved_body = payload.get("body") or ""
+        resolved_attachments = payload.get("attachments") or []
+        if attachments:
+            resolved_attachments = attachments
+
         # 2. Compliance & Tracking
         base_url = settings.BASE_URL.rstrip('/')
-        formatted_body = body.replace('\n', '<br/>')
+        is_html_body = bool(re.search(r"<[a-z][\s\S]*?>", resolved_body, flags=re.IGNORECASE))
+        formatted_body = resolved_body if is_html_body else resolved_body.replace('\n', '<br/>')
         unsubscribe_url = f"{base_url}/api/contacts/unsubscribe?email={to_addr}"
+        wrapper_open = "" if is_html_body else "<div style='font-family: sans-serif; color: #333; line-height: 1.6;'>"
+        wrapper_close = "" if is_html_body else "</div>"
         tracking_body = (
-            f"<div style='font-family: sans-serif; color: #333; line-height: 1.6;'>"
+            f"{wrapper_open}"
             f"{formatted_body}"
             f"<br/><br/><hr style='border: 0; border-top: 1px solid #eee;'/><br/>"
             f"<p style='font-size: 12px; color: #999; text-align: center;'>"
@@ -57,7 +66,7 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             f"<a href='{unsubscribe_url}' style='color: #4f46e5; text-decoration: underline;'>Unsubscribe</a>"
             f"</p>"
             f"<img src='{base_url}/api/t/o/{email_id}' width='1' height='1' alt='' style='display:none !important; visibility:hidden; opacity:0;'/>"
-            f"</div>"
+            f"{wrapper_close}"
         )
         
         def repl(match):
@@ -70,18 +79,6 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             return f'href="{tracked_url}"'
             
         tracking_body = re.sub(r'href=["\']([^"\']+)["\']', repl, tracking_body)
-
-        from email.mime.multipart import MIMEMultipart
-        from email.mime.text import MIMEText
-
-        # 3. Construct MIME Message
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = settings.SMTP_USER
-        msg["To"] = to_addr
-        
-        part = MIMEText(tracking_body, "html")
-        msg.attach(part)
 
         # 4. Fetch Mail Provider & Send
         from .models import Settings as DBSettings
@@ -110,10 +107,17 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
             password = s.smtp_password if s else settings.SMTP_PASS
             
             debug_log(f"DEBUG: Connecting to SMTP {host}:{port}")
-            with smtplib.SMTP(host, port, timeout=30) as server:
-                server.starttls()
-                server.login(user, password)
-                server.sendmail(user, [to_addr], msg.as_string())
+            services.send_mail(
+                to_addr=to_addr,
+                subject=subject,
+                body_html=tracking_body,
+                smtp_host=host,
+                smtp_port=port,
+                smtp_user=user,
+                smtp_pass=password,
+                from_addr=(s.from_email if s and s.from_email else user),
+                attachments=resolved_attachments,
+            )
             debug_log(f"SUCCESS: Email {email_id} sent via SMTP")
         now = datetime.now(timezone.utc)
         
@@ -153,6 +157,8 @@ def send_email_fn(email_id: int, subject: str, body: str, attachments: list = No
         if email_record:
             email_record.status = EmailStatus.BOUNCED
             email_record.failure_reason = error_msg
+            email_record.bounce_reason = error_msg
+            email_record.delivery_status = "bounced"
             db.add(EmailEvent(email_id=email_id, event_type=EventType.BOUNCED, timestamp=datetime.now(timezone.utc)))
             
             camp = db.query(Campaign).get(email_record.campaign_id)

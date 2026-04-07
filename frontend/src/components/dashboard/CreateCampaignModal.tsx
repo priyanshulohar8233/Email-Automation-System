@@ -11,11 +11,81 @@ interface CreateCampaignModalProps {
     onSuccess: () => void;
 }
 
+interface DraftTemplateMeta {
+    logoUrl: string;
+    primaryColor: string;
+    secondaryColor: string;
+    signatureHtml: string;
+    templateName: string;
+}
+
+const escapeHtml = (value: string) =>
+    value
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+const stripHtmlToText = (value: string) =>
+    value
+        .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<script[\s\S]*?<\/script>/gi, "")
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
+const formatBodyTextToHtml = (rawText: string) => {
+    const lines = rawText.split(/\r?\n/).map((line) => line.trim());
+    const paragraphs: string[] = [];
+    let current: string[] = [];
+
+    lines.forEach((line) => {
+        if (line) {
+            current.push(line);
+        } else if (current.length) {
+            paragraphs.push(current.join(" "));
+            current = [];
+        }
+    });
+
+    if (current.length) {
+        paragraphs.push(current.join(" "));
+    }
+
+    return paragraphs
+        .map(
+            (paragraph) =>
+                `<p style="margin:0 0 14px 0; font-size:15px; line-height:1.82; color:#334155;">${escapeHtml(paragraph)}</p>`
+        )
+        .join("");
+};
+
+const normalizeCampaignBody = (rawText: string) =>
+    rawText
+        .split(/\r?\n/)
+        .filter((line) => {
+            const trimmed = line.trim();
+            if (!trimmed) return true;
+            return !/^(dear\b|best regards\b|regards\b|cheers\b|\[?your name\]?|email:|phone:|p\.?s\.)/i.test(trimmed);
+        })
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+
 export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalProps) {
     const [name, setName] = useState("");
     const [company, setCompany] = useState(() => localStorage.getItem("last_used_company") || "MP Consultant LLC");
     const [subject, setSubject] = useState("");
     const [body, setBody] = useState("");
+    const [draftTemplateMeta, setDraftTemplateMeta] = useState<DraftTemplateMeta | null>(null);
+    const [draftBodyBaseline, setDraftBodyBaseline] = useState("");
+    const [draftImageSource, setDraftImageSource] = useState("");
+    const [draftImagePlacement, setDraftImagePlacement] = useState<"top" | "bottom">("bottom");
+    const [draftImageWidth, setDraftImageWidth] = useState(70);
+    const [draftImageHeight, setDraftImageHeight] = useState(280);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [fileName, setFileName] = useState<string>("");
@@ -33,19 +103,69 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
         "Matkotech"
     ];
 
+    const buildBrandedDraftHtml = (bodyText: string) => {
+        if (!draftTemplateMeta) return bodyText.trim();
+
+        const safeBodyHtml = formatBodyTextToHtml(normalizeCampaignBody(bodyText));
+        const imageHtml = draftImageSource
+            ? `<div style="margin:18px 0 6px 0;"><img src="${draftImageSource}" alt="Email visual" style="display:block;margin:0 auto;width:${draftImageWidth}%;max-width:${draftImageWidth}%;height:${draftImageHeight}px;object-fit:cover;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 8px 20px rgba(15, 23, 42, 0.08);" /></div>`
+            : "";
+        const contentHtml = draftImagePlacement === "top" ? `${imageHtml}${safeBodyHtml}` : `${safeBodyHtml}${imageHtml}`;
+
+        return `
+      <div style="max-width:680px;margin:0 auto;font-family:'Segoe UI',Arial,sans-serif;color:#334155;line-height:1.7;background:#ffffff;padding:28px 32px;border-radius:12px;border:1px solid #e2e8f0;">
+        <div style="display:flex;align-items:center;gap:12px;padding-bottom:16px;border-bottom:1px solid #e2e8f0;margin-bottom:22px;">
+          <img src="${draftTemplateMeta.logoUrl}" width="42" height="42" alt="${escapeHtml(draftTemplateMeta.templateName)}" />
+          <div>
+            <div style="font-size:11px;color:#64748b;letter-spacing:0.08em;text-transform:uppercase;">MailFlow Standard Layout</div>
+            <div style="font-size:16px;font-weight:700;color:#0f172a;">${escapeHtml(draftTemplateMeta.templateName)}</div>
+          </div>
+        </div>
+        <p style="margin:0 0 18px 0;font-size:15px;line-height:1.8;color:#0f172a;font-weight:600;">Dear [Recipient Name],</p>
+        <div style="font-size:15px;min-height:120px;">${contentHtml}</div>
+        ${draftTemplateMeta.signatureHtml}
+        <div style="margin-top:24px;font-size:11px;color:#64748b;text-align:center;border-top:1px solid #e2e8f0;padding-top:14px;">
+          Sent via MailFlow AI Engine. To unsubscribe,
+          <a href="#" style="color:${draftTemplateMeta.primaryColor};text-decoration:none;font-weight:700;">click here</a>.
+        </div>
+      </div>
+    `.trim();
+    };
+
     useEffect(() => {
         const aiSubject = localStorage.getItem("ai_draft_subject");
         const aiBody = localStorage.getItem("ai_draft_body");
+        const aiBodyText = localStorage.getItem("ai_draft_body_text");
+        const aiHtml = localStorage.getItem("ai_draft_html");
         const aiRecipients = localStorage.getItem("ai_draft_recipients");
         const aiFileName = localStorage.getItem("ai_draft_filename");
         const aiAttachments = localStorage.getItem("ai_draft_attachments");
+        const aiTemplateMeta = localStorage.getItem("ai_draft_template_meta");
+        const aiImageSource = localStorage.getItem("ai_draft_image_source");
+        const aiImagePlacement = localStorage.getItem("ai_draft_image_placement");
+        const aiImageWidth = localStorage.getItem("ai_draft_image_width");
+        const aiImageHeight = localStorage.getItem("ai_draft_image_height");
 
-        if (aiSubject || aiBody) {
+        if (aiSubject || aiBody || aiBodyText || aiHtml) {
+            const initialBody = normalizeCampaignBody(aiBodyText || (aiBody ? stripHtmlToText(aiBody) : ""));
             setSubject(aiSubject || "");
-            setBody(aiBody || "");
+            setBody(initialBody);
             setHasAIDraft(true);
-            if (aiSubject) setName(`AI: ${aiSubject.substring(0, 20)}...`);
+            setDraftBodyBaseline(initialBody);
             if (aiFileName) setFileName(aiFileName);
+
+            if (aiTemplateMeta) {
+                try {
+                    const parsedMeta = JSON.parse(aiTemplateMeta);
+                    setDraftTemplateMeta(parsedMeta);
+                } catch (e) {
+                    console.error("Failed to parse AI template meta", e);
+                }
+            }
+            if (aiImageSource) setDraftImageSource(aiImageSource);
+            if (aiImagePlacement === "top" || aiImagePlacement === "bottom") setDraftImagePlacement(aiImagePlacement);
+            if (aiImageWidth) setDraftImageWidth(Number(aiImageWidth) || 70);
+            if (aiImageHeight) setDraftImageHeight(Number(aiImageHeight) || 280);
 
             if (aiRecipients) {
                 try {
@@ -78,6 +198,16 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
         setError(null);
 
         try {
+            if (isScheduled && !scheduledAt) {
+                throw new Error("Please choose a schedule date and time.");
+            }
+
+            const finalBody = normalizeCampaignBody(body);
+            const bodyForSend =
+                draftTemplateMeta && finalBody
+                    ? buildBrandedDraftHtml(finalBody)
+                    : finalBody;
+
             // 1. Create the campaign
             const createResponse = await fetch("/api/campaigns", {
                 method: "POST",
@@ -86,7 +216,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                     name: name.trim(),
                     company: company,
                     subject: subject.trim(),
-                    body: body.trim()
+                    body: finalBody
                 }),
             });
 
@@ -113,7 +243,7 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
                         campaign_id: parseInt(campaignData.id),
                         company: company,
                         subject: subject.trim(),
-                        body: body.trim(),
+                        body: bodyForSend,
                         recipients: finalRecipients,
                         scheduled_at: isScheduled && scheduledAt ? toUTC(scheduledAt) : null,
                         attachments: attachments
@@ -133,8 +263,15 @@ export function CreateCampaignModal({ onClose, onSuccess }: CreateCampaignModalP
             localStorage.setItem("last_used_company", company);
             localStorage.removeItem("ai_draft_subject");
             localStorage.removeItem("ai_draft_body");
+            localStorage.removeItem("ai_draft_body_text");
+            localStorage.removeItem("ai_draft_html");
             localStorage.removeItem("ai_draft_recipients");
             localStorage.removeItem("ai_draft_attachments");
+            localStorage.removeItem("ai_draft_template_meta");
+            localStorage.removeItem("ai_draft_image_source");
+            localStorage.removeItem("ai_draft_image_placement");
+            localStorage.removeItem("ai_draft_image_width");
+            localStorage.removeItem("ai_draft_image_height");
             onSuccess();
         } catch (err: any) {
             setError(err.message || "An error occurred. Please try again.");

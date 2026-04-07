@@ -202,7 +202,8 @@ def test_smtp(db: Session = Depends(get_db)):
             smtp_host=host,
             smtp_port=port,
             smtp_user=user,
-            smtp_pass=pw
+            smtp_pass=pw,
+            from_addr=user,
         )
         return {"status": "success", "message": f"Test email sent to {user} (Source: {source})"}
     except Exception as e:
@@ -687,6 +688,7 @@ def test_send_template(req: TestEmailRequest, db: Session = Depends(get_db)):
             smtp_port=s.smtp_port,
             smtp_user=s.smtp_username,
             smtp_pass=s.smtp_password,
+            from_addr=(s.from_email or s.smtp_username),
             attachments=req.attachments
         )
         return {"status": "success"}

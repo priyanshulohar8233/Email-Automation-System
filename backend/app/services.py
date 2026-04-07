@@ -65,7 +65,7 @@ def check_and_complete_campaign(db: Session, campaign_id: int):
         db.commit()
         debug.debug_log(f"CAMPAIGN_COMPLETE: Campaign {campaign_id} (Done at {camp.completed_at})")
 
-def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_port: int, smtp_user: str, smtp_pass: str, reply_to: str = None, attachments: list = None):
+def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_port: int, smtp_user: str, smtp_pass: str, reply_to: str = None, attachments: list = None, from_addr: str | None = None):
     # Create the root message and set headers
     message = MIMEMultipart("mixed")
     
@@ -73,8 +73,9 @@ def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_p
     alt_part = MIMEMultipart("alternative")
     message.attach(alt_part)
     
+    sender_addr = (from_addr or smtp_user or "").strip()
     message["Subject"] = subject
-    message["From"] = smtp_user
+    message["From"] = sender_addr
     message["To"] = to_addr
     
     # List-Unsubscribe Header (Crucial for Google/Outlook compliance)
@@ -196,13 +197,14 @@ def send_mail(to_addr: str, subject: str, body_html: str, smtp_host: str, smtp_p
     # Defensive stripping
     smtp_user = smtp_user.strip() if smtp_user else smtp_user
     smtp_pass = smtp_pass.strip() if smtp_pass else smtp_pass
+    sender_addr = sender_addr or smtp_user
 
     try:
         debug.debug_log(f"SMTP: Connecting to {smtp_host}:{smtp_port}...")
         with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
             server.starttls()
             server.login(smtp_user, smtp_pass)
-            server.sendmail(smtp_user, [to_addr], message.as_string())
+            server.sendmail(sender_addr, [to_addr], message.as_string())
             debug.debug_log(f"SMTP: Email sent successfully to {to_addr}")
     except Exception as e:
         debug.debug_log(f"SMTP_ERROR: Failed to send email to {to_addr}. Error: {str(e)}")
@@ -1185,6 +1187,52 @@ def get_emails_per_company(db: Session, days: int = 30, company_name: str | list
     return [{"company": r[0], "total": int(r[1] or 0)} for r in activity_rows if r[0] and r[0].lower() != "unknown" and (r[1] or 0) > 0]
 
 
+MAILFLOW_META_PREFIX = "<!--MAILFLOW_META:"
+MAILFLOW_META_SUFFIX = "-->"
+
+
+def pack_email_payload(body: str, attachments: list | None = None) -> str:
+    import base64
+    import json
+
+    clean_body = body or ""
+    clean_attachments = [
+        item.strip()
+        for item in (attachments or [])
+        if isinstance(item, str) and item.strip()
+    ]
+    if not clean_attachments:
+        return clean_body
+
+    encoded = base64.b64encode(
+        json.dumps({"attachments": clean_attachments}).encode("utf-8")
+    ).decode("ascii")
+    return f"{MAILFLOW_META_PREFIX}{encoded}{MAILFLOW_META_SUFFIX}{clean_body}"
+
+
+def unpack_email_payload(payload: str) -> dict:
+    import base64
+    import json
+
+    raw_payload = payload or ""
+    if not raw_payload.startswith(MAILFLOW_META_PREFIX):
+        return {"body": raw_payload, "attachments": []}
+
+    marker_end = raw_payload.find(MAILFLOW_META_SUFFIX)
+    if marker_end == -1:
+        return {"body": raw_payload, "attachments": []}
+
+    encoded = raw_payload[len(MAILFLOW_META_PREFIX):marker_end]
+    try:
+        metadata = json.loads(base64.b64decode(encoded).decode("utf-8"))
+    except Exception:
+        metadata = {}
+
+    body = raw_payload[marker_end + len(MAILFLOW_META_SUFFIX):]
+    attachments = metadata.get("attachments") or []
+    return {"body": body, "attachments": attachments}
+
+
 def prepare_campaign_emails(db: Session, campaign_id: int, data, background_tasks):
     from .models import Campaign, CampaignStatus, Email, EmailStatus
     from .tasks import send_email_fn
@@ -1203,6 +1251,10 @@ def prepare_campaign_emails(db: Session, campaign_id: int, data, background_task
 
     records = []
     recipients = getattr(data, 'recipients', []) or []
+    packed_body = pack_email_payload(
+        getattr(data, "body", ""),
+        getattr(data, "attachments", None),
+    )
     
     # Deduplication Logic: Check existing emails for this campaign
     existing_emails = {e.recipient_email for e in db.query(Email.recipient_email).filter(Email.campaign_id == campaign_id).all()}
@@ -1216,7 +1268,7 @@ def prepare_campaign_emails(db: Session, campaign_id: int, data, background_task
             recipient_email=addr, 
             status=EmailStatus.PENDING,
             subject=data.subject,
-            body=data.body
+            body=packed_body
         )
         db.add(e)
         records.append(e)
@@ -1225,6 +1277,13 @@ def prepare_campaign_emails(db: Session, campaign_id: int, data, background_task
     if eta and eta > datetime.now(timezone.utc):
         camp.status = CampaignStatus.QUEUED
         camp.scheduled_for = eta
+        if redis_client:
+            try:
+                timestamp = int(eta.timestamp())
+                redis_client.zadd("scheduled_campaigns", {str(campaign_id): timestamp})
+                debug.debug_log(f"REDIS_SCHEDULER: Added queued campaign {campaign_id} to queue (Unix: {timestamp})")
+            except Exception as redis_error:
+                debug.debug_log(f"REDIS_SCHEDULER_ERROR: {str(redis_error)}")
     else:
         camp.status = CampaignStatus.RUNNING
         # If launching now, ensure we have emails to send (could be existing ones)
@@ -1237,7 +1296,7 @@ def prepare_campaign_emails(db: Session, campaign_id: int, data, background_task
     # Trigger background tasks for immediate sends
     if camp.status == CampaignStatus.RUNNING:
         for e in records:
-            background_tasks.add_task(send_email_fn, e.id, data.subject, data.body)
+            background_tasks.add_task(send_email_fn, e.id, e.subject or data.subject, e.body)
             
     return {"queued": len(records), "scheduled": bool(eta), "status": camp.status.value}
 
@@ -2154,7 +2213,6 @@ def generate_block_template(topic: str, tone: str) -> list:
 
 def generate_ai_template(topic: str, tone: str) -> dict:
     import json
-    import random
     from .config import settings
     
     def clean_model_output(content: str) -> str:
@@ -2242,19 +2300,13 @@ def generate_ai_template(topic: str, tone: str) -> dict:
     else:
         print("DEBUG: Using Local Fallback Generator (No API Key)")
 
-    variation_id = random.randint(1000, 9999)
-    angle_hint = random.choice([
-        "relationship-first value framing",
-        "ROI-oriented executive summary",
-        "problem-solution storytelling",
-        "concise operational update with CTA",
-    ])
-    subject_flavor = random.choice([
-        "Strategic Brief",
-        "Growth Update",
-        "Execution Note",
-        "Priority Action",
-    ])
+    seniority_guidance = {
+        "C-Executive Level": "Write for a C-suite leader: strategic, concise, business-impact focused, and high-level.",
+        "VP Level": "Write for a VP: leadership-focused, outcome-aware, and operationally clear.",
+        "Director": "Write for a Director: structured, execution-aware, and cross-functional.",
+        "Manager": "Write for a Manager: practical, organized, and action-oriented.",
+        "Non-Manager": "Write for an individual contributor: clear, respectful, and collaborative.",
+    }
 
     # Fallback / Local Generation Logic (if no API Key or for quick testing)
     def fallback_generation(topic: str, tone: str) -> dict:
@@ -2279,115 +2331,76 @@ def generate_ai_template(topic: str, tone: str) -> dict:
         # Default Subject
         subject = f"{action_verb}: {short_topic}"
 
-        signature = (
-            "\n\nBest regards,\n\n"
-            "[Your Name]\n"
-            "Sr. Business Development Manager\n"
-            "Email: support@mailflow.com\n"
-            "Phone: 847-550-4472"
-        )
-
-        # Refined Structure based on user example: Intro -> Core -> Update -> Appreciation -> Sign-off
-        # C-Executive Level
         if tone == "C-Executive Level":
-            subject = f"Strategic Overview: {topic.title()}"
+            subject = f"Executive Update: {topic.title()}"
             body = (
-                f"Dear [Recipient Name],\n\n"
-                f"I hope this finds you well and your week is off to a strong start.\n\n"
-                f"I am writing to provide a high-level strategic update regarding {topic} as we discussed in our last leadership sync. "
+                f"I hope you are doing well. I wanted to share a concise executive update regarding {topic}.\n\n"
+                f"This note is intended to keep communication aligned around the broader business context, current direction, and expected impact. "
                 f"Our team is fully committed to ensuring the success of this initiative and aligning it with our long-term goals.\n\n"
-                f"I will continue to monitor the long-term impact of {topic} and will provide additional milestones as they are reached. "
-                f"Please let me know if there are any critical elements that require my immediate attention at the executive level.\n\n"
-                f"Thank you for your continued leadership and understanding."
-                f"{signature}"
+                f"If helpful, I can share a short follow-up with the current status, key milestones, and any items that may require executive review."
             )
-        # VP Level
         elif tone == "VP Level":
             subject = f"Impact & Results: {topic.title()}"
             body = (
-                f"Dear [Recipient Name],\n\n"
-                f"I hope you are having a productive week.\n\n"
-                f"I am reaching out to discuss the recent impact and cross-departmental results of {topic} as we move forward. "
+                f"I hope you are having a productive week. I wanted to share a focused leadership update regarding {topic}.\n\n"
+                f"I am reaching out to discuss the recent impact and cross-departmental progress tied to {topic}. "
                 f"Initial data suggests that our approach is yielding significant efficiency gains across the board.\n\n"
-                f"I'll be sure to keep you updated on the performance metrics of {topic} as new data becomes available. "
-                f"Please let me know if any urgent matter requires my attention regarding the scale of this project.\n\n"
-                f"Thank you for your support on this initiative."
-                f"{signature}"
+                f"I can also share a brief follow-up with performance highlights, next actions, and any support needed from the leadership side."
             )
-        # Director
         elif tone == "Director":
             subject = f"Resource & Roadmap: {topic.title()}"
             body = (
-                f"Dear [Recipient Name],\n\n"
-                f"I hope you are doing well.\n\n"
-                f"I am writing to formally address the matter of {topic} and how it fits into our current roadmap and resource allocation. "
+                f"I hope you are doing well. I am writing to provide a professional update regarding {topic}.\n\n"
+                f"This note outlines how {topic} fits into the current roadmap, resource planning, and execution priorities. "
                 f"We have identified several key opportunities to streamline our execution phase.\n\n"
-                f"I will keep you updated on the progress of {topic} and will finalize the next operational steps as soon as possible. "
-                f"Please let me know if any urgent matter requires my attention regarding our execution plan.\n\n"
-                f"Thank you for your understanding."
-                f"{signature}"
+                f"If useful, I can provide a concise follow-up with timelines, dependencies, and the next operational steps."
             )
-        # Manager
         elif tone == "Manager":
             subject = f"Project Update: {topic.title()}"
             body = (
-                f"Dear [Recipient Name],\n\n"
-                f"Hope your day is going well.\n\n"
-                f"I'm reaching out with a quick project-level update about {topic} and the current status of our team's tasks. "
+                f"I hope your day is going well. I wanted to share a clear project update regarding {topic}.\n\n"
+                f"I'm reaching out with a quick update on the current status, ongoing work, and coordination needs related to {topic}. "
                 f"I wanted to share some thoughts on {topic} and ensure we are aligned with the upcoming deadlines.\n\n"
-                f"I'll be sure to keep you in the loop as things develop on the ground. "
-                f"Let's chat about this during our next check-in if you have a free moment.\n\n"
-                f"Thanks so much for your guidance."
-                f"{signature}"
+                f"Please let me know if you would like a short follow-up covering action items, owners, and immediate next steps."
             )
-        # Non-Manager
         elif tone == "Non-Manager":
             subject = f"Collaborative Sync: {topic.title()}"
             body = (
-                f"Dear [Recipient Name],\n\n"
-                f"I hope you are having a productive week.\n\n"
-                f"I am writing to provide an update on {topic} and to request a brief sync to discuss the next steps in our implementation. "
-                f"I have been review the latest progress and would love to align on our roadmap.\n\n"
-                f"Please let me know if you are available later this week to chat briefly.\n\n"
-                f"Thank you for your time and consideration."
-                f"{signature}"
+                f"I hope you are having a productive week. I am writing to share an update regarding {topic}.\n\n"
+                f"I wanted to keep communication clear and collaborative while we align on the current progress and next steps. "
+                f"This should help ensure everyone stays on the same page moving forward.\n\n"
+                f"Please let me know if you would like a short follow-up with the next actions or any additional context."
             )
         else:
-            body = f"Dear [Recipient Name],\n\nI hope you are well. I am writing to discuss {topic}.\n\nBest regards,\n[Your Name]"
+            body = f"I hope you are well. I am writing to share a professional update regarding {topic}.\n\nPlease let me know if you would like a short follow-up with the next steps."
 
-        subject = f"{subject_flavor}: {subject}"
-        body = body + "\n\nP.S. " + random.choice([
-            "Happy to tailor this further for your role and priorities.",
-            "I can also share a condensed version for quick executive review.",
-            "If helpful, I can send a role-specific follow-up in the next step.",
-        ])
         return {"subject": subject, "body": body}
 
     if provider == "fallback":
         return fallback_generation(topic, tone)
 
     system_prompt = (
-        "You are a master executive communicator. Write structured, professional emails in plain text. "
-        "Use 'Best regards,' for sign-offs. Use standard punctuation. Always generate a fresh, "
-        "non-repetitive variant and output pure JSON."
+        "You are a senior executive communications specialist. "
+        "Write polished business email copy in plain text only. "
+        "Return only valid JSON with two keys: subject and body. "
+        "The body must contain only the main message paragraphs. "
+        "Do not include salutation, sign-off, signature, postscript, labels, headings, bullets, or HTML."
     )
 
     prompt = (
-        f"Write a professional, high-impact email about '{topic}' tailored for a recipient at the '{tone}' level.\n\n"
-        f"UNIQUENESS REQUIREMENT:\n"
-        f"- Variation ID: {variation_id}\n"
-        f"- Writing Angle: {angle_hint}\n"
-        f"- Produce a fresh variant with distinct phrasing and structure.\n\n"
-        f"STRUCTURE (MANDATORY):\n"
-        f"- Salutation: 'Dear [Recipient Name],'\n"
-        f"- Body: 3-4 professional paragraphs using standard punctuation and formal tone.\n"
-        f"- Closing: A polite concluding sentence.\n"
-        f"- Sign-off: 'Best regards,' followed by '[Your Name]'.\n\n"
-        f"FORMATTING RULES:\n"
-        "1. Use ONLY standard plain text. DO NOT use HTML tags like <br/> or <strong>.\n"
-        "2. Use standard newlines (\\n) for paragraphs and spacing.\n"
-        f"3. The subject line MUST be professional and include '{topic}'.\n"
-        "4. Output ONLY a valid JSON object: {'subject': '...', 'body': '...'}. No markdown."
+        f"Topic or keywords from user: {topic}\n"
+        f"Recipient seniority: {tone}\n"
+        f"Guidance: {seniority_guidance.get(tone, seniority_guidance['Manager'])}\n\n"
+        "Write a highly professional outbound business email.\n"
+        "Requirements:\n"
+        "1. Subject line must be concise, polished, and business-appropriate.\n"
+        "2. Body must be 3 short professional paragraphs.\n"
+        "3. Use formal but natural business English.\n"
+        "4. Keep the content relevant to the provided topic/keywords.\n"
+        "5. Do not repeat the topic awkwardly.\n"
+        "6. Do not include placeholders except where absolutely necessary.\n"
+        "7. Do not include salutation, sign-off, signature, P.S., markdown, or HTML.\n"
+        "8. Return JSON only: {\"subject\":\"...\",\"body\":\"paragraph1\\n\\nparagraph2\\n\\nparagraph3\"}"
     )
 
     try:
@@ -2403,7 +2416,7 @@ def generate_ai_template(topic: str, tone: str) -> dict:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.9,
+            temperature=0.6,
             max_tokens=800
         )
         content = response.choices[0].message.content.strip()
@@ -2732,11 +2745,135 @@ def generate_branded_email(template_name: str, description: str, seniority: str,
     Generates an AI email and wraps it in a specific company branding/signature layout.
     """
     import html as html_lib
+    import re
+
+    def _normalize_topic(raw_value: str) -> str:
+        cleaned = re.sub(r"create a fresh variant using.*", "", str(raw_value or ""), flags=re.IGNORECASE | re.DOTALL)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" .:-")
+        return cleaned or "your update"
+
+    def _fallback_subject(topic_value: str, seniority_value: str) -> str:
+        prefix_map = {
+            "C-Executive Level": "Executive Update",
+            "VP Level": "Leadership Update",
+            "Director": "Operational Update",
+            "Manager": "Status Update",
+            "Non-Manager": "Professional Update",
+        }
+        return f"{prefix_map.get(seniority_value, 'Professional Update')}: {topic_value.title()}"
+
+    def _sanitize_subject(raw_subject: str, topic_value: str, seniority_value: str) -> str:
+        cleaned = str(raw_subject or "")
+        cleaned = re.sub(r"create a fresh variant using.*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\b(variation id|writing angle)\b.*", "", cleaned, flags=re.IGNORECASE)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip(" .:-")
+
+        if (
+            not cleaned
+            or "create a fresh variant" in cleaned.lower()
+            or "writing angle" in cleaned.lower()
+            or "variation id" in cleaned.lower()
+        ):
+            cleaned = _fallback_subject(topic_value, seniority_value)
+
+        if len(cleaned) > 88:
+            cleaned = cleaned[:88].rsplit(" ", 1)[0].rstrip(" .,:;-")
+
+        return cleaned
+
+    def _fallback_body(topic_value: str, seniority_value: str) -> str:
+        paragraph_map = {
+            "C-Executive Level": [
+                f"I hope you are doing well. I am writing to share a concise executive update regarding {topic_value}.",
+                f"Our intent is to keep communication clear, aligned, and focused on the broader business impact. The work is moving forward in a structured manner, with attention to timing, coordination, and quality of execution.",
+                f"If helpful, I can provide a short follow-up with the current status, next actions, and any points that may require your review.",
+            ],
+            "VP Level": [
+                f"I hope you are having a productive week. I wanted to share a focused leadership update regarding {topic_value}.",
+                f"The objective is to maintain visibility on progress, highlight the operational impact, and ensure the next steps remain aligned with current priorities.",
+                f"Please let me know if you would like a brief follow-up summary covering outcomes, timelines, and any support required from the leadership side.",
+            ],
+            "Director": [
+                f"I hope you are doing well. I am writing to provide a professional update regarding {topic_value}.",
+                f"The current focus is on maintaining execution quality, coordinating deliverables, and keeping communication clear across the relevant stakeholders.",
+                f"If useful, I can share a concise follow-up with the present status, immediate next steps, and any dependencies that should be monitored.",
+            ],
+            "Manager": [
+                f"I hope your day is going well. I wanted to share a clear update regarding {topic_value}.",
+                f"The work is progressing with attention to timelines, coordination, and day-to-day execution requirements. The goal is to keep everything organized and moving smoothly.",
+                f"Please let me know if you would like a short follow-up with action items, owners, and the expected next steps.",
+            ],
+            "Non-Manager": [
+                f"I hope you are doing well. I am reaching out with a professional update regarding {topic_value}.",
+                f"I wanted to keep the communication clear, straightforward, and aligned on what matters most at this stage.",
+                f"If helpful, I can also share a short follow-up outlining the next steps and any actions needed from this side.",
+            ],
+        }
+        return "\n\n".join(paragraph_map.get(seniority_value, paragraph_map["Manager"]))
+
+    def _sanitize_body(raw_text: str, topic_value: str, seniority_value: str) -> str:
+        lines = [line.strip() for line in str(raw_text or "").splitlines()]
+        blocked_patterns = [
+            r"^dear\b",
+            r"^best regards\b",
+            r"^regards\b",
+            r"^cheers\b",
+            r"^\[?your name\]?",
+            r"^sr\.",
+            r"^email:",
+            r"^phone:",
+            r"^p\.?s\.",
+            r"variation id",
+            r"writing angle",
+            r"create a fresh variant using",
+            r"uniqueness requirement",
+            r"structure \(mandatory\)",
+        ]
+
+        clean_lines = []
+        for line in lines:
+            if not line:
+                clean_lines.append("")
+                continue
+            if any(re.search(pattern, line, flags=re.IGNORECASE) for pattern in blocked_patterns):
+                continue
+            clean_lines.append(line)
+
+        paragraphs = []
+        chunk = []
+        for line in clean_lines:
+            if line:
+                chunk.append(re.sub(r"\s+", " ", line).strip())
+            elif chunk:
+                paragraph = " ".join(chunk).strip()
+                if paragraph:
+                    paragraphs.append(paragraph)
+                chunk = []
+
+        if chunk:
+            paragraph = " ".join(chunk).strip()
+            if paragraph:
+                paragraphs.append(paragraph)
+
+        paragraphs = [
+            paragraph
+            for paragraph in paragraphs
+            if paragraph
+            and "create a fresh variant" not in paragraph.lower()
+            and "writing angle" not in paragraph.lower()
+            and "variation id" not in paragraph.lower()
+        ]
+
+        if len(paragraphs) < 2:
+            return _fallback_body(topic_value, seniority_value)
+
+        return "\n\n".join(paragraphs)
 
     # 1. Generate core content
-    ai_result = generate_ai_template(description, seniority)
-    subject = ai_result.get("subject", "Generated Email")
-    body_text = ai_result.get("body", "")
+    normalized_topic = _normalize_topic(description)
+    ai_result = generate_ai_template(normalized_topic, seniority)
+    subject = _sanitize_subject(ai_result.get("subject", "Generated Email"), normalized_topic, seniority)
+    body_text = _sanitize_body(ai_result.get("body", ""), normalized_topic, seniority)
 
     def _format_body(raw_text: str) -> str:
         lines = [line.strip() for line in str(raw_text or "").splitlines()]

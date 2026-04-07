@@ -217,6 +217,7 @@ export default function StandardLayout() {
   const [imageUrl, setImageUrl] = useState("");
   const [localImage, setLocalImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
+  const [imagePlacement, setImagePlacement] = useState<"top" | "bottom">("bottom");
   const [imageSizePreset, setImageSizePreset] = useState<"small" | "medium" | "large" | "custom">("medium");
   const [imageWidthPercent, setImageWidthPercent] = useState<number>(70);
   const [imageHeightPx, setImageHeightPx] = useState<number>(280);
@@ -248,7 +249,9 @@ export default function StandardLayout() {
 
   useEffect(() => {
     return () => {
-      if (imagePreview) URL.revokeObjectURL(imagePreview);
+      if (imagePreview && imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
     };
   }, [imagePreview]);
 
@@ -324,12 +327,15 @@ export default function StandardLayout() {
     if (input) input.value = "";
   };
 
-  const handleLocalImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLocalImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    if (imagePreview) URL.revokeObjectURL(imagePreview);
+    if (imagePreview && imagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
+    }
     setLocalImage(file);
-    setImagePreview(URL.createObjectURL(file));
+    const dataUrl = await fileToDataUrl(file);
+    setImagePreview(dataUrl);
   };
 
   const setImagePreset = (preset: "small" | "medium" | "large") => {
@@ -454,16 +460,30 @@ export default function StandardLayout() {
       .join("");
   };
 
+  const normalizeComposedBody = (rawText: string) =>
+    rawText
+      .split(/\r?\n/)
+      .filter((line) => {
+        const trimmed = line.trim();
+        if (!trimmed) return true;
+        return !/^(dear\b|best regards\b|regards\b|cheers\b|\[?your name\]?|email:|phone:|p\.?s\.)/i.test(trimmed);
+      })
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
   const composedHtml = useMemo(() => {
     if (!templateMeta || !generatedBodyText.trim()) {
       return generatedHtml;
     }
 
     const imageSource = imagePreview || imageUrl;
-    const bodyHtml = formatBodyTextToHtml(generatedBodyText);
+    const cleanedBodyText = normalizeComposedBody(generatedBodyText);
+    const bodyHtml = formatBodyTextToHtml(cleanedBodyText);
     const imageHtml = imageSource
       ? `<div style="margin:18px 0 6px 0;"><img src="${imageSource}" alt="Email visual" style="display:block;margin:0 auto;width:${imageWidthPercent}%;max-width:${imageWidthPercent}%;height:${imageHeightPx}px;object-fit:cover;border-radius:12px;border:1px solid #e2e8f0;box-shadow:0 8px 20px rgba(15, 23, 42, 0.08);" /></div>`
       : "";
+    const contentHtml = imagePlacement === "top" ? `${imageHtml}${bodyHtml}` : `${bodyHtml}${imageHtml}`;
 
     return `
       <div style="max-width:680px;margin:0 auto;font-family:'Segoe UI',Arial,sans-serif;color:#334155;line-height:1.7;background:#ffffff;padding:28px 32px;border-radius:12px;border:1px solid #e2e8f0;">
@@ -475,8 +495,7 @@ export default function StandardLayout() {
           </div>
         </div>
         <p style="margin:0 0 18px 0;font-size:15px;line-height:1.8;color:#0f172a;font-weight:600;">Dear [Recipient Name],</p>
-        <div style="font-size:15px;min-height:120px;">${bodyHtml}</div>
-        ${imageHtml}
+        <div style="font-size:15px;min-height:120px;">${contentHtml}</div>
         ${templateMeta.signatureHtml}
         <div style="margin-top:24px;font-size:11px;color:#64748b;text-align:center;border-top:1px solid #e2e8f0;padding-top:14px;">
           Sent via MailFlow AI Engine. To unsubscribe,
@@ -490,6 +509,7 @@ export default function StandardLayout() {
     generatedHtml,
     imagePreview,
     imageUrl,
+    imagePlacement,
     imageWidthPercent,
     imageHeightPx,
   ]);
@@ -534,22 +554,14 @@ export default function StandardLayout() {
   const handleGenerate = async () => {
     if (!topic || !selectedTemplate) return;
     setGenerating(true);
+    setPreviewInGmailStyle(false);
     try {
-      const variationAngles = [
-        "relationship-first tone",
-        "ROI-driven pitch",
-        "problem-solution structure",
-        "concise executive memo style",
-      ];
-      const chosenAngle = variationAngles[Math.floor(Math.random() * variationAngles.length)];
-      const dynamicPrompt = `${topic}\n\nCreate a fresh variant using ${chosenAngle}.`;
-
       const res = await fetch("/api/generate-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           template: selectedTemplate.name,
-          description: dynamicPrompt,
+          description: topic.trim(),
           seniority: seniority,
           image: imageUrl || imagePreview,
           attachment: collectAttachmentLinks()[0] || null
@@ -560,7 +572,7 @@ export default function StandardLayout() {
         const data = await res.json();
         setGeneratedHtml(data.html || "");
         setGeneratedSubject(data.subject || "");
-        setGeneratedBodyText(data.body_text || "");
+        setGeneratedBodyText(normalizeComposedBody(data.body_text || ""));
         setTemplateMeta({
           logoUrl: data.logo_url || "",
           primaryColor: data.primary_color || "#6366f1",
@@ -591,7 +603,17 @@ export default function StandardLayout() {
   const handleUseInCampaign = async () => {
     if (!composedHtml) return;
     localStorage.setItem("ai_draft_subject", generatedSubject);
-    localStorage.setItem("ai_draft_body", composedHtml);
+    localStorage.setItem("ai_draft_body", generatedBodyText);
+    localStorage.setItem("ai_draft_body_text", generatedBodyText);
+    localStorage.setItem("ai_draft_html", composedHtml);
+    localStorage.setItem(
+      "ai_draft_template_meta",
+      JSON.stringify(templateMeta || {})
+    );
+    localStorage.setItem("ai_draft_image_source", imagePreview || imageUrl || "");
+    localStorage.setItem("ai_draft_image_placement", imagePlacement);
+    localStorage.setItem("ai_draft_image_width", String(imageWidthPercent));
+    localStorage.setItem("ai_draft_image_height", String(imageHeightPx));
     if (recipients.length > 0) {
       localStorage.setItem("ai_draft_recipients", JSON.stringify(recipients));
       localStorage.setItem("ai_draft_filename", uploadedFileName || "standard_layout_recipients.xlsx");
@@ -957,6 +979,24 @@ export default function StandardLayout() {
                          Custom
                        </Button>
                      </div>
+                     <div className="mt-2 grid grid-cols-2 gap-2">
+                       <Button
+                         type="button"
+                         variant={imagePlacement === "top" ? "default" : "outline"}
+                         className="h-8 text-[10px] font-bold"
+                         onClick={() => setImagePlacement("top")}
+                       >
+                         Body Top
+                       </Button>
+                       <Button
+                         type="button"
+                         variant={imagePlacement === "bottom" ? "default" : "outline"}
+                         className="h-8 text-[10px] font-bold"
+                         onClick={() => setImagePlacement("bottom")}
+                       >
+                         Body Bottom
+                       </Button>
+                     </div>
                      <div className="mt-2 rounded-lg border border-border/60 bg-card/40 p-2 space-y-2">
                        <div className="flex items-center justify-between gap-2">
                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Width</span>
@@ -997,7 +1037,7 @@ export default function StandardLayout() {
                        onClick={() => {
                          setImageUrl("");
                          setLocalImage(null);
-                         if (imagePreview) URL.revokeObjectURL(imagePreview);
+                         if (imagePreview && imagePreview.startsWith("blob:")) URL.revokeObjectURL(imagePreview);
                          setImagePreview("");
                          setImagePreset("medium");
                        }}
@@ -1179,39 +1219,51 @@ export default function StandardLayout() {
               <CardContent className="p-0 flex-1 overflow-y-auto bg-muted/50 scrollbar-hide">
                  {composedHtml ? (
                    <div className="p-6 md:p-8 space-y-6">
-                      <div
-                        className={`grid items-start gap-6 ${
-                          previewInGmailStyle
-                            ? "grid-cols-1 xl:grid-cols-[minmax(0,460px)_minmax(0,1fr)]"
-                            : "grid-cols-1"
-                        }`}
-                      >
-                        <div
-                          className={`rounded-2xl border border-border bg-card/90 shadow-sm p-5 space-y-5 ${
-                            previewInGmailStyle ? "" : "w-full max-w-[1040px] mx-auto"
-                          }`}
-                        >
+                      {previewInGmailStyle ? (
+                        <div className="space-y-3">
+                          <div className="rounded-[28px] border border-border bg-[#f6f8fc] p-4 md:p-6 shadow-inner transition-all duration-300">
+                            <div className="mb-4 rounded-2xl border border-[#d7dce5] bg-white px-4 py-3 shadow-sm">
+                              <div className="flex items-center justify-between gap-3 text-[#5f6368]">
+                                <div>
+                                  <p className="text-base font-semibold text-[#202124]">{generatedSubject || "Professional Email Preview"}</p>
+                                  <p className="text-xs">to me</p>
+                                </div>
+                                <Badge variant="outline" className="border-[#d7dce5] bg-[#f8f9fa] text-[#5f6368]">
+                                  Preview
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="flex justify-center">
+                              <div
+                                className="w-full max-w-[860px] overflow-hidden rounded-none border-0 bg-white shadow-none"
+                                dangerouslySetInnerHTML={{ __html: composedHtml }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-border bg-card/90 shadow-sm p-5 max-w-[1080px] mx-auto min-h-[720px] flex flex-col gap-5">
                           <div className="space-y-2">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Subject Line</label>
                             <Input
                               value={generatedSubject}
                               onChange={(e) => setGeneratedSubject(e.target.value)}
                               style={{ borderRadius: "12px" }}
-                              placeholder="Subject line"
-                              className="bg-muted/30 border-border h-12 text-[15px] font-medium"
+                              placeholder="Professional subject line"
+                              className="bg-muted/30 border-border h-12 text-[15px] font-semibold tracking-[-0.01em]"
                             />
                           </div>
-                          <div className="space-y-2">
+                          <div className="space-y-2 flex-1 flex flex-col">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Body</label>
                             <textarea
                               value={generatedBodyText}
                               onChange={(e) => setGeneratedBodyText(e.target.value)}
                               style={{ borderRadius: "14px" }}
-                              className="w-full min-h-[460px] bg-muted/30 border border-border p-4 text-[15px] leading-8 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-y text-foreground"
+                              className="w-full flex-1 min-h-[520px] bg-muted/30 border border-border p-4 text-[15px] leading-8 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 resize-y text-foreground"
                               placeholder="Generated email body"
                             />
                           </div>
-                          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4">
+                          <div className="space-y-2 rounded-2xl border border-border bg-muted/20 p-4 mt-auto">
                             <label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Send Test Email</label>
                             <Input
                               type="email"
@@ -1234,30 +1286,7 @@ export default function StandardLayout() {
                             </Button>
                           </div>
                         </div>
-                        {previewInGmailStyle && (
-                          <div className="space-y-3 min-w-0">
-                            <div className="rounded-[28px] border border-border bg-[#f6f8fc] p-4 md:p-6 shadow-inner transition-all duration-300">
-                              <div className="mb-4 rounded-2xl border border-[#d7dce5] bg-white px-4 py-3 shadow-sm">
-                                <div className="flex items-center justify-between gap-3 text-[#5f6368]">
-                                  <div>
-                                    <p className="text-base font-semibold text-[#202124]">{generatedSubject || "Professional Email Preview"}</p>
-                                    <p className="text-xs">to me</p>
-                                  </div>
-                                  <Badge variant="outline" className="border-[#d7dce5] bg-[#f8f9fa] text-[#5f6368]">
-                                    Preview
-                                  </Badge>
-                                </div>
-                              </div>
-                              <div className="flex justify-center">
-                                <div
-                                  className="w-full max-w-[860px] overflow-hidden rounded-none border-0 bg-white shadow-none"
-                                  dangerouslySetInnerHTML={{ __html: composedHtml }}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      )}
                    </div>
                  ) : (
                    <div className="h-full flex flex-col items-center justify-center text-center p-12 space-y-4">
