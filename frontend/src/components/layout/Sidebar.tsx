@@ -35,18 +35,24 @@ export function Sidebar() {
   const location = useLocation();
 
   return (
-    <div className="flex h-screen w-[260px] flex-col border-r border-border bg-card fixed left-0 top-0 z-40 transition-colors duration-300">
-      <div className="flex h-20 items-center px-6 border-b border-border">
-        <div className="flex items-center gap-2 text-indigo-600">
-          <Zap className="h-6 w-6 fill-current" />
-          <span className="text-xl font-bold tracking-tight">MailFlow</span>
+    <div className="sidebar-panel z-40 flex flex-col text-foreground transition-colors duration-300">
+      <div className="sidebar-brand-panel flex h-20 items-center px-6">
+        <div className="flex items-center gap-3 text-indigo-600">
+          <div className="sidebar-icon-chip flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-500/20 bg-indigo-500/10">
+            <Zap className="h-5 w-5 fill-current" />
+          </div>
+          <div>
+            <span className="block text-[1.55rem] font-bold tracking-[-0.04em] text-indigo-600">MailFlow</span>
+            <span className="block text-[10px] font-bold uppercase tracking-[0.22em] text-muted-foreground">
+              AI Outreach Studio
+            </span>
+          </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto py-6 px-4">
-        <nav className="space-y-1">
+        <nav className="space-y-1.5">
           {sidebarItems.map((item) => {
-            // Check if active based on whether it starts with the section's base path for items with subItems
             const isBaseActive = item.subItems
               ? location.pathname.startsWith('/templates')
               : location.pathname === item.href;
@@ -55,29 +61,40 @@ export function Sidebar() {
               <div key={item.label} className="space-y-1">
                 <Link
                   to={item.href}
+                  data-active={isBaseActive}
                   className={cn(
-                    "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
+                    "sidebar-nav-item flex items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-semibold transition-all duration-300",
                     isBaseActive
-                      ? "bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                      ? "text-indigo-600"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100"
                   )}
                 >
-                  <item.icon className={cn("h-5 w-5", isBaseActive ? "text-indigo-600" : "text-slate-400 dark:text-slate-500")} />
+                  <span
+                    className={cn(
+                      "sidebar-icon-chip flex h-9 w-9 items-center justify-center rounded-2xl border transition-all duration-300",
+                      isBaseActive
+                        ? "border-indigo-500/20 bg-indigo-500/10 text-indigo-500"
+                        : "border-border/60 bg-card/40 text-slate-400 dark:text-slate-500"
+                    )}
+                  >
+                    <item.icon className="h-[18px] w-[18px]" />
+                  </span>
                   {item.label}
                 </Link>
                 {item.subItems && isBaseActive && (
-                  <div className="ml-9 space-y-1 mt-1">
+                  <div className="ml-11 mt-1.5 space-y-1.5">
                     {item.subItems.map((subItem) => {
                       const isSubActive = location.pathname === subItem.href;
                       return (
                         <Link
                           key={subItem.label}
                           to={subItem.href}
+                          data-active={isSubActive}
                           className={cn(
-                            "block rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                            "sidebar-subnav-item block rounded-2xl px-3 py-2.5 text-sm font-medium transition-all duration-300",
                             isSubActive
                               ? "text-indigo-600 font-semibold"
-                              : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800"
+                              : "text-slate-500 dark:text-slate-400 hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100"
                           )}
                         >
                           {subItem.label}
@@ -92,9 +109,11 @@ export function Sidebar() {
         </nav>
       </div>
 
-      <div className="border-t border-border p-4">
-        <button className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100">
-          <LogOut className="h-5 w-5 text-slate-400 dark:text-slate-500" />
+      <div className="border-t border-border/50 p-4">
+        <button className="sidebar-logout-item flex w-full items-center gap-3 rounded-2xl px-3.5 py-3 text-sm font-semibold text-slate-600 dark:text-slate-400 transition-all duration-300 hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-100">
+          <span className="sidebar-icon-chip flex h-9 w-9 items-center justify-center rounded-2xl border border-border/60 bg-card/40 text-slate-400 dark:text-slate-500">
+            <LogOut className="h-[18px] w-[18px]" />
+          </span>
           Logout
         </button>
       </div>
