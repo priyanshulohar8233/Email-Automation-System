@@ -2157,11 +2157,88 @@ def generate_ai_template(topic: str, tone: str) -> dict:
     import random
     from .config import settings
     
-    api_key = settings.OPENAI_API_KEY
+    def clean_model_output(content: str) -> str:
+        content = (content or "").strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+        return content.strip()
+
+    def parse_model_json(content: str) -> dict:
+        cleaned = clean_model_output(content)
+        try:
+            data = json.loads(cleaned)
+            return {
+                "subject": data.get("subject", "Generated Subject"),
+                "body": data.get("body", cleaned),
+            }
+        except json.JSONDecodeError:
+            return {"subject": "Email Subject", "body": cleaned}
+
+    def resolve_ai_provider() -> str:
+        preferred = (settings.AI_PROVIDER or "auto").strip().lower()
+        has_claude = bool(settings.ANTHROPIC_API_KEY)
+        has_openai = bool(settings.OPENAI_API_KEY)
+
+        if preferred in ("claude", "anthropic"):
+            if has_claude:
+                return "claude"
+            if has_openai:
+                return "openai"
+            return "fallback"
+
+        if preferred == "openai":
+            if has_openai:
+                return "openai"
+            if has_claude:
+                return "claude"
+            return "fallback"
+
+        if has_claude:
+            return "claude"
+        if has_openai:
+            return "openai"
+        return "fallback"
+
+    def generate_with_claude(system_prompt: str, user_prompt: str) -> dict:
+        headers = {
+            "x-api-key": settings.ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        payload = {
+            "model": settings.ANTHROPIC_MODEL,
+            "max_tokens": 900,
+            "temperature": 0.9,
+            "system": system_prompt,
+            "messages": [
+                {"role": "user", "content": user_prompt}
+            ],
+        }
+        response = requests.post(
+            "https://api.anthropic.com/v1/messages",
+            headers=headers,
+            json=payload,
+            timeout=60,
+        )
+        response.raise_for_status()
+        data = response.json()
+        text_content = "\n".join(
+            block.get("text", "")
+            for block in data.get("content", [])
+            if block.get("type") == "text"
+        ).strip()
+        return parse_model_json(text_content)
     
-    # Debug: Check if key is loaded
-    if api_key and len(api_key) > 10:
-        print(f"DEBUG: Generating AI email with OpenAI Key (length: {len(api_key)})")
+    provider = resolve_ai_provider()
+
+    if provider == "claude":
+        print(f"DEBUG: Generating AI email with Claude ({settings.ANTHROPIC_MODEL})")
+    elif provider == "openai" and settings.OPENAI_API_KEY and len(settings.OPENAI_API_KEY) > 10:
+        print(f"DEBUG: Generating AI email with OpenAI Key (length: {len(settings.OPENAI_API_KEY)})")
     else:
         print("DEBUG: Using Local Fallback Generator (No API Key)")
 
@@ -2286,57 +2363,53 @@ def generate_ai_template(topic: str, tone: str) -> dict:
         ])
         return {"subject": subject, "body": body}
 
-    if not api_key:
+    if provider == "fallback":
         return fallback_generation(topic, tone)
 
+    system_prompt = (
+        "You are a master executive communicator. Write structured, professional emails in plain text. "
+        "Use 'Best regards,' for sign-offs. Use standard punctuation. Always generate a fresh, "
+        "non-repetitive variant and output pure JSON."
+    )
+
+    prompt = (
+        f"Write a professional, high-impact email about '{topic}' tailored for a recipient at the '{tone}' level.\n\n"
+        f"UNIQUENESS REQUIREMENT:\n"
+        f"- Variation ID: {variation_id}\n"
+        f"- Writing Angle: {angle_hint}\n"
+        f"- Produce a fresh variant with distinct phrasing and structure.\n\n"
+        f"STRUCTURE (MANDATORY):\n"
+        f"- Salutation: 'Dear [Recipient Name],'\n"
+        f"- Body: 3-4 professional paragraphs using standard punctuation and formal tone.\n"
+        f"- Closing: A polite concluding sentence.\n"
+        f"- Sign-off: 'Best regards,' followed by '[Your Name]'.\n\n"
+        f"FORMATTING RULES:\n"
+        "1. Use ONLY standard plain text. DO NOT use HTML tags like <br/> or <strong>.\n"
+        "2. Use standard newlines (\\n) for paragraphs and spacing.\n"
+        f"3. The subject line MUST be professional and include '{topic}'.\n"
+        "4. Output ONLY a valid JSON object: {'subject': '...', 'body': '...'}. No markdown."
+    )
+
     try:
+        if provider == "claude":
+            return generate_with_claude(system_prompt, prompt)
+
         from openai import OpenAI
-        client = OpenAI(api_key=api_key)
-        
-        prompt = (
-            f"Write a professional, high-impact email about '{topic}' tailored for a recipient at the '{tone}' level.\n\n"
-            f"UNIQUENESS REQUIREMENT:\n"
-            f"- Variation ID: {variation_id}\n"
-            f"- Writing Angle: {angle_hint}\n"
-            f"- Produce a fresh variant with distinct phrasing and structure.\n\n"
-            f"STRUCTURE (MANDATORY):\n"
-            f"- Salutation: 'Dear [Recipient Name],'\n"
-            f"- Body: 3-4 professional paragraphs using standard punctuation and formal tone.\n"
-            f"- Closing: A polite concluding sentence.\n"
-            f"- Sign-off: 'Best regards,' followed by '[Your Name]'.\n\n"
-            f"FORMATTING RULES:\n"
-            "1. Use ONLY standard plain text. DO NOT use HTML tags like <br/> or <strong>.\n"
-            "2. Use standard newlines (\\n) for paragraphs and spacing.\n"
-            f"3. The subject line MUST be professional and include '{topic}'.\n"
-            "4. Output ONLY a valid JSON object: {'subject': '...', 'body': '...'}. No markdown."
-        )
-        
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=settings.OPENAI_MODEL,
             messages=[
-                {"role": "system", "content": "You are a master executive communicator. Write structured, professional emails in plain text. Use 'Best regards,' for sign-offs. Use standard punctuation. Always generate a fresh, non-repetitive variant and output pure JSON."},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.9,
             max_tokens=800
         )
         content = response.choices[0].message.content.strip()
-        # Clean markdown if present
-        if content.startswith("```json"):
-            content = content[7:]
-        if content.startswith("```"):
-            content = content[3:]
-        if content.endswith("```"):
-            content = content[:-3]
-            
-        try:
-            data = json.loads(content)
-            return {"subject": data.get("subject", "Generated Subject"), "body": data.get("body", content)}
-        except json.JSONDecodeError:
-            return {"subject": "Email Subject", "body": content}
+        return parse_model_json(content)
     except Exception as e:
-        print(f"ERROR: OpenAI failure: {str(e)}")
-        # Fallback to local generation if API fails (e.g. quota limit)
+        print(f"ERROR: {provider.upper()} failure: {str(e)}")
         return fallback_generation(topic, tone)
 
 def process_ai_chat(message: str, history: list = None) -> str:
@@ -2345,15 +2418,37 @@ def process_ai_chat(message: str, history: list = None) -> str:
     Tailored for a professional Email SaaS experience.
     """
     from .config import settings
-    from openai import OpenAI
-    
-    api_key = settings.OPENAI_API_KEY
-    if not api_key:
-        return "Hey! I'm Clawd, your email assistant. I'm currently in 'Offline Mode' because no AI API key is configured in your settings. Please add an OpenAI API Key to start a real conversation!"
+
+    def resolve_ai_provider() -> str:
+        preferred = (settings.AI_PROVIDER or "auto").strip().lower()
+        has_claude = bool(settings.ANTHROPIC_API_KEY)
+        has_openai = bool(settings.OPENAI_API_KEY)
+
+        if preferred in ("claude", "anthropic"):
+            if has_claude:
+                return "claude"
+            if has_openai:
+                return "openai"
+            return "fallback"
+
+        if preferred == "openai":
+            if has_openai:
+                return "openai"
+            if has_claude:
+                return "claude"
+            return "fallback"
+
+        if has_claude:
+            return "claude"
+        if has_openai:
+            return "openai"
+        return "fallback"
+
+    provider = resolve_ai_provider()
+    if provider == "fallback":
+        return "Hey! I'm Clawd, your email assistant. I'm currently in 'Offline Mode' because no AI API key is configured in your settings. Please add an OpenAI or Anthropic API key to start a real conversation!"
 
     try:
-        client = OpenAI(api_key=api_key)
-        
         system_prompt = (
             "You are 'Clawd', a senior Email Growth Specialist and AI Assistant for this Email Automation SaaS platform.\n"
             "Your personality: Professional, encouraging, highly technical yet accessible, and slightly witty.\n"
@@ -2365,16 +2460,45 @@ def process_ai_chat(message: str, history: list = None) -> str:
             "Tone: SaaS Executive meets helpful Engineer. Use Markdown for formatting (bold, lists, etc.). Keep responses concise."
         )
 
-        messages = [{"role": "system", "content": system_prompt}]
+        messages = []
         if history:
-            # History is expected as list of {"role": "user|assistant", "content": "..."}
-            messages.extend(history[-10:]) # Keep last 10 messages for context
-        
+            messages.extend(
+                {"role": item.get("role", "user"), "content": item.get("content", "")}
+                for item in history[-10:]
+                if item.get("role") in ("user", "assistant") and item.get("content")
+            )
         messages.append({"role": "user", "content": message})
 
+        if provider == "claude":
+            response = requests.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": settings.ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": settings.ANTHROPIC_MODEL,
+                    "system": system_prompt,
+                    "messages": messages,
+                    "temperature": 0.7,
+                    "max_tokens": 700,
+                },
+                timeout=60,
+            )
+            response.raise_for_status()
+            data = response.json()
+            return "\n".join(
+                block.get("text", "")
+                for block in data.get("content", [])
+                if block.get("type") == "text"
+            ).strip()
+
+        from openai import OpenAI
+        client = OpenAI(api_key=settings.OPENAI_API_KEY)
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
+            model=settings.OPENAI_MODEL,
+            messages=[{"role": "system", "content": system_prompt}, *messages],
             temperature=0.7,
             max_tokens=500
         )

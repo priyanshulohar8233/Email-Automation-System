@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     
     # Optional fields
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+    AI_PROVIDER: str = os.getenv("AI_PROVIDER", "auto")
+    ANTHROPIC_MODEL: str = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
     SENDGRID_VERIFIED_SENDER: str = os.getenv("SENDGRID_VERIFIED_SENDER", "")
 
     class Config:

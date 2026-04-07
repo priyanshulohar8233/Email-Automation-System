@@ -580,7 +580,7 @@ export default function AITemplates() {
         } catch (error: any) {
             console.error("AI Generation Failed:", error);
             setGeneratedSubject("Error generating template");
-            setGeneratedBody(`Error: ${error.message || "Failed to connect to the AI generation service."} \n\nPlease check your backend is running and OPENAI_API_KEY is properly configured.`);
+            setGeneratedBody(`Error: ${error.message || "Failed to connect to the AI generation service."} \n\nPlease check your backend is running and your AI API key is properly configured in backend/.env.`);
         } finally {
             setGenerating(false);
         }
@@ -675,7 +675,7 @@ export default function AITemplates() {
             {/* Top Bar */}
             <PageHeader
                 title="AI Templates"
-                subtitle="Generate high-converting emails instantly with our OpenAI ChatGPT assistant."
+                subtitle="Generate high-converting emails instantly with our AI email engine."
             >
                 <div className="flex gap-3">
                     <Button
@@ -1170,7 +1170,7 @@ export default function AITemplates() {
                                     <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
                                     <span className="w-2.5 h-2.5 bg-indigo-500 rounded-full animate-bounce"></span>
                                 </div>
-                                <p className="mt-4 text-sm font-semibold text-muted-foreground">ChatGPT is assembling your message...</p>
+                                <p className="mt-4 text-sm font-semibold text-muted-foreground">AI engine is assembling your message...</p>
                             </div>
                         )}
 
