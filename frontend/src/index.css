@@ -126,44 +126,81 @@
   box-shadow: 0 0 0 1px rgb(255 255 255 / 0.05), 0 32px 90px rgb(15 23 42 / 0.14);
 }
 
-.consultant-premium-card {
+.premium-template-card {
+  --premium-border: rgb(148 163 184 / 0.28);
+  --premium-overlay: rgb(255 255 255 / 0.06);
+  --premium-hover-glow: rgb(99 102 241 / 0.22);
+  --premium-radial-glow: rgb(255 255 255 / 0.24);
+  --premium-badge-text: #0f172a;
   position: relative;
   isolation: isolate;
-  border-color: rgb(255 213 79 / 0.3);
+  border-color: var(--premium-border);
   box-shadow:
     0 18px 42px rgb(0 0 0 / 0.2),
-    0 0 0 1px rgb(255 232 154 / 0.08);
+    0 0 0 1px rgb(255 255 255 / 0.06);
 }
 
-.consultant-premium-card::after {
+.premium-template-card::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 34%, rgb(255 200 0 / 0.08));
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.07), transparent 34%, var(--premium-overlay));
   opacity: 0.78;
   transition: opacity 0.35s ease;
 }
 
-.consultant-premium-card:hover {
-  border-color: rgb(255 214 102 / 0.52);
+.premium-template-card:hover {
+  border-color: color-mix(in srgb, var(--premium-border) 72%, white 28%);
   transform: translateY(-6px);
   box-shadow:
     0 28px 60px rgb(0 0 0 / 0.3),
-    0 0 30px rgb(255 200 0 / 0.16);
+    0 0 30px var(--premium-hover-glow);
 }
 
-.consultant-premium-card:hover::after {
+.premium-template-card:hover::after {
   opacity: 1;
 }
 
-.consultant-premium-hero {
+.premium-template-card--lumina {
+  --premium-border: rgb(139 92 246 / 0.34);
+  --premium-overlay: rgb(123 97 255 / 0.14);
+  --premium-hover-glow: rgb(123 97 255 / 0.3);
+  --premium-radial-glow: rgb(171 156 255 / 0.38);
+  --premium-badge-text: #4a3791;
+}
+
+.premium-template-card--consultant {
+  --premium-border: rgb(255 213 79 / 0.32);
+  --premium-overlay: rgb(255 200 0 / 0.1);
+  --premium-hover-glow: rgb(255 200 0 / 0.24);
+  --premium-radial-glow: rgb(255 200 0 / 0.42);
+  --premium-badge-text: #6f5200;
+}
+
+.premium-template-card--making {
+  --premium-border: rgb(255 119 102 / 0.3);
+  --premium-overlay: rgb(255 89 94 / 0.12);
+  --premium-hover-glow: rgb(255 89 94 / 0.25);
+  --premium-radial-glow: rgb(255 160 128 / 0.38);
+  --premium-badge-text: #7f3027;
+}
+
+.premium-template-card--matkotech {
+  --premium-border: rgb(74 222 128 / 0.3);
+  --premium-overlay: rgb(34 197 94 / 0.11);
+  --premium-hover-glow: rgb(34 197 94 / 0.24);
+  --premium-radial-glow: rgb(125 235 170 / 0.34);
+  --premium-badge-text: #146c3a;
+}
+
+.premium-template-hero {
   justify-content: flex-start;
   padding-top: 18px;
 }
 
-.consultant-logo-shell {
+.premium-logo-shell {
   position: relative;
   display: flex;
   align-items: center;
@@ -179,17 +216,17 @@
   backdrop-filter: blur(10px);
   box-shadow:
     0 10px 25px rgb(0 0 0 / 0.35),
-    0 0 20px rgb(255 200 0 / 0.4);
+    0 0 20px var(--premium-hover-glow);
   will-change: transform;
   transform: translateZ(0);
   transition:
     transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.3s ease,
     filter 0.3s ease;
-  animation: consultant-float 4s ease-in-out infinite;
+  animation: premium-template-float 4s ease-in-out infinite;
 }
 
-.consultant-logo-shell::before {
+.premium-logo-shell::before {
   content: "";
   position: absolute;
   inset: 10px;
@@ -198,22 +235,22 @@
   pointer-events: none;
 }
 
-.consultant-logo-glow {
+.premium-logo-glow {
   position: absolute;
   top: 50%;
   left: 50%;
   width: 78px;
   height: 78px;
   border-radius: 9999px;
-  background: radial-gradient(circle, rgb(255 200 0 / 0.42), transparent 72%);
+  background: radial-gradient(circle, var(--premium-radial-glow), transparent 72%);
   opacity: 0.78;
   filter: blur(20px);
   transform: translate(-50%, -50%);
-  animation: consultant-pulse 3.8s ease-in-out infinite;
+  animation: premium-template-pulse 3.8s ease-in-out infinite;
   pointer-events: none;
 }
 
-.consultant-logo-shine {
+.premium-logo-shine {
   position: absolute;
   inset: -35%;
   left: -120%;
@@ -225,7 +262,7 @@
   pointer-events: none;
 }
 
-.consultant-logo-image {
+.premium-logo-image {
   position: relative;
   z-index: 2;
   width: 70px;
@@ -234,30 +271,30 @@
   filter: drop-shadow(0 8px 18px rgb(0 0 0 / 0.24));
 }
 
-.consultant-premium-card:hover .consultant-logo-shell {
+.premium-template-card:hover .premium-logo-shell {
   transform: translateY(-6px) scale(1.06);
   box-shadow:
     0 20px 40px rgb(0 0 0 / 0.45),
-    0 0 30px rgb(255 200 0 / 0.6);
+    0 0 30px color-mix(in srgb, var(--premium-hover-glow) 86%, white 14%);
 }
 
-.consultant-premium-card:hover .consultant-logo-shine {
+.premium-template-card:hover .premium-logo-shine {
   opacity: 1;
   transform: translateX(245%) skewX(-24deg);
 }
 
-.consultant-premium-badge {
+.premium-template-badge {
   margin-top: 2px;
   background: rgb(255 255 255 / 0.72) !important;
-  color: #6f5200 !important;
+  color: var(--premium-badge-text) !important;
   border: 1px solid rgb(255 255 255 / 0.14);
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.45),
-    0 10px 18px rgb(138 99 0 / 0.14);
+    0 10px 18px rgb(15 23 42 / 0.14);
   backdrop-filter: blur(10px);
 }
 
-@keyframes consultant-float {
+@keyframes premium-template-float {
   0% {
     transform: translateY(0);
   }
@@ -269,7 +306,7 @@
   }
 }
 
-@keyframes consultant-pulse {
+@keyframes premium-template-pulse {
   0%,
   100% {
     opacity: 0.66;
@@ -292,14 +329,14 @@
     animation-duration: 0.01ms !important;
   }
 
-  .consultant-logo-shell,
-  .consultant-logo-glow {
+  .premium-logo-shell,
+  .premium-logo-glow {
     animation: none !important;
   }
 
-  .consultant-premium-card:hover,
-  .consultant-premium-card:hover .consultant-logo-shell,
-  .consultant-premium-card:hover .consultant-logo-shine {
+  .premium-template-card:hover,
+  .premium-template-card:hover .premium-logo-shell,
+  .premium-template-card:hover .premium-logo-shine {
     transform: none !important;
   }
 }
